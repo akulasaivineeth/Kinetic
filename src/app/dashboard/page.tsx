@@ -1,0 +1,355 @@
+'use client';
+
+import { useState } from 'react';
+import { motion } from 'framer-motion';
+import { AppShell } from '@/components/layout/app-shell';
+import { GlassCard } from '@/components/ui/glass-card';
+import { ScoreRing } from '@/components/ui/score-ring';
+import { TogglePills } from '@/components/ui/toggle-pills';
+import { DateRangeTabs } from '@/components/ui/date-range-tabs';
+import { useWorkoutLogs, type DateRange } from '@/hooks/use-workout-logs';
+import { useLeaderboard } from '@/hooks/use-leaderboard';
+import { useAuth } from '@/providers/auth-provider';
+import { formatPercentage } from '@/lib/utils';
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart,
+} from 'recharts';
+import { format } from 'date-fns';
+
+export default function DashboardPage() {
+  const { profile } = useAuth();
+  const [dateRange, setDateRange] = useState<DateRange>('week');
+  const [metric, setMetric] = useState<'volume' | 'peak'>('volume');
+  const [mode, setMode] = useState<'raw' | 'percent'>('raw');
+
+  const { data: logs = [] } = useWorkoutLogs(dateRange);
+  const { data: leaderboard = [] } = useLeaderboard(dateRange, metric, mode);
+
+  // Find current user in leaderboard
+  const myEntry = leaderboard.find((e) => e.user_id === profile?.id);
+
+  // Top 3 metric cards data
+  const topPushups = leaderboard[0];
+  const topPlanks = leaderboard[0];
+  const topRuns = leaderboard[0];
+
+  // Prepare chart data
+  const chartData = logs.map((log) => ({
+    date: format(new Date(log.logged_at), 'MMM d'),
+    pushups: log.pushup_reps,
+    planks: log.plank_seconds,
+    runs: Number(log.run_distance),
+    total: log.pushup_reps + log.plank_seconds + Number(log.run_distance) * 100,
+  }));
+
+  // Stamina Score (mock calculation — real would use Whoop recovery + goal consistency)
+  const staminaScore = 82;
+  const peakGain = 18;
+
+  return (
+    <AppShell>
+      <div className="space-y-6 pt-2">
+        {/* System Status */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+        >
+          <p className="text-[10px] font-semibold tracking-[0.2em] text-emerald-500 uppercase">
+            SYSTEM STATUS
+          </p>
+          <h2 className="text-3xl font-black tracking-tight mt-1">
+            PULSE MODE
+          </h2>
+        </motion.div>
+
+        {/* Section Header — This Week's Arena */}
+        <div>
+          <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-1">
+            SECTION
+          </p>
+          <div className="flex items-end justify-between">
+            <h3 className="text-2xl font-black italic leading-tight">
+              THIS<br />WEEK&apos;S<br />ARENA
+            </h3>
+            <TogglePills
+              options={[
+                { value: 'volume' as const, label: 'VOLUME' },
+                { value: 'peak' as const, label: 'PEAK' },
+              ]}
+              selected={metric}
+              onChange={setMetric}
+              size="sm"
+            />
+          </div>
+        </div>
+
+        {/* Metric Cards */}
+        <div className="space-y-3">
+          {/* Push-ups Card */}
+          <GlassCard className="relative overflow-hidden" delay={0.1}>
+            <div className="flex items-start justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">💪</span>
+                <span className="text-[11px] font-semibold tracking-wider text-dark-muted uppercase">
+                  PUSH-UPS
+                </span>
+              </div>
+              {topPushups && (
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 rounded-full bg-dark-elevated" />
+                  <span className="text-[10px] font-semibold text-dark-muted">
+                    {topPushups.full_name?.split(' ')[0] || 'You'} {topPushups.full_name?.split(' ')[1]?.[0] || ''}.
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="flex items-baseline gap-3">
+              <span className="text-4xl font-black text-dark-text">
+                {myEntry ? Math.round(myEntry.pushup_value) : 0}
+              </span>
+              {mode === 'percent' || myEntry ? (
+                <span className="text-sm font-bold text-emerald-500">
+                  {formatPercentage(12)}
+                </span>
+              ) : null}
+            </div>
+            {/* Mini sparkline */}
+            <div className="h-10 mt-2 -mx-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData.slice(-7)}>
+                  <defs>
+                    <linearGradient id="pushupGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10B981" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area
+                    type="monotone"
+                    dataKey="pushups"
+                    stroke="#10B981"
+                    strokeWidth={2}
+                    fill="url(#pushupGrad)"
+                    dot={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </GlassCard>
+
+          {/* Plank Card */}
+          <GlassCard className="relative overflow-hidden" delay={0.2}>
+            <div className="flex items-start justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🧘</span>
+                <span className="text-[11px] font-semibold tracking-wider text-dark-muted uppercase">
+                  PLANK (MIN)
+                </span>
+              </div>
+              {topPlanks && (
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 rounded-full bg-dark-elevated" />
+                  <span className="text-[10px] font-semibold text-dark-muted">SARAH J.</span>
+                </div>
+              )}
+            </div>
+            <div className="flex items-baseline gap-3">
+              <span className="text-4xl font-black text-dark-text">
+                {myEntry ? (myEntry.plank_value / 60).toFixed(1) : '0.0'}
+              </span>
+              <span className="text-sm font-bold text-emerald-500">+8.4%</span>
+            </div>
+            <div className="h-10 mt-2 -mx-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData.slice(-7)}>
+                  <defs>
+                    <linearGradient id="plankGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10B981" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area
+                    type="monotone"
+                    dataKey="planks"
+                    stroke="#10B981"
+                    strokeWidth={2}
+                    fill="url(#plankGrad)"
+                    dot={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </GlassCard>
+
+          {/* Running Card */}
+          <GlassCard className="relative overflow-hidden" delay={0.3}>
+            <div className="flex items-start justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🏃</span>
+                <span className="text-[11px] font-semibold tracking-wider text-dark-muted uppercase">
+                  RUNNING (KM)
+                </span>
+              </div>
+              {topRuns && (
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 rounded-full bg-dark-elevated" />
+                  <span className="text-[10px] font-semibold text-dark-muted">LEO M.</span>
+                </div>
+              )}
+            </div>
+            <div className="flex items-baseline gap-3">
+              <span className="text-4xl font-black text-dark-text">
+                {myEntry ? Number(myEntry.run_value).toFixed(1) : '0.0'}
+              </span>
+              <span className="text-sm font-bold text-emerald-500">+15%</span>
+            </div>
+            <div className="h-10 mt-2 -mx-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData.slice(-7)}>
+                  <defs>
+                    <linearGradient id="runGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10B981" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area
+                    type="monotone"
+                    dataKey="runs"
+                    stroke="#10B981"
+                    strokeWidth={2}
+                    fill="url(#runGrad)"
+                    dot={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </GlassCard>
+        </div>
+
+        {/* Personal Trends Section */}
+        <div className="pt-4">
+          <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-1">
+            DATA CLUSTER
+          </p>
+          <h3 className="text-2xl font-black italic mb-4">
+            PERSONAL TRENDS
+          </h3>
+
+          {/* Date Range + Metric Toggles */}
+          <div className="space-y-2 mb-4">
+            <DateRangeTabs selected={dateRange} onChange={setDateRange} />
+            <div className="flex gap-2">
+              <TogglePills
+                options={[
+                  { value: 'volume' as const, label: 'VOLUME' },
+                  { value: 'peak' as const, label: 'PEAK' },
+                ]}
+                selected={metric}
+                onChange={setMetric}
+                size="sm"
+              />
+              <TogglePills
+                options={[
+                  { value: 'raw' as const, label: 'RAW' },
+                  { value: 'percent' as const, label: '% IMP.' },
+                ]}
+                selected={mode}
+                onChange={setMode}
+                size="sm"
+              />
+            </div>
+          </div>
+
+          {/* Trends Chart */}
+          <GlassCard className="p-5" delay={0.4}>
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <p className="text-lg font-black">8-WEEK</p>
+                <p className="text-lg font-black">VELOCITY</p>
+                <p className="text-[10px] font-semibold tracking-wider text-dark-muted mt-1">
+                  PERFORMANCE TRACKING
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-black text-emerald-500">
+                  8.4<span className="text-xs text-dark-muted ml-0.5">pts</span>
+                </p>
+                <p className="text-xs font-semibold text-emerald-500">+4.2%</p>
+                <p className="text-[10px] text-dark-muted">IMPROVEMENT</p>
+              </div>
+            </div>
+
+            <div className="h-40">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData.length > 0 ? chartData : [
+                  { date: 'Week 1', total: 20 },
+                  { date: 'Week 2', total: 25 },
+                  { date: 'Week 3', total: 22 },
+                  { date: 'Week 4', total: 35 },
+                  { date: 'Week 5', total: 30 },
+                  { date: 'Week 6', total: 45 },
+                  { date: 'Week 7', total: 50 },
+                  { date: 'Week 8', total: 55 },
+                ]}>
+                  <XAxis
+                    dataKey="date"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#8E8E93', fontSize: 10 }}
+                  />
+                  <YAxis hide />
+                  <Tooltip
+                    contentStyle={{
+                      background: 'rgba(28, 28, 30, 0.95)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '12px',
+                      color: '#F5F5F7',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="total"
+                    stroke="#10B981"
+                    strokeWidth={3}
+                    dot={false}
+                    activeDot={{ r: 4, fill: '#10B981' }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </GlassCard>
+        </div>
+
+        {/* Stamina Score + Peak Gain Rings */}
+        <div className="flex justify-center gap-8 py-6">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: 'spring', delay: 0.5 }}
+          >
+            <ScoreRing
+              value={staminaScore}
+              label="STAMINA SCORE"
+              sublabel="OPTIMAL"
+              color="#10B981"
+            />
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: 'spring', delay: 0.6 }}
+          >
+            <ScoreRing
+              value={peakGain}
+              label="PEAK GAIN"
+              sublabel="RECORD HIGH"
+              color="#10B981"
+              showPercent
+            />
+          </motion.div>
+        </div>
+      </div>
+    </AppShell>
+  );
+}
