@@ -153,3 +153,39 @@ Average % improvement across Volume + Peak for all 3 metrics (push-ups, planks, 
 ## License
 
 MIT
+
+
+GRK
+# Kinetic
+
+Private premium PWA for a year-long fitness challenge (April 2026 – April 2027). Track push-ups, planks, and running with fair % improvement scoring, real-time Whoop integration, beautiful visualizations, and mutual sharing.
+
+## Challenge Rules
+- 3 metrics with hybrid views: **Volume** (weekly totals) + **Peak** (weekly bests)
+- Fairness: % improvement from personal 4-week baseline (raw numbers shown side-by-side)
+- Weekly aggregates auto-calculated from daily logs
+
+## Key Features
+- **Auth**: Google Sign-In + flexible invite-only (admin generates links; no public sign-up)
+- **Whoop**: Real-time webhook on workout finish → push notification → pre-filled Log screen (user confirms reps/seconds/distance already entered in Whoop)
+- **Logging**: Always-available one-screen form with weekly goal progress bar + per-card “X goal • Y left”, auto-save drafts, offline sync, photo + notes
+- **Dashboard**: Personal Trends (your data only) with date-range tabs (This Week / This Month / Last 3mo / Last 6mo / Full Year / Custom) + Volume/Peak + Raw/% Imp toggles + Stamina Score & Peak Gain rings
+- **Arena**: Unified leaderboard + history. Filters update table + overlaid chart instantly. Supports mutual sharing
+- **Sharing**: Apple Fitness style – search email → double confirmation → recipient gets 3 options (Accept / Accept and start sharing / Reject). All 3 metrics shared. Revoke anytime from Profile
+- **Profile**: Avatar upload, Google account, Dark/Light toggle, Performance Goals, logout
+- **Stamina & Peak formulas** (see above)
+- **PWA**: Installable, offline-first, push notifications, buttery spring animations
+
+## UI Reference
+Use the exact 4 Stitch screenshots the user selected (Arena, Dashboard with Pulse Mode, Profile, Log screen) as the visual spec.
+
+## Tech Stack
+- Next.js 15 App Router + TypeScript + Tailwind
+- Supabase (Auth, Postgres, Realtime, Storage, Edge Functions for Whoop)
+- Recharts + TanStack Query + Zod
+- Deploy: Vercel (free)
+
+## Future
+- More friends via invites
+- AI insights
+- Weekly auto-recaps
