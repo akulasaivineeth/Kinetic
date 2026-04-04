@@ -199,6 +199,31 @@ export function useSharedLogs(dateRange: DateRange, customFrom?: Date, customTo?
   const { user } = useAuth();
   const supabase = createClient();
   const { from, to } = getDateRange(dateRange, customFrom, customTo);
+  const queryClient = useQueryClient();
+
+  // Real-time subscription for shared logs (Arena Chart updates)
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('shared-logs-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'workout_logs',
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['shared-workout-logs'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, queryClient, supabase]);
 
   return useQuery({
     queryKey: ['shared-workout-logs', user?.id, dateRange, from.toISOString(), to.toISOString()],
