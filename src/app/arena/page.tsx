@@ -100,7 +100,7 @@ export default function ArenaPage() {
 
   return (
     <AppShell>
-      <div className="space-y-5 pt-2">
+      <div className="max-w-md mx-auto px-6 space-y-6 pt-2 pb-32">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}

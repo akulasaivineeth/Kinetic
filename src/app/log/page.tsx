@@ -76,20 +76,33 @@ function LogPage() {
       setDraftId(draft.id);
       setPushupReps(draft.pushup_reps || 0);
       setPlankSeconds(draft.plank_seconds || 0);
-      setRunDistance(Number(draft.run_distance) || 0);
+      
+      // Denormalize: KM to MI if user is in Imperial mode
+      const km = Number(draft.run_distance) || 0;
+      if (profile?.unit_preference === 'imperial') {
+        setRunDistance(Number((km * 0.621371).toFixed(1)));
+      } else {
+        setRunDistance(km);
+      }
+      
       setNotes(draft.notes || '');
       setPhotoUrl(draft.photo_url || null);
     }
-  }, [draft]);
+  }, [draft, profile?.unit_preference]);
 
   // Auto-save draft
   const autoSave = useCallback(() => {
     if (!user) return;
+    // Normalize: MI to KM if user is in Imperial mode
+    const finalRunDist = profile?.unit_preference === 'imperial' 
+      ? Number((runDistance * 1.60934).toFixed(3)) 
+      : runDistance;
+
     saveDraft.mutate({
       id: draftId || undefined,
       pushup_reps: pushupReps,
       plank_seconds: plankSeconds,
-      run_distance: runDistance,
+      run_distance: finalRunDist,
       notes,
       photo_url: photoUrl,
       whoop_activity_type: whoopActivity || undefined,
@@ -100,7 +113,7 @@ function LogPage() {
         if (data && !draftId) setDraftId(data.id);
       },
     });
-  }, [user, draftId, pushupReps, plankSeconds, runDistance, notes, photoUrl, whoopActivity, whoopStrain, whoopDuration, saveDraft]);
+  }, [user, profile?.unit_preference, draftId, pushupReps, plankSeconds, runDistance, notes, photoUrl, whoopActivity, whoopStrain, whoopDuration, saveDraft]);
 
   useEffect(() => {
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
@@ -169,7 +182,7 @@ function LogPage() {
 
   return (
     <AppShell>
-      <div className="space-y-4 pt-2">
+      <div className="max-w-md mx-auto px-6 space-y-6 pt-2 pb-32">
         {/* Current Session (Whoop prefill) */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}

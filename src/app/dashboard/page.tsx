@@ -104,7 +104,7 @@ export default function DashboardPage() {
 
   return (
     <AppShell>
-      <div className="space-y-6 pt-2">
+      <div className="max-w-md mx-auto px-6 space-y-6 pt-2 pb-32">
         {/* System Status */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}

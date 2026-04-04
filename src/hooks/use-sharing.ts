@@ -51,7 +51,6 @@ export function useSendSharingRequest() {
         .single();
       if (error) throw error;
 
-      // Create notification for recipient
       await supabase.from('notifications').insert({
         user_id: recipient.id,
         type: 'sharing_request',
@@ -59,6 +58,19 @@ export function useSendSharingRequest() {
         body: `${user.user_metadata?.full_name || user.email} wants to share activity data with you.`,
         data: { connection_id: data.id, requester_id: user.id },
       });
+
+      // Invoke Email Edge Function (Premium Requirement: Email with 3 explicit buttons)
+      try {
+        await supabase.functions.invoke('sharing-notification', {
+          body: {
+            recipientEmail,
+            requesterName: user.user_metadata?.full_name || user.email,
+            inviteUrl: `${window.location.origin}/arena`, // deep-link back to arena
+          },
+        });
+      } catch (e) {
+        console.error('Email notify failed:', e);
+      }
 
       return data;
     },
