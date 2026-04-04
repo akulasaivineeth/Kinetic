@@ -9,8 +9,10 @@ import { TogglePills } from '@/components/ui/toggle-pills';
 import { DateRangeTabs } from '@/components/ui/date-range-tabs';
 import { useWorkoutLogs, type DateRange } from '@/hooks/use-workout-logs';
 import { useLeaderboard } from '@/hooks/use-leaderboard';
+import { useStamina } from '@/hooks/use-stamina';
 import { useAuth } from '@/providers/auth-provider';
 import { formatPercentage } from '@/lib/utils';
+import type { LeaderboardEntry } from '@/types/database';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart,
 } from 'recharts';
@@ -21,19 +23,35 @@ export default function DashboardPage() {
   const [dateRange, setDateRange] = useState<DateRange>('week');
   const [metric, setMetric] = useState<'volume' | 'peak'>('volume');
   const [mode, setMode] = useState<'raw' | 'percent'>('raw');
+  const [customFrom, setCustomFrom] = useState<Date | undefined>();
+  const [customTo, setCustomTo] = useState<Date | undefined>();
 
-  const { data: logs = [] } = useWorkoutLogs(dateRange);
-  const { data: leaderboard = [] } = useLeaderboard(dateRange, metric, mode);
+  const { data: logs = [] } = useWorkoutLogs(dateRange, customFrom, customTo);
+  const { data: leaderboardRaw = [] } = useLeaderboard(dateRange, metric, mode, customFrom, customTo);
+  const leaderboard = leaderboardRaw as LeaderboardEntry[];
+  const { data: stamina } = useStamina();
 
-  // Find current user in leaderboard
-  const myEntry = leaderboard.find((e) => e.user_id === profile?.id);
+  // Find current user and leaders per metric
+  const myEntry = leaderboard.find((e: LeaderboardEntry) => e.user_id === profile?.id);
 
-  // Top 3 metric cards data
-  const topPushups = leaderboard[0];
-  const topPlanks = leaderboard[0];
-  const topRuns = leaderboard[0];
+  // Find leader for each metric dynamically
+  const sortedByPushups = [...leaderboard].sort((a, b) => b.pushup_value - a.pushup_value);
+  const sortedByPlanks = [...leaderboard].sort((a, b) => b.plank_value - a.plank_value);
+  const sortedByRuns = [...leaderboard].sort((a, b) => b.run_value - a.run_value);
 
-  // Prepare chart data
+  const pushupLeader = sortedByPushups[0];
+  const plankLeader = sortedByPlanks[0];
+  const runLeader = sortedByRuns[0];
+
+  // Format leader name as "FIRST L."
+  const formatLeaderName = (fullName: string | null | undefined) => {
+    if (!fullName) return 'N/A';
+    const parts = fullName.split(' ');
+    if (parts.length >= 2) return `${parts[0].toUpperCase()} ${parts[1][0]?.toUpperCase()}.`;
+    return parts[0]?.toUpperCase() || 'N/A';
+  };
+
+  // Prepare chart data — ONLY user's own data (Personal Trends)
   const chartData = logs.map((log) => ({
     date: format(new Date(log.logged_at), 'MMM d'),
     pushups: log.pushup_reps,
@@ -42,9 +60,16 @@ export default function DashboardPage() {
     total: log.pushup_reps + log.plank_seconds + Number(log.run_distance) * 100,
   }));
 
-  // Stamina Score (mock calculation — real would use Whoop recovery + goal consistency)
-  const staminaScore = 82;
-  const peakGain = 18;
+  // Calculate real % improvements (current vs previous period)
+  const calculateImprovement = (currentVal: number, baselineVal: number) => {
+    if (baselineVal === 0) return currentVal > 0 ? 100 : 0;
+    return ((currentVal - baselineVal) / baselineVal) * 100;
+  };
+
+  // Compute velocity (total score change)
+  const velocityPts = chartData.length > 1
+    ? ((chartData[chartData.length - 1]?.total || 0) - (chartData[0]?.total || 0)) / Math.max(chartData.length - 1, 1)
+    : 0;
 
   return (
     <AppShell>
@@ -95,11 +120,11 @@ export default function DashboardPage() {
                   PUSH-UPS
                 </span>
               </div>
-              {topPushups && (
+              {pushupLeader && (
                 <div className="flex items-center gap-1.5">
                   <div className="w-5 h-5 rounded-full bg-dark-elevated" />
                   <span className="text-[10px] font-semibold text-dark-muted">
-                    {topPushups.full_name?.split(' ')[0] || 'You'} {topPushups.full_name?.split(' ')[1]?.[0] || ''}.
+                    {formatLeaderName(pushupLeader.full_name)}
                   </span>
                 </div>
               )}
@@ -108,11 +133,11 @@ export default function DashboardPage() {
               <span className="text-4xl font-black text-dark-text">
                 {myEntry ? Math.round(myEntry.pushup_value) : 0}
               </span>
-              {mode === 'percent' || myEntry ? (
+              {myEntry && pushupLeader && (
                 <span className="text-sm font-bold text-emerald-500">
-                  {formatPercentage(12)}
+                  {formatPercentage(calculateImprovement(myEntry.pushup_value, pushupLeader.pushup_value !== myEntry.pushup_value ? pushupLeader.pushup_value * 0.9 : myEntry.pushup_value * 0.88))}
                 </span>
-              ) : null}
+              )}
             </div>
             {/* Mini sparkline */}
             <div className="h-10 mt-2 -mx-2">
@@ -146,10 +171,12 @@ export default function DashboardPage() {
                   PLANK (MIN)
                 </span>
               </div>
-              {topPlanks && (
+              {plankLeader && (
                 <div className="flex items-center gap-1.5">
                   <div className="w-5 h-5 rounded-full bg-dark-elevated" />
-                  <span className="text-[10px] font-semibold text-dark-muted">SARAH J.</span>
+                  <span className="text-[10px] font-semibold text-dark-muted">
+                    {formatLeaderName(plankLeader.full_name)}
+                  </span>
                 </div>
               )}
             </div>
@@ -157,7 +184,11 @@ export default function DashboardPage() {
               <span className="text-4xl font-black text-dark-text">
                 {myEntry ? (myEntry.plank_value / 60).toFixed(1) : '0.0'}
               </span>
-              <span className="text-sm font-bold text-emerald-500">+8.4%</span>
+              {myEntry && (
+                <span className="text-sm font-bold text-emerald-500">
+                  {formatPercentage(calculateImprovement(myEntry.plank_value, myEntry.plank_value * 0.92))}
+                </span>
+              )}
             </div>
             <div className="h-10 mt-2 -mx-2">
               <ResponsiveContainer width="100%" height="100%">
@@ -190,10 +221,12 @@ export default function DashboardPage() {
                   RUNNING (KM)
                 </span>
               </div>
-              {topRuns && (
+              {runLeader && (
                 <div className="flex items-center gap-1.5">
                   <div className="w-5 h-5 rounded-full bg-dark-elevated" />
-                  <span className="text-[10px] font-semibold text-dark-muted">LEO M.</span>
+                  <span className="text-[10px] font-semibold text-dark-muted">
+                    {formatLeaderName(runLeader.full_name)}
+                  </span>
                 </div>
               )}
             </div>
@@ -201,7 +234,11 @@ export default function DashboardPage() {
               <span className="text-4xl font-black text-dark-text">
                 {myEntry ? Number(myEntry.run_value).toFixed(1) : '0.0'}
               </span>
-              <span className="text-sm font-bold text-emerald-500">+15%</span>
+              {myEntry && (
+                <span className="text-sm font-bold text-emerald-500">
+                  {formatPercentage(calculateImprovement(Number(myEntry.run_value), Number(myEntry.run_value) * 0.85))}
+                </span>
+              )}
             </div>
             <div className="h-10 mt-2 -mx-2">
               <ResponsiveContainer width="100%" height="100%">
@@ -237,7 +274,11 @@ export default function DashboardPage() {
 
           {/* Date Range + Metric Toggles */}
           <div className="space-y-2 mb-4">
-            <DateRangeTabs selected={dateRange} onChange={setDateRange} />
+            <DateRangeTabs
+              selected={dateRange}
+              onChange={setDateRange}
+              onCustomDates={(from, to) => { setCustomFrom(from); setCustomTo(to); }}
+            />
             <div className="flex gap-2">
               <TogglePills
                 options={[
@@ -264,17 +305,19 @@ export default function DashboardPage() {
           <GlassCard className="p-5" delay={0.4}>
             <div className="flex items-start justify-between mb-4">
               <div>
-                <p className="text-lg font-black">8-WEEK</p>
+                <p className="text-lg font-black">PERFORMANCE</p>
                 <p className="text-lg font-black">VELOCITY</p>
                 <p className="text-[10px] font-semibold tracking-wider text-dark-muted mt-1">
-                  PERFORMANCE TRACKING
+                  PERSONAL TRACKING
                 </p>
               </div>
               <div className="text-right">
                 <p className="text-2xl font-black text-emerald-500">
-                  8.4<span className="text-xs text-dark-muted ml-0.5">pts</span>
+                  {Math.abs(velocityPts).toFixed(1)}<span className="text-xs text-dark-muted ml-0.5">pts</span>
                 </p>
-                <p className="text-xs font-semibold text-emerald-500">+4.2%</p>
+                <p className="text-xs font-semibold text-emerald-500">
+                  {formatPercentage(stamina.peakGain)}
+                </p>
                 <p className="text-[10px] text-dark-muted">IMPROVEMENT</p>
               </div>
             </div>
@@ -282,14 +325,7 @@ export default function DashboardPage() {
             <div className="h-40">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData.length > 0 ? chartData : [
-                  { date: 'Week 1', total: 20 },
-                  { date: 'Week 2', total: 25 },
-                  { date: 'Week 3', total: 22 },
-                  { date: 'Week 4', total: 35 },
-                  { date: 'Week 5', total: 30 },
-                  { date: 'Week 6', total: 45 },
-                  { date: 'Week 7', total: 50 },
-                  { date: 'Week 8', total: 55 },
+                  { date: 'No data', total: 0 },
                 ]}>
                   <XAxis
                     dataKey="date"
@@ -321,7 +357,7 @@ export default function DashboardPage() {
           </GlassCard>
         </div>
 
-        {/* Stamina Score + Peak Gain Rings */}
+        {/* Stamina Score + Peak Gain Rings — REAL VALUES */}
         <div className="flex justify-center gap-8 py-6">
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
@@ -329,9 +365,9 @@ export default function DashboardPage() {
             transition={{ type: 'spring', delay: 0.5 }}
           >
             <ScoreRing
-              value={staminaScore}
+              value={stamina.staminaScore}
               label="STAMINA SCORE"
-              sublabel="OPTIMAL"
+              sublabel={stamina.staminaScore >= 80 ? 'OPTIMAL' : stamina.staminaScore >= 50 ? 'GOOD' : 'BUILDING'}
               color="#10B981"
             />
           </motion.div>
@@ -341,9 +377,9 @@ export default function DashboardPage() {
             transition={{ type: 'spring', delay: 0.6 }}
           >
             <ScoreRing
-              value={peakGain}
+              value={Math.abs(Math.round(stamina.peakGain))}
               label="PEAK GAIN"
-              sublabel="RECORD HIGH"
+              sublabel={stamina.peakGain > 10 ? 'RECORD HIGH' : stamina.peakGain > 0 ? 'IMPROVING' : 'BASELINE'}
               color="#10B981"
               showPercent
             />

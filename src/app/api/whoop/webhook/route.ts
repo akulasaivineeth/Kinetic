@@ -2,14 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import webpush from 'web-push';
 
-// Configure VAPID
-webpush.setVapidDetails(
-  process.env.VAPID_EMAIL || 'mailto:admin@kinetic.app',
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '',
-  process.env.VAPID_PRIVATE_KEY || ''
-);
+// VAPID credentials are configured lazily (not at build time)
+let vapidConfigured = false;
+function ensureVapid() {
+  if (vapidConfigured) return;
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  if (publicKey && privateKey) {
+    webpush.setVapidDetails(
+      process.env.VAPID_EMAIL || 'mailto:admin@kinetic.app',
+      publicKey,
+      privateKey
+    );
+    vapidConfigured = true;
+  }
+}
 
 export async function POST(request: NextRequest) {
+  ensureVapid();
   try {
     const body = await request.json();
     const webhookSecret = request.headers.get('x-whoop-signature');

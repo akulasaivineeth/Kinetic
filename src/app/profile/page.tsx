@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { AppShell } from '@/components/layout/app-shell';
@@ -11,7 +11,7 @@ import { useGoals, useUpdateGoals } from '@/hooks/use-goals';
 import { useSharingConnections, useSendSharingRequest, useRemoveSharing } from '@/hooks/use-sharing';
 import { getInitials } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
-import { useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 export default function ProfilePage() {
   const { user, profile, signOut, refreshProfile } = useAuth();
@@ -186,6 +186,35 @@ export default function ProfilePage() {
             <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 text-[10px] font-bold tracking-wider">
               CONNECTED
             </span>
+          </GlassCard>
+
+          <div className="h-2" />
+
+          {/* Whoop Connect */}
+          <GlassCard className="flex items-center gap-3" delay={0.2}>
+            <div className="w-10 h-10 rounded-xl bg-dark-elevated flex items-center justify-center">
+              <span className="text-lg">⌚</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-semibold tracking-wider text-dark-muted uppercase">
+                WHOOP
+              </p>
+              <p className="text-sm font-semibold text-dark-text">
+                {profile?.whoop_user_id ? `Connected (ID: ${profile.whoop_user_id})` : 'Not connected'}
+              </p>
+            </div>
+            {profile?.whoop_user_id ? (
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 text-[10px] font-bold tracking-wider">
+                CONNECTED
+              </span>
+            ) : (
+              <a
+                href="/api/whoop/auth"
+                className="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-500 text-[10px] font-bold tracking-wider"
+              >
+                CONNECT
+              </a>
+            )}
           </GlassCard>
         </div>
 
@@ -411,6 +440,35 @@ export default function ProfilePage() {
               </AnimatePresence>
             </>
           )}
+        </div>
+
+        {/* Data & Export */}
+        <div>
+          <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-3">
+            DATA & EXPORT
+          </p>
+          <a
+            href="/api/export"
+            download
+            className="block w-full"
+          >
+            <GlassCard className="flex items-center gap-3" delay={0.35}>
+              <div className="w-10 h-10 rounded-xl bg-dark-elevated flex items-center justify-center">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-dark-text">Export Data (CSV)</p>
+                <p className="text-[10px] text-dark-muted">Download all your workout logs</p>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </GlassCard>
+          </a>
         </div>
 
         {/* Deactivate Session / Logout */}

@@ -2,10 +2,18 @@
 
 import { motion } from 'framer-motion';
 import { useAuth } from '@/providers/auth-provider';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-export default function LandingPage() {
+export default function LandingPageWrapper() {
+  return (
+    <Suspense fallback={<div className="min-h-dvh bg-dark-bg flex items-center justify-center"><div className="text-dark-muted">Loading...</div></div>}>
+      <LandingPage />
+    </Suspense>
+  );
+}
+
+function LandingPage() {
   const { signInWithGoogle, loading } = useAuth();
   const searchParams = useSearchParams();
   const inviteCode = searchParams.get('invite') || undefined;

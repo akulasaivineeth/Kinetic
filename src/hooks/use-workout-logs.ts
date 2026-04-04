@@ -3,10 +3,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/providers/auth-provider';
-import type { WorkoutLog } from '@/types/database';
+import type { WorkoutLog, WeeklyVolume } from '@/types/database';
 import { startOfWeek, endOfWeek, subMonths, subWeeks, startOfMonth, endOfMonth } from 'date-fns';
-
-const supabase = createClient();
 
 export type DateRange = 'week' | 'month' | '3mo' | '6mo' | 'year' | 'custom';
 
@@ -32,16 +30,19 @@ export function getDateRange(range: DateRange, customFrom?: Date, customTo?: Dat
 
 export function useWeeklyVolume() {
   const { user } = useAuth();
+  const supabase = createClient();
 
   return useQuery({
     queryKey: ['weekly-volume', user?.id],
-    queryFn: async () => {
+    queryFn: async (): Promise<WeeklyVolume | null> => {
       if (!user) return null;
-      const { data, error } = await supabase.rpc('get_weekly_volume', {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await supabase.rpc('get_weekly_volume' as any, {
         p_user_id: user.id,
-      });
+      } as any);
       if (error) throw error;
-      return data?.[0] ?? { total_pushups: 0, total_plank_seconds: 0, total_run_distance: 0 };
+      const rows = data as WeeklyVolume[] | null;
+      return rows?.[0] ?? { total_pushups: 0, total_plank_seconds: 0, total_run_distance: 0 };
     },
     enabled: !!user,
   });
@@ -49,6 +50,7 @@ export function useWeeklyVolume() {
 
 export function useWorkoutLogs(dateRange: DateRange, customFrom?: Date, customTo?: Date) {
   const { user } = useAuth();
+  const supabase = createClient();
   const { from, to } = getDateRange(dateRange, customFrom, customTo);
 
   return useQuery({
@@ -72,6 +74,7 @@ export function useWorkoutLogs(dateRange: DateRange, customFrom?: Date, customTo
 
 export function useDraftLog() {
   const { user } = useAuth();
+  const supabase = createClient();
 
   return useQuery({
     queryKey: ['draft-log', user?.id],
@@ -95,6 +98,7 @@ export function useDraftLog() {
 export function useSaveDraft() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const supabase = createClient();
 
   return useMutation({
     mutationFn: async (log: Partial<WorkoutLog>) => {
@@ -127,6 +131,7 @@ export function useSaveDraft() {
 
 export function useSubmitLog() {
   const queryClient = useQueryClient();
+  const supabase = createClient();
 
   return useMutation({
     mutationFn: async (logId: string) => {

@@ -20,7 +20,7 @@ export async function subscribeToPush(): Promise<boolean> {
 
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: convertedKey,
+        applicationServerKey: convertedKey.buffer as ArrayBuffer,
       });
     }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import { AppShell } from '@/components/layout/app-shell';
 import { GlassCard } from '@/components/ui/glass-card';
@@ -11,10 +11,20 @@ import { useWeeklyVolume, useDraftLog, useSaveDraft, useSubmitLog } from '@/hook
 import { formatPlankTime } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { useSearchParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 
-export default function LogPage() {
-  const { user } = useAuth();
+export default function LogPageWrapper() {
+  return (
+    <Suspense fallback={<AppShell><div className="flex items-center justify-center pt-20"><div className="text-dark-muted text-sm">Loading...</div></div></AppShell>}>
+      <LogPage />
+    </Suspense>
+  );
+}
+
+function LogPage() {
+  const { user, profile } = useAuth();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const { data: goals } = useGoals();
   const { data: weeklyVolume } = useWeeklyVolume();
   const { data: draft } = useDraftLog();
@@ -34,8 +44,31 @@ export default function LogPage() {
   const [draftId, setDraftId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Whoop import fallback
+  const handleWhoopImport = async () => {
+    setIsImporting(true);
+    setImportResult(null);
+    try {
+      const res = await fetch('/api/whoop/import');
+      const data = await res.json();
+      if (res.ok) {
+        setImportResult(`Imported ${data.imported} workout${data.imported !== 1 ? 's' : ''}`);
+        queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      } else {
+        setImportResult(data.error || 'Import failed');
+      }
+    } catch {
+      setImportResult('Network error');
+    } finally {
+      setIsImporting(false);
+      setTimeout(() => setImportResult(null), 4000);
+    }
+  };
 
   // Load draft
   useEffect(() => {
@@ -149,6 +182,24 @@ export default function LogPage() {
             </span>
           </h2>
         </motion.div>
+
+        {/* Whoop Import Fallback */}
+        {profile?.whoop_access_token && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleWhoopImport}
+              disabled={isImporting}
+              className="flex-1 px-4 py-2.5 rounded-xl bg-dark-elevated border border-dark-border text-xs font-bold tracking-wider text-dark-muted hover:text-emerald-500 hover:border-emerald-500/30 transition-all disabled:opacity-50"
+            >
+              {isImporting ? 'IMPORTING...' : '⌚ IMPORT RECENT WORKOUTS'}
+            </button>
+            {importResult && (
+              <span className="text-xs font-semibold text-emerald-500 animate-fade-in">
+                {importResult}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Weekly Volume Progress Bar */}
         <ProgressBar
