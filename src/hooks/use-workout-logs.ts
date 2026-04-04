@@ -205,8 +205,9 @@ export function useSharedLogs(dateRange: DateRange, customFrom?: Date, customTo?
   useEffect(() => {
     if (!user) return;
 
+    const channelId = `shared-logs-realtime-${user.id}-${Math.random().toString(36).slice(2, 9)}`;
     const channel = supabase
-      .channel('shared-logs-realtime')
+      .channel(channelId)
       .on(
         'postgres_changes',
         {

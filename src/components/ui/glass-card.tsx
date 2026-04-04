@@ -21,8 +21,7 @@ export function GlassCard({
   delay = 0,
   onClick,
 }: GlassCardProps) {
-  const Component = animate ? motion.div : 'div';
-  const animateProps = animate
+  const motionProps = animate
     ? {
         initial: { opacity: 0, y: 10, scale: 0.98 },
         animate: { opacity: 1, y: 0, scale: 1 },
@@ -36,7 +35,7 @@ export function GlassCard({
     : {};
 
   return (
-    <Component
+    <motion.div
       className={cn(
         elevated ? 'glass-card-elevated' : 'glass-card',
         'p-4',
@@ -46,9 +45,9 @@ export function GlassCard({
       onClick={onClick}
       whileHover={onClick ? { y: -4, transition: { type: 'spring', stiffness: 300, damping: 25 } } : undefined}
       whileTap={onClick ? { scale: 0.97 } : undefined}
-      {...animateProps}
+      {...motionProps}
     >
       {children}
-    </Component>
+    </motion.div>
   );
 }

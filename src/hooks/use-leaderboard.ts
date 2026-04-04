@@ -23,8 +23,9 @@ export function useLeaderboard(
   useEffect(() => {
     if (!user) return;
 
+    const channelId = `arena-realtime-${user.id}-${Math.random().toString(36).slice(2, 9)}`;
     const channel = supabase
-      .channel('arena-realtime')
+      .channel(channelId)
       .on(
         'postgres_changes',
         {
