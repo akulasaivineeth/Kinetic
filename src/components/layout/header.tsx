@@ -163,9 +163,9 @@ export function Header() {
                                     'accept_mutual',
                                     notification.id
                                   )}
-                                  className="flex-1 px-3 py-1.5 rounded-lg bg-blue-500/15 text-blue-400 text-[10px] font-bold tracking-wider"
+                                  className="flex-1 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold tracking-wider"
                                 >
-                                  ACCEPT & SHARE
+                                  ACCEPT & SHARE MUTUAL
                                 </button>
                                 <button
                                   onClick={() => handleSharingResponse(
@@ -173,9 +173,9 @@ export function Header() {
                                     'reject',
                                     notification.id
                                   )}
-                                  className="px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-[10px] font-bold tracking-wider"
+                                  className="px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold tracking-wider"
                                 >
-                                  ✕
+                                  REJECT
                                 </button>
                               </div>
                             )}

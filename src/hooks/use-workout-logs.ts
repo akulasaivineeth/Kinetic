@@ -5,6 +5,13 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/providers/auth-provider';
 import type { WorkoutLog, WeeklyVolume } from '@/types/database';
 import { startOfWeek, endOfWeek, subMonths, subWeeks, startOfMonth, endOfMonth } from 'date-fns';
+import { get, set, del } from 'idb-keyval';
+import { useEffect, useCallback } from 'react';
+
+/**
+ * Workout Logs Hook System
+ * Precise implementation of offline sync, auto-save drafts, and weekly volume calculation.
+ */
 
 export type DateRange = 'week' | 'month' | '3mo' | '6mo' | 'year' | 'custom';
 
@@ -80,6 +87,12 @@ export function useDraftLog() {
     queryKey: ['draft-log', user?.id],
     queryFn: async () => {
       if (!user) return null;
+      
+      // 1. Try IndexedDB first for offline persistence
+      const idbDraft = await get(`draft-log-${user.id}`);
+      if (idbDraft && !navigator.onLine) return idbDraft;
+
+      // 2. Fetch from Supabase
       const { data, error } = await supabase
         .from('workout_logs')
         .select('*')
@@ -88,7 +101,11 @@ export function useDraftLog() {
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
+      
       if (error) throw error;
+      
+      // Update IndexedDB if remote is newer or better
+      if (data) await set(`draft-log-${user.id}`, data);
       return data as WorkoutLog | null;
     },
     enabled: !!user,
@@ -104,24 +121,36 @@ export function useSaveDraft() {
     mutationFn: async (log: Partial<WorkoutLog>) => {
       if (!user) throw new Error('Not authenticated');
 
-      if (log.id) {
-        const { data, error } = await supabase
-          .from('workout_logs')
-          .update({ ...log, updated_at: new Date().toISOString() })
-          .eq('id', log.id)
-          .select()
-          .single();
-        if (error) throw error;
-        return data;
-      } else {
-        const { data, error } = await supabase
-          .from('workout_logs')
-          .insert({ ...log, user_id: user.id, is_draft: true })
-          .select()
-          .single();
-        if (error) throw error;
-        return data;
+      const logData = { ...log, user_id: user.id, is_draft: true, updated_at: new Date().toISOString() };
+
+      // 1. Always save to IndexedDB immediately for offline safety
+      await set(`draft-log-${user.id}`, logData);
+
+      // 2. If online, sync to Supabase
+      if (navigator.onLine) {
+        if (log.id) {
+          const { data, error } = await supabase
+            .from('workout_logs')
+            .update(logData)
+            .eq('id', log.id)
+            .select()
+            .single();
+          if (error) throw error;
+          await set(`draft-log-${user.id}`, data);
+          return data;
+        } else {
+          const { data, error } = await supabase
+            .from('workout_logs')
+            .insert(logData)
+            .select()
+            .single();
+          if (error) throw error;
+          await set(`draft-log-${user.id}`, data);
+          return data;
+        }
       }
+      
+      return logData;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['draft-log'] });
@@ -131,10 +160,14 @@ export function useSaveDraft() {
 
 export function useSubmitLog() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const supabase = createClient();
 
   return useMutation({
     mutationFn: async (logId: string) => {
+      if (!logId) throw new Error('No log id provided for submission');
+      if (!user) throw new Error('Not authenticated');
+
       const { data, error } = await supabase
         .from('workout_logs')
         .update({
@@ -145,7 +178,11 @@ export function useSubmitLog() {
         .eq('id', logId)
         .select()
         .single();
+      
       if (error) throw error;
+
+      // Clean up local draft after successful submission
+      await del(`draft-log-${user.id}`);
       return data;
     },
     onSuccess: () => {
@@ -153,6 +190,71 @@ export function useSubmitLog() {
       queryClient.invalidateQueries({ queryKey: ['workout-logs'] });
       queryClient.invalidateQueries({ queryKey: ['weekly-volume'] });
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      queryClient.invalidateQueries({ queryKey: ['stamina'] });
     },
   });
+}
+
+export function useSharedLogs(dateRange: DateRange, customFrom?: Date, customTo?: Date) {
+  const { user } = useAuth();
+  const supabase = createClient();
+  const { from, to } = getDateRange(dateRange, customFrom, customTo);
+
+  return useQuery({
+    queryKey: ['shared-workout-logs', user?.id, dateRange, from.toISOString(), to.toISOString()],
+    queryFn: async () => {
+      if (!user) return [];
+
+      // 1. Get accepted connections
+      const { data: connections } = await supabase
+        .from('sharing_connections')
+        .select('requester_id, recipient_id')
+        .eq('status', 'accepted')
+        .or(`requester_id.eq.${user.id},recipient_id.eq.${user.id}`);
+
+      if (!connections || connections.length === 0) return [];
+
+      const sharedUserIds = connections.map(c => 
+        c.requester_id === user.id ? c.recipient_id : c.requester_id
+      );
+
+      // 2. Fetch logs for these users
+      const { data: logs, error } = await supabase
+        .from('workout_logs')
+        .select('*, profiles(full_name)')
+        .in('user_id', sharedUserIds)
+        .not('submitted_at', 'is', null)
+        .gte('logged_at', from.toISOString())
+        .lte('logged_at', to.toISOString())
+        .order('logged_at', { ascending: true });
+
+      if (error) throw error;
+      return logs ?? [];
+    },
+    enabled: !!user,
+  });
+}
+
+/**
+ * Background Sync Hook: listens for SW sync events or online reconnect
+ */
+export function useBackgroundSync() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const saveDraft = useSaveDraft();
+
+  const sync = useCallback(async () => {
+    if (!user || !navigator.onLine) return;
+    const localDraft = await get(`draft-log-${user.id}`);
+    if (localDraft && !localDraft.id) {
+      // It's a purely local draft that hasn't seen the server
+      saveDraft.mutate(localDraft);
+    }
+    queryClient.invalidateQueries({ queryKey: ['draft-log'] });
+  }, [user, saveDraft, queryClient]);
+
+  useEffect(() => {
+    window.addEventListener('online', sync);
+    return () => window.removeEventListener('online', sync);
+  }, [sync]);
 }
