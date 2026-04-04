@@ -2,62 +2,53 @@
 
 **Effective Date:** April 3, 2026
 
-## Introduction
+## 👋 What Is This?
 
-Kinetic is a private Progressive Web App built for a small group of friends to track fitness metrics — push-ups, planks, and running — and compete in a friendly performance challenge. This policy explains what data we collect, how we use it, and how we keep it safe.
+Kinetic is a private fitness app built by and for exactly 3 competitive idiots who decided a year-long push-up, plank, and running challenge was a reasonable life decision. This is not a Fortune 500 company. There is no legal team. There is only a group chat and an unhealthy obsession with leaderboard rankings.
 
-Kinetic is **not a commercial product**. It is invite-only, privately hosted, and used exclusively by authorized members.
+If you're reading this, you were probably invited. There is no sign-up page. You literally cannot use this app unless one of us personally sent you a link.
 
-## Information We Collect
+## 💪 What We Collect (Your Sweaty Data)
 
-- **Account Information:** Your name, email address, and profile photo via Google Sign-In.
-- **Fitness Data:** Push-up reps, plank duration, running distance, and optional workout notes and photos that you manually log.
-- **Whoop Data (Optional):** If you connect your Whoop account, we receive workout summaries (activity type, duration, strain score) via the Whoop API.
-- **Device Tokens:** Push notification tokens for sending you workout alerts, stored securely and used solely for notifications.
+- **Google account info** — your name, email, and profile pic so we know whose ego to crush.
+- **Workout logs** — push-up reps, plank seconds, run distance, and the occasional gym selfie you voluntarily upload.
+- **Whoop data** (optional) — if you connect Whoop, we grab your workout type, duration, and strain score. That's it. We don't care about your sleep cycles.
+- **Push notification tokens** — so we can alert you when someone just out-repped you.
 
-We do **not** collect location data, browsing history, contacts, or any data beyond what is listed above.
+## 📊 How We Use Your Data
 
-## How We Use Your Data
+Exclusively to:
+- Power your dashboard and track your gains (or lack thereof).
+- Display the Arena leaderboard so we can roast whoever is in last place.
+- Send you a push notification that says "Workout Detected 💪" and guilt you into logging it.
 
-Your data is used exclusively to:
+We do **not** run ads, train AI models on your plank times, or sell your data. Ever.
 
-- Display your personal fitness dashboard and trends.
-- Calculate leaderboard rankings in the Arena.
-- Send push notifications when a Whoop workout is detected.
-- Track weekly goals and improvement over time.
+## 🤝 Data Sharing
 
-We do **not** use your data for advertising, analytics profiling, or any purpose other than powering the app for you and your invited friends.
+Your data is shared with:
+- **Google** — because you signed in with it.
+- **Supabase** — our database. Think of it as a really secure spreadsheet in the cloud.
+- **Whoop** — only if you opted in, and only workout summaries.
+- **Each other** — but only after you both explicitly accept a sharing request inside the app. We built a whole double-confirmation flow for this. You're welcome.
 
-## Data Sharing
+Nobody else. No advertisers. No data brokers. No one cares about our push-up counts that much.
 
-Your data is **never sold** to third parties.
+## 🔒 Security
 
-Data is shared only with the following authorized services required to run the app:
+All data is encrypted, stored behind row-level security policies, and transmitted over HTTPS. We promise not to sell your plank times to the Russians. Or anyone. Your mediocre 5K pace is safe with us.
 
-- **Google** — for authentication (Sign-In).
-- **Supabase** — for secure database storage and user authentication.
-- **Whoop** — only if you opt into the Whoop integration, and limited to workout data.
-- **Vercel** — for hosting the application.
+## 🚪 Your Rights
 
-Fitness data is visible only to users you have explicitly accepted a mutual sharing connection with inside the app.
+- View all your data anytime in the app.
+- Revoke sharing with anyone from your Profile.
+- Ask the admin (it's just Vineeth) to delete your account entirely.
+- Quit the challenge. We'll judge you, but we'll comply.
 
-## Data Storage and Security
+## 📱 Contact
 
-All data is stored in a Supabase Postgres database protected by Row Level Security (RLS) policies, ensuring users can only access their own data and data explicitly shared with them. Communication between the app and the server is encrypted via HTTPS/TLS.
-
-## Your Rights
-
-Since this is a private app among friends, you can:
-
-- **View** all data associated with your account at any time.
-- **Delete** your account and all associated data by requesting removal from the admin.
-- **Revoke sharing** with any connected user instantly from your Profile.
-- **Disconnect Whoop** at any time to stop receiving automated workout data.
-
-## Contact
-
-For questions or data removal requests, contact the app administrator directly.
+Just text the group chat. You know which one.
 
 ---
 
-*This policy may be updated occasionally. Changes will be communicated to all active members.*
+*This policy may be updated if we add more friends or do something new. We'll let you know in the group chat, obviously.*
