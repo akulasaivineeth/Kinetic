@@ -1,4 +1,5 @@
-// Supabase Edge Function for Whoop Webhook
+// @ts-nocheck — This file runs in Supabase's Deno runtime, not Node.js.
+// IDE errors about missing Deno types are expected and harmless.
 // Deploy: supabase functions deploy whoop-webhook
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
