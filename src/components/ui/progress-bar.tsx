@@ -34,8 +34,8 @@ export function ProgressBar({ value, max, label, remaining }: ProgressBarProps) 
           animate={{ width: `${percentage}%` }}
           transition={{
             type: 'spring',
-            stiffness: 100,
-            damping: 20,
+            stiffness: 300,
+            damping: 25,
             delay: 0.2,
           }}
         />

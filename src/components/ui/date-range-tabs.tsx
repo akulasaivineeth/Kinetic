@@ -58,7 +58,7 @@ export function DateRangeTabs({ selected, onChange, onCustomDates }: DateRangeTa
               <motion.div
                 layoutId="date-tab"
                 className="absolute inset-0 rounded-full bg-emerald-500/15 border border-emerald-500/30"
-                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
               />
             )}
             <span className="relative z-10">{tab.label}</span>
