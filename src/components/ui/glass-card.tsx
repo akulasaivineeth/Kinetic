@@ -28,7 +28,7 @@ export function GlassCard({
         animate: { opacity: 1, y: 0, scale: 1 },
         transition: {
           type: 'spring',
-          stiffness: 400,
+          stiffness: 300,
           damping: 25,
           delay,
         },

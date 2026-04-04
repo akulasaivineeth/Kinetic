@@ -10,7 +10,7 @@ import { DateRangeTabs } from '@/components/ui/date-range-tabs';
 import { useLeaderboard } from '@/hooks/use-leaderboard';
 import { useWorkoutLogs, useSharedLogs, type DateRange } from '@/hooks/use-workout-logs';
 import { useAuth } from '@/providers/auth-provider';
-import { formatPercentage, getInitials } from '@/lib/utils';
+import { formatPercentage, getInitials, formatDistance } from '@/lib/utils';
 import type { LeaderboardEntry } from '@/types/database';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -30,6 +30,29 @@ export default function ArenaPage() {
   const { data: myLogs = [] } = useWorkoutLogs(dateRange, customFrom, customTo);
   const { data: sharedLogs = [] } = useSharedLogs(dateRange, customFrom, customTo);
 
+  // CSV Export for Arena
+  const handleExportCSV = () => {
+    if (!leaderboard.length) return;
+    const unit = profile?.unit_preference === 'imperial' ? 'MI' : 'KM';
+    const headers = ['Rank', 'Name', 'Push-ups', `Plank (min)`, `Run (${unit})`, 'Total Score'];
+    const rows = leaderboard.map((e, i) => [
+      i + 1,
+      e.full_name,
+      Math.round(e.pushup_value),
+      Math.round(e.plank_value / 60),
+      formatDistance(Number(e.run_value), profile?.unit_preference),
+      Math.round(e.total_score)
+    ]);
+    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", `kinetic_arena_${dateRange}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Podium (top 3)
   const top3 = leaderboard.slice(0, 3);
   const podiumOrder = top3.length >= 3
@@ -46,8 +69,8 @@ export default function ArenaPage() {
       if (!dataMap[dateKey]) dataMap[dateKey] = { date: dateKey };
       
       const val = metric === 'volume'
-        ? log.pushup_reps + log.plank_seconds + Number(log.run_distance) * 100
-        : Math.max(log.pushup_reps, log.plank_seconds, Number(log.run_distance) * 100);
+        ? log.pushup_reps + (log.plank_seconds / 6) + (Number(log.run_distance) * 10)
+        : Math.max(log.pushup_reps, log.plank_seconds / 6, Number(log.run_distance) * 10);
       
       dataMap[dateKey].you = (dataMap[dateKey].you || 0) + val;
     });
@@ -58,8 +81,8 @@ export default function ArenaPage() {
       if (!dataMap[dateKey]) dataMap[dateKey] = { date: dateKey };
       
       const val = metric === 'volume'
-        ? log.pushup_reps + log.plank_seconds + Number(log.run_distance) * 100
-        : Math.max(log.pushup_reps, log.plank_seconds, Number(log.run_distance) * 100);
+        ? log.pushup_reps + (log.plank_seconds / 6) + (Number(log.run_distance) * 10)
+        : Math.max(log.pushup_reps, log.plank_seconds / 6, Number(log.run_distance) * 10);
       
       const userName = log.profiles?.full_name?.split(' ')[0]?.toUpperCase() || 'FRIEND';
       dataMap[dateKey][userName] = (dataMap[dateKey][userName] || 0) + val;
@@ -90,10 +113,18 @@ export default function ArenaPage() {
               LIVE RANKINGS
             </p>
           </div>
-          <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-dark-elevated border border-dark-border">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-emerald-500 text-[10px] font-bold tracking-wider">LIVE</span>
-          </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleExportCSV}
+                className="px-3 py-1 rounded-full bg-dark-elevated border border-dark-border text-[9px] font-bold tracking-widest text-dark-muted hover:text-emerald-500 hover:border-emerald-500/30 transition-all uppercase"
+              >
+                EXPORT
+              </button>
+              <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-dark-elevated border border-dark-border">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-emerald-500 text-[10px] font-bold tracking-wider">LIVE</span>
+              </div>
+            </div>
         </motion.div>
 
         {/* Filters */}
@@ -306,7 +337,7 @@ export default function ArenaPage() {
                         {isYou ? `YOU (${entry.full_name?.split(' ')[0]})` : entry.full_name?.toUpperCase()}
                       </p>
                       <p className="text-[10px] text-dark-muted">
-                        💪 {Math.round(entry.pushup_value)} • 🧘 {Math.round(entry.plank_value / 60)}m • 🏃 {Number(entry.run_value).toFixed(1)}km
+                        💪 {Math.round(entry.pushup_value)} • 🧘 {Math.round(entry.plank_value / 60)}m • 🏃 {formatDistance(Number(entry.run_value), profile?.unit_preference)}{profile?.unit_preference === 'imperial' ? 'mi' : 'km'}
                       </p>
                     </div>
 

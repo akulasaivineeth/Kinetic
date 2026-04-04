@@ -35,7 +35,7 @@ export function TogglePills<T extends string>({
             <motion.div
               layoutId="toggle-pill"
               className="absolute inset-0 rounded-full bg-emerald-500/15 border border-emerald-500/30"
-              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
             />
           )}
           <span className="relative z-10">{option.label}</span>

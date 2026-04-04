@@ -27,6 +27,7 @@ export default function ProfilePage() {
   const [showInvites, setShowInvites] = useState(false);
   const [shareEmail, setShareEmail] = useState('');
   const [shareConfirm, setShareConfirm] = useState(false);
+  const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState('');
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
@@ -249,6 +250,35 @@ export default function ProfilePage() {
 
           <div className="h-2" />
 
+          {/* Unit Preference Toggle */}
+          <GlassCard className="flex items-center gap-3" delay={0.22}>
+            <div className="w-10 h-10 rounded-xl bg-dark-elevated flex items-center justify-center">
+              <span className="text-lg">📏</span>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-dark-text">Unit Preference</p>
+              <p className="text-[10px] text-dark-muted">
+                {profile?.unit_preference === 'imperial' ? 'Imperial (Miles)' : 'Metric (Kilometers)'}
+              </p>
+            </div>
+            <button
+              onClick={async () => {
+                const newUnit = profile?.unit_preference === 'imperial' ? 'metric' : 'imperial';
+                const supabase = createClient();
+                await supabase
+                  .from('profiles')
+                  .update({ unit_preference: newUnit, updated_at: new Date().toISOString() })
+                  .eq('id', user!.id);
+                await refreshProfile();
+              }}
+              className="px-3 py-1.5 rounded-xl bg-dark-elevated border border-dark-border text-[10px] font-bold tracking-wider text-emerald-500 hover:border-emerald-500/30 transition-all font-mono"
+            >
+              {profile?.unit_preference?.toUpperCase() || 'METRIC'}
+            </button>
+          </GlassCard>
+
+          <div className="h-2" />
+
           {/* Performance Goals */}
           <GlassCard
             className="flex items-center gap-3 cursor-pointer"
@@ -373,13 +403,19 @@ export default function ProfilePage() {
                           <span className="text-xs text-dark-text">{other?.full_name || other?.email}</span>
                           <button
                             onClick={() => {
-                              if (confirm(`Remove sharing with ${other?.full_name}?`)) {
+                              if (removeConfirmId === conn.id) {
                                 removeSharing.mutate(conn.id);
+                                setRemoveConfirmId(null);
+                              } else {
+                                setRemoveConfirmId(conn.id);
+                                setTimeout(() => setRemoveConfirmId(null), 3000);
                               }
                             }}
-                            className="text-[10px] text-red-400 font-semibold"
+                            className={`text-[10px] font-bold tracking-wider px-2 py-1 rounded-lg transition-all ${
+                              removeConfirmId === conn.id ? 'bg-red-500 text-white' : 'text-red-400'
+                            }`}
                           >
-                            REMOVE
+                            {removeConfirmId === conn.id ? 'CONFIRM REMOVAL' : 'REMOVE'}
                           </button>
                         </div>
                       );

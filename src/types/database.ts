@@ -13,6 +13,7 @@ export interface Profile {
   whoop_refresh_token: string | null;
   whoop_user_id: string | null;
   push_subscription: Json | null;
+  unit_preference: 'metric' | 'imperial';
   created_at: string;
   updated_at: string;
 }

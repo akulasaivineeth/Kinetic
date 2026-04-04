@@ -70,31 +70,39 @@ export function DateRangeTabs({ selected, onChange, onCustomDates }: DateRangeTa
       <AnimatePresence>
         {showPicker && selected === 'custom' && (
           <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
+            initial={{ opacity: 0, height: 0, y: -10 }}
+            animate={{ opacity: 1, height: 'auto', y: 0 }}
+            exit={{ opacity: 0, height: 0, y: -10 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
             className="overflow-hidden"
           >
-            <div className="flex items-center gap-2 mt-3">
-              <input
-                type="date"
-                value={customFrom}
-                onChange={(e) => setCustomFrom(e.target.value)}
-                className="flex-1 px-3 py-2 rounded-xl bg-dark-elevated text-sm text-dark-text border border-dark-border outline-none focus:border-emerald-500/50 transition-colors [color-scheme:dark]"
-              />
-              <span className="text-dark-muted text-xs font-bold">→</span>
-              <input
-                type="date"
-                value={customTo}
-                onChange={(e) => setCustomTo(e.target.value)}
-                className="flex-1 px-3 py-2 rounded-xl bg-dark-elevated text-sm text-dark-text border border-dark-border outline-none focus:border-emerald-500/50 transition-colors [color-scheme:dark]"
-              />
-              <button
+            <div className="flex items-center gap-2 mt-3 p-3 rounded-2xl bg-dark-elevated/30 border border-white/5 backdrop-blur-md shadow-2xl">
+              <div className="flex-1 relative">
+                <p className="absolute -top-4 left-1 text-[8px] font-bold text-dark-muted uppercase tracking-widest">FROM</p>
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-dark-bg/60 text-xs font-bold text-dark-text border border-white/5 outline-none focus:border-emerald-500/50 transition-colors [color-scheme:dark]"
+                />
+              </div>
+              <span className="text-dark-muted text-xs font-bold mt-2">→</span>
+              <div className="flex-1 relative">
+                <p className="absolute -top-4 left-1 text-[8px] font-bold text-dark-muted uppercase tracking-widest">TO</p>
+                <input
+                  type="date"
+                  value={customTo}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-dark-bg/60 text-xs font-bold text-dark-text border border-white/5 outline-none focus:border-emerald-500/50 transition-colors [color-scheme:dark]"
+                />
+              </div>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
                 onClick={handleApplyCustom}
-                className="px-3 py-2 rounded-xl bg-emerald-500/15 text-emerald-500 text-xs font-bold tracking-wider"
+                className="mt-2 px-4 py-2 rounded-xl bg-emerald-500 text-black text-[10px] font-black tracking-widest uppercase shadow-lg shadow-emerald-500/20"
               >
                 GO
-              </button>
+              </motion.button>
             </div>
           </motion.div>
         )}

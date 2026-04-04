@@ -10,8 +10,11 @@ export function formatPlankTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-export function formatDistance(km: number): string {
-  return km.toFixed(1);
+export function formatDistance(km: number, unit?: 'metric' | 'imperial'): number {
+  if (unit === 'imperial') {
+    return Number((km * 0.621371).toFixed(1));
+  }
+  return Number(km.toFixed(1));
 }
 
 export function formatPercentage(value: number): string {

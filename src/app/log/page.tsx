@@ -163,6 +163,10 @@ function LogPage() {
   const plankGoal = goals?.plank_weekly_goal || 600;
   const runGoal = goals?.run_weekly_goal || 20;
 
+  const displayRunGoal = profile?.unit_preference === 'imperial' ? runGoal * 0.621371 : runGoal;
+  const displayRunDist = profile?.unit_preference === 'imperial' ? totalRunDist * 0.621371 : totalRunDist;
+  const unitLabel = profile?.unit_preference === 'imperial' ? 'MI' : 'KM';
+
   return (
     <AppShell>
       <div className="space-y-4 pt-2">
@@ -266,12 +270,12 @@ function LogPage() {
         {/* Run Distance Card */}
         <GlassCard className="relative" delay={0.3}>
           <div className="flex justify-end mb-1">
-            <span className="text-[10px] font-bold tracking-wider text-emerald-500">
-              {runGoal}KM GOAL • {Math.max(runGoal - totalRunDist, 0).toFixed(1)}KM LEFT
+            <span className="text-[10px] font-bold tracking-wider text-emerald-500 uppercase">
+              {displayRunGoal.toFixed(1)}{unitLabel} GOAL • {Math.max(displayRunGoal - (profile?.unit_preference === 'imperial' ? totalRunDist * 0.621371 : totalRunDist), 0).toFixed(1)}{unitLabel} LEFT
             </span>
           </div>
           <p className="text-[11px] font-semibold tracking-[0.15em] text-dark-muted text-center uppercase mb-3">
-            RUN DISTANCE (KM)
+            RUN DISTANCE ({unitLabel})
           </p>
           <input
             type="number"

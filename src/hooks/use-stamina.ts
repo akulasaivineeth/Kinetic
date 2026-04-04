@@ -154,9 +154,10 @@ async function calculatePeakGain(supabase: any, userId: string, leanMassKg: numb
 
   // Body-weight normalization factor
   // If lean mass available, normalize push-up and plank values per kg of lean mass
-  const bwFactor = leanMassKg && leanMassKg > 0 ? leanMassKg : 1; // kg, or 1 = no normalization
+  // Using the latest lean mass for both current and baseline to compare pure performance delta per KG.
+  const bwFactor = leanMassKg && leanMassKg > 0 ? leanMassKg : 75; // kg default
   const normalize = (val: number, isBodyweight: boolean) =>
-    isBodyweight && leanMassKg ? val / bwFactor : val;
+    isBodyweight ? val / bwFactor : val;
 
   // Volume: sum of all
   const curVolPush = normalize(currentLogs.reduce((s: number, l: { pushup_reps: number }) => s + (l.pushup_reps || 0), 0), true);

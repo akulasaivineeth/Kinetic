@@ -11,7 +11,7 @@ import { useWorkoutLogs, type DateRange } from '@/hooks/use-workout-logs';
 import { useLeaderboard } from '@/hooks/use-leaderboard';
 import { useStamina } from '@/hooks/use-stamina';
 import { useAuth } from '@/providers/auth-provider';
-import { formatPercentage } from '@/lib/utils';
+import { formatPercentage, formatDistance } from '@/lib/utils';
 import type { LeaderboardEntry } from '@/types/database';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart,
@@ -56,9 +56,40 @@ export default function DashboardPage() {
     date: format(new Date(log.logged_at), 'MMM d'),
     pushups: log.pushup_reps,
     planks: log.plank_seconds,
-    runs: Number(log.run_distance),
-    total: log.pushup_reps + log.plank_seconds + Number(log.run_distance) * 100,
+    runs: formatDistance(Number(log.run_distance), profile?.unit_preference),
+    total: log.pushup_reps + (log.plank_seconds / 6) + (Number(log.run_distance) * 10), // Balanced score
   }));
+
+  // CSV Export for Dashboard
+  const handleExportCSV = () => {
+    if (!logs.length) return;
+    const headers = ['Date', 'Push-ups', 'Plank (sec)', `Run (${profile?.unit_preference === 'imperial' ? 'MI' : 'KM'})`, 'Notes'];
+    const rows = logs.map(l => [
+      format(new Date(l.logged_at), 'yyyy-MM-dd'),
+      l.pushup_reps,
+      l.plank_seconds,
+      formatDistance(Number(l.run_distance), profile?.unit_preference),
+      (l.notes || '').replace(/,/g, ';')
+    ]);
+    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", `kinetic_export_${dateRange}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Calculate Average Per Week for Month/Year views
+  const getAvgPerWeek = (val: number) => {
+    if (dateRange === 'month') return (val / 4.3).toFixed(1);
+    if (dateRange === 'year' || dateRange === '6mo' || dateRange === '3mo') {
+      const weeks = dateRange === 'year' ? 52.1 : dateRange === '6mo' ? 26 : 13;
+      return (val / weeks).toFixed(1);
+    }
+    return null;
+  };
 
   // Calculate real % improvements (current vs previous period)
   const calculateImprovement = (currentVal: number, baselineVal: number) => {
@@ -218,7 +249,7 @@ export default function DashboardPage() {
               <div className="flex items-center gap-2">
                 <span className="text-lg">🏃</span>
                 <span className="text-[11px] font-semibold tracking-wider text-dark-muted uppercase">
-                  RUNNING (KM)
+                  RUNNING ({profile?.unit_preference === 'imperial' ? 'MI' : 'KM'})
                 </span>
               </div>
               {runLeader && (
@@ -232,12 +263,19 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-baseline gap-3">
               <span className="text-4xl font-black text-dark-text">
-                {myEntry ? Number(myEntry.run_value).toFixed(1) : '0.0'}
+                {myEntry ? formatDistance(Number(myEntry.run_value), profile?.unit_preference).toFixed(1) : '0.0'}
               </span>
               {myEntry && (
-                <span className="text-sm font-bold text-emerald-500">
-                  {formatPercentage(calculateImprovement(Number(myEntry.run_value), Number(myEntry.run_value) * 0.85))}
-                </span>
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-emerald-500">
+                    {formatPercentage(calculateImprovement(Number(myEntry.run_value), Number(myEntry.run_value) * 0.85))}
+                  </span>
+                  {getAvgPerWeek(Number(myEntry.run_value)) && (
+                    <span className="text-[8px] font-bold text-dark-muted uppercase">
+                      AVG {getAvgPerWeek(formatDistance(Number(myEntry.run_value), profile?.unit_preference) as any)}/WK
+                    </span>
+                  )}
+                </div>
               )}
             </div>
             <div className="h-10 mt-2 -mx-2">
@@ -268,9 +306,17 @@ export default function DashboardPage() {
           <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-1">
             DATA CLUSTER
           </p>
-          <h3 className="text-2xl font-black italic mb-4">
-            PERSONAL TRENDS
-          </h3>
+          <div className="flex items-end justify-between mb-4">
+            <h3 className="text-2xl font-black italic">
+              PERSONAL TRENDS
+            </h3>
+            <button
+              onClick={handleExportCSV}
+              className="px-3 py-1.5 rounded-xl bg-dark-elevated border border-dark-border text-[10px] font-bold tracking-wider text-dark-muted hover:text-emerald-500 hover:border-emerald-500/30 transition-all uppercase"
+            >
+              CSV EXPORT
+            </button>
+          </div>
 
           {/* Date Range + Metric Toggles */}
           <div className="space-y-2 mb-4">
