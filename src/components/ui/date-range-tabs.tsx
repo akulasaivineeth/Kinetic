@@ -3,15 +3,40 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import type { DateRange } from '@/hooks/use-workout-logs';
+import type { DateRange as DateRangeType } from '@/hooks/use-workout-logs';
+import { DayPicker, type DateRange } from 'react-day-picker';
+import * as Popover from '@radix-ui/react-popover';
+import { format } from 'date-fns';
+import { Calendar as CalendarIcon, ChevronRight } from 'lucide-react';
+
+// Custom CSS for react-day-picker to match Kinetic theme
+const calendarStyles = `
+  .rdp {
+    --rdp-cell-size: 38px;
+    --rdp-accent-color: #10B981;
+    --rdp-background-color: rgba(16, 185, 129, 0.1);
+    margin: 0;
+  }
+  .rdp-months { justify-content: center; }
+  .rdp-day_selected, .rdp-day_selected:focus-visible, .rdp-day_selected:hover {
+    color: black !important;
+    font-weight: 900;
+    background-color: var(--rdp-accent-color) !important;
+  }
+  .rdp-button:hover:not([disabled]):not(.rdp-day_selected) {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+  .rdp-day { font-size: 11px; font-weight: 600; }
+  .rdp-head_cell { font-size: 9px; font-weight: 800; color: #8E8E93; text-transform: uppercase; }
+`;
 
 interface DateRangeTabsProps {
-  selected: DateRange;
-  onChange: (range: DateRange) => void;
+  selected: DateRangeType;
+  onChange: (range: DateRangeType) => void;
   onCustomDates?: (from: Date, to: Date) => void;
 }
 
-const tabs: { value: DateRange; label: string }[] = [
+const tabs: { value: DateRangeType; label: string }[] = [
   { value: 'week', label: 'WEEK' },
   { value: 'month', label: 'MONTH' },
   { value: '3mo', label: '3MO' },
@@ -21,34 +46,28 @@ const tabs: { value: DateRange; label: string }[] = [
 ];
 
 export function DateRangeTabs({ selected, onChange, onCustomDates }: DateRangeTabsProps) {
-  const [showPicker, setShowPicker] = useState(false);
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
+  const [range, setRange] = useState<DateRange | undefined>();
 
-  const handleTabClick = (value: DateRange) => {
+  const handleTabClick = (value: DateRangeType) => {
     onChange(value);
-    if (value === 'custom') {
-      setShowPicker(true);
-    } else {
-      setShowPicker(false);
-    }
   };
 
   const handleApplyCustom = () => {
-    if (customFrom && customTo && onCustomDates) {
-      onCustomDates(new Date(customFrom), new Date(customTo));
+    if (range?.from && range?.to && onCustomDates) {
+      onCustomDates(range.from, range.to);
     }
   };
 
   return (
-    <div>
-      <div className="flex gap-1 overflow-x-auto no-scrollbar">
+    <div className="relative">
+      <style>{calendarStyles}</style>
+      <div className="flex gap-1 overflow-x-auto no-scrollbar pb-1">
         {tabs.map((tab) => (
           <button
             key={tab.value}
             onClick={() => handleTabClick(tab.value)}
             className={cn(
-              'relative px-3 py-1.5 rounded-full text-[11px] font-bold tracking-wider whitespace-nowrap transition-all duration-200',
+              'relative px-3.5 py-1.5 rounded-full text-[10px] font-black tracking-[0.1em] whitespace-nowrap transition-all duration-200',
               selected === tab.value
                 ? 'text-emerald-400'
                 : 'text-dark-muted hover:text-dark-text'
@@ -66,44 +85,55 @@ export function DateRangeTabs({ selected, onChange, onCustomDates }: DateRangeTa
         ))}
       </div>
 
-      {/* Custom date picker */}
       <AnimatePresence>
-        {showPicker && selected === 'custom' && (
+        {selected === 'custom' && (
           <motion.div
-            initial={{ opacity: 0, height: 0, y: -10 }}
-            animate={{ opacity: 1, height: 'auto', y: 0 }}
-            exit={{ opacity: 0, height: 0, y: -10 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="overflow-hidden"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="mt-3"
           >
-            <div className="flex items-center gap-2 mt-3 p-3 rounded-2xl bg-dark-elevated/30 border border-white/5 backdrop-blur-md shadow-2xl">
-              <div className="flex-1 relative">
-                <p className="absolute -top-4 left-1 text-[8px] font-bold text-dark-muted uppercase tracking-widest">FROM</p>
-                <input
-                  type="date"
-                  value={customFrom}
-                  onChange={(e) => setCustomFrom(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-dark-bg/60 text-xs font-bold text-dark-text border border-white/5 outline-none focus:border-emerald-500/50 transition-colors [color-scheme:dark]"
-                />
-              </div>
-              <span className="text-dark-muted text-xs font-bold mt-2">→</span>
-              <div className="flex-1 relative">
-                <p className="absolute -top-4 left-1 text-[8px] font-bold text-dark-muted uppercase tracking-widest">TO</p>
-                <input
-                  type="date"
-                  value={customTo}
-                  onChange={(e) => setCustomTo(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-dark-bg/60 text-xs font-bold text-dark-text border border-white/5 outline-none focus:border-emerald-500/50 transition-colors [color-scheme:dark]"
-                />
-              </div>
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={handleApplyCustom}
-                className="mt-2 px-4 py-2 rounded-xl bg-emerald-500 text-black text-[10px] font-black tracking-widest uppercase shadow-lg shadow-emerald-500/20"
-              >
-                GO
-              </motion.button>
-            </div>
+            <Popover.Root>
+              <Popover.Trigger asChild>
+                <button className="w-full h-12 px-4 rounded-2xl bg-dark-elevated border border-dark-border flex items-center justify-between group hover:border-emerald-500/30 transition-all">
+                  <div className="flex items-center gap-3">
+                    <CalendarIcon size={16} className="text-dark-muted group-hover:text-emerald-500 transition-colors" />
+                    <span className="text-[11px] font-bold text-dark-text tracking-wide">
+                      {range?.from 
+                        ? `${format(range.from, 'MMM d')} - ${range.to ? format(range.to, 'MMM d') : '...'}`
+                        : 'SELECT DATE RANGE'}
+                    </span>
+                  </div>
+                  <ChevronRight size={14} className="text-dark-muted" />
+                </button>
+              </Popover.Trigger>
+              
+              <Popover.Portal>
+                <Popover.Content 
+                  className="z-[100] w-auto p-4 rounded-3xl glass-card-elevated border border-white/10 shadow-2xl animate-in fade-in zoom-in-95 duration-200"
+                  sideOffset={8}
+                  align="start"
+                >
+                  <DayPicker
+                    mode="range"
+                    selected={range}
+                    onSelect={setRange}
+                    numberOfMonths={1}
+                  />
+                  <div className="flex gap-2 mt-4">
+                    <Popover.Close asChild>
+                      <button 
+                        onClick={handleApplyCustom}
+                        disabled={!range?.from || !range?.to}
+                        className="flex-1 py-3 rounded-xl emerald-gradient text-white text-[10px] font-black tracking-widest uppercase shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                      >
+                        APPLY RANGE
+                      </button>
+                    </Popover.Close>
+                  </div>
+                </Popover.Content>
+              </Popover.Portal>
+            </Popover.Root>
           </motion.div>
         )}
       </AnimatePresence>

@@ -40,7 +40,7 @@ function LandingPage() {
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 20, delay: 0.1 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.1 }}
           className="mb-8"
         >
           <div className="w-20 h-20 rounded-2xl emerald-gradient emerald-glow mx-auto flex items-center justify-center mb-6">

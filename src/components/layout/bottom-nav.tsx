@@ -71,7 +71,7 @@ export function BottomNav() {
             >
               <motion.div
                 whileTap={{ scale: 0.9 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
               >
                 {item.icon(isActive)}
               </motion.div>
@@ -88,7 +88,7 @@ export function BottomNav() {
                 <motion.div
                   layoutId="nav-indicator"
                   className="absolute -top-2 w-1 h-1 rounded-full bg-emerald-500"
-                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 25 }}
                 />
               )}
             </Link>

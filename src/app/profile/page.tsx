@@ -243,7 +243,7 @@ export default function ProfilePage() {
               <motion.div
                 className="w-5 h-5 rounded-full bg-white absolute top-1"
                 animate={{ left: theme === 'dark' ? 24 : 4 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
               />
             </button>
           </GlassCard>

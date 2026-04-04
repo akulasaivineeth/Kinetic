@@ -44,6 +44,7 @@ export function GlassCard({
         className
       )}
       onClick={onClick}
+      whileHover={onClick ? { y: -4, transition: { type: 'spring', stiffness: 300, damping: 25 } } : undefined}
       whileTap={onClick ? { scale: 0.97 } : undefined}
       {...animateProps}
     >

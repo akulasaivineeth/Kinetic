@@ -164,10 +164,19 @@ export default function DashboardPage() {
               <span className="text-4xl font-black text-dark-text">
                 {myEntry ? Math.round(myEntry.pushup_value) : 0}
               </span>
-              {myEntry && pushupLeader && (
-                <span className="text-sm font-bold text-emerald-500">
-                  {formatPercentage(calculateImprovement(myEntry.pushup_value, pushupLeader.pushup_value !== myEntry.pushup_value ? pushupLeader.pushup_value * 0.9 : myEntry.pushup_value * 0.88))}
-                </span>
+              {myEntry && (
+                <div className="flex flex-col">
+                  {pushupLeader && (
+                    <span className="text-sm font-bold text-emerald-500">
+                      {formatPercentage(calculateImprovement(myEntry.pushup_value, pushupLeader.pushup_value !== myEntry.pushup_value ? pushupLeader.pushup_value * 0.9 : myEntry.pushup_value * 0.88))}
+                    </span>
+                  )}
+                  {getAvgPerWeek(myEntry.pushup_value) && (
+                    <span className="text-[8px] font-bold text-dark-muted uppercase">
+                      AVG {getAvgPerWeek(myEntry.pushup_value)}/WK
+                    </span>
+                  )}
+                </div>
               )}
             </div>
             {/* Mini sparkline */}
@@ -216,9 +225,16 @@ export default function DashboardPage() {
                 {myEntry ? (myEntry.plank_value / 60).toFixed(1) : '0.0'}
               </span>
               {myEntry && (
-                <span className="text-sm font-bold text-emerald-500">
-                  {formatPercentage(calculateImprovement(myEntry.plank_value, myEntry.plank_value * 0.92))}
-                </span>
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-emerald-500">
+                    {formatPercentage(calculateImprovement(myEntry.plank_value, myEntry.plank_value * 0.92))}
+                  </span>
+                  {getAvgPerWeek(myEntry.plank_value) && (
+                    <span className="text-[8px] font-bold text-dark-muted uppercase">
+                      AVG {(Number(getAvgPerWeek(myEntry.plank_value)) / 60).toFixed(1)}/WK
+                    </span>
+                  )}
+                </div>
               )}
             </div>
             <div className="h-10 mt-2 -mx-2">
@@ -347,60 +363,65 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Trends Chart */}
-          <GlassCard className="p-5" delay={0.4}>
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <p className="text-lg font-black">PERFORMANCE</p>
-                <p className="text-lg font-black">VELOCITY</p>
-                <p className="text-[10px] font-semibold tracking-wider text-dark-muted mt-1">
-                  PERSONAL TRACKING
-                </p>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.4 }}
+          >
+            <GlassCard className="p-5" animate={false}>
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <p className="text-lg font-black">PERFORMANCE</p>
+                  <p className="text-lg font-black">VELOCITY</p>
+                  <p className="text-[10px] font-semibold tracking-wider text-dark-muted mt-1">
+                    PERSONAL TRACKING
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-black text-emerald-500">
+                    {Math.abs(velocityPts).toFixed(1)}<span className="text-xs text-dark-muted ml-0.5">pts</span>
+                  </p>
+                  <p className="text-xs font-semibold text-emerald-500">
+                    {formatPercentage(stamina.peakGain)}
+                  </p>
+                  <p className="text-[10px] text-dark-muted">IMPROVEMENT</p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-2xl font-black text-emerald-500">
-                  {Math.abs(velocityPts).toFixed(1)}<span className="text-xs text-dark-muted ml-0.5">pts</span>
-                </p>
-                <p className="text-xs font-semibold text-emerald-500">
-                  {formatPercentage(stamina.peakGain)}
-                </p>
-                <p className="text-[10px] text-dark-muted">IMPROVEMENT</p>
-              </div>
-            </div>
 
-            <div className="h-40">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData.length > 0 ? chartData : [
-                  { date: 'No data', total: 0 },
-                ]}>
-                  <XAxis
-                    dataKey="date"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#8E8E93', fontSize: 10 }}
-                  />
-                  <YAxis hide />
-                  <Tooltip
-                    contentStyle={{
-                      background: 'rgba(28, 28, 30, 0.95)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '12px',
-                      color: '#F5F5F7',
-                      fontSize: '12px',
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="total"
-                    stroke="#10B981"
-                    strokeWidth={3}
-                    dot={false}
-                    activeDot={{ r: 4, fill: '#10B981' }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </GlassCard>
+              <div className="h-40">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData.length > 0 ? chartData : [
+                    { date: 'No data', total: 0 },
+                  ]}>
+                    <XAxis
+                      dataKey="date"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: '#8E8E93', fontSize: 10 }}
+                    />
+                    <YAxis hide />
+                    <Tooltip
+                      contentStyle={{
+                        background: 'rgba(28, 28, 30, 0.95)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '12px',
+                        color: '#F5F5F7',
+                        fontSize: '12px',
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="total"
+                      stroke="#10B981"
+                      strokeWidth={3}
+                      dot={false}
+                      activeDot={{ r: 4, fill: '#10B981' }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </GlassCard>
+          </motion.div>
         </div>
 
         {/* Stamina Score + Peak Gain Rings — REAL VALUES */}

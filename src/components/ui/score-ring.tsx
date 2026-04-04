@@ -58,8 +58,8 @@ export function ScoreRing({
             animate={{ strokeDashoffset }}
             transition={{
               type: 'spring',
-              stiffness: 60,
-              damping: 15,
+              stiffness: 300,
+              damping: 25,
               delay: 0.3,
             }}
           />

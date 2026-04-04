@@ -230,18 +230,24 @@ export function useSharedLogs(dateRange: DateRange, customFrom?: Date, customTo?
     queryFn: async () => {
       if (!user) return [];
 
-      // 1. Get accepted connections
+      // 1. Get accepted connections (Differentiate one-way vs mutual)
       const { data: connections } = await supabase
         .from('sharing_connections')
-        .select('requester_id, recipient_id')
+        .select('requester_id, recipient_id, is_mutual')
         .eq('status', 'accepted')
         .or(`requester_id.eq.${user.id},recipient_id.eq.${user.id}`);
 
       if (!connections || connections.length === 0) return [];
 
-      const sharedUserIds = connections.map(c => 
-        c.requester_id === user.id ? c.recipient_id : c.requester_id
-      );
+      const sharedUserIds = connections
+        .filter(c => {
+          // I requested them -> I see them (Accept/AcceptMutual both allow this)
+          if (c.requester_id === user.id) return true;
+          // They requested me -> I see them ONLY if I clicked Accept Mutual
+          if (c.recipient_id === user.id && c.is_mutual) return true;
+          return false;
+        })
+        .map(c => c.requester_id === user.id ? c.recipient_id : c.requester_id);
 
       // 2. Fetch logs for these users
       const { data: logs, error } = await supabase

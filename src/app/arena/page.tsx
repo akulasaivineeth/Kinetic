@@ -224,74 +224,80 @@ export default function ArenaPage() {
           )}
         </GlassCard>
 
-        {/* OVERLAID Intensity Velocity Chart */}
-        <GlassCard delay={0.3}>
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-bold tracking-wider text-dark-muted uppercase">
-              INTENSITY VELOCITY
-            </p>
-            <div className="flex gap-3">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="text-[10px] font-semibold text-dark-muted uppercase">YOU</span>
-              </div>
-              {comparisonUsers.slice(0, 2).map((name) => (
-                <div key={name} className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-white/20" />
-                  <span className="text-[10px] font-semibold text-dark-muted uppercase">{name}</span>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98, y: 10 }}
+          whileInView={{ opacity: 1, scale: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.3 }}
+        >
+          <GlassCard animate={false}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-bold tracking-wider text-dark-muted uppercase">
+                INTENSITY VELOCITY
+              </p>
+              <div className="flex gap-3">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="text-[10px] font-semibold text-dark-muted uppercase">YOU</span>
                 </div>
-              ))}
-            </div>
-          </div>
-          
-          <div className="h-48">
-            {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
-                  <XAxis
-                    dataKey="date"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#8E8E93', fontSize: 10 }}
-                  />
-                  <YAxis hide />
-                  <Tooltip
-                    contentStyle={{
-                      background: 'rgba(28, 28, 30, 0.95)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '12px',
-                      color: '#F5F5F7',
-                      fontSize: '12px',
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="you"
-                    stroke="#10B981"
-                    strokeWidth={3}
-                    dot={false}
-                    activeDot={{ r: 4 }}
-                  />
-                  {comparisonUsers.map((name, i) => (
-                    <Line
-                      key={name}
-                      type="monotone"
-                      dataKey={name}
-                      stroke={`rgba(255,255,255,${0.4 - i * 0.1})`}
-                      strokeWidth={1.5}
-                      strokeDasharray="4 4"
-                      dot={false}
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center border border-dashed border-dark-border rounded-xl">
-                <p className="text-[10px] font-bold text-dark-muted uppercase tracking-widest">NO LIVE DATA</p>
+                {comparisonUsers.slice(0, 2).map((name) => (
+                  <div key={name} className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-white/20" />
+                    <span className="text-[10px] font-semibold text-dark-muted uppercase">{name}</span>
+                  </div>
+                ))}
               </div>
-            )}
-          </div>
-        </GlassCard>
+            </div>
+            
+            <div className="h-48">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData}>
+                    <XAxis
+                      dataKey="date"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: '#8E8E93', fontSize: 10 }}
+                    />
+                    <YAxis hide />
+                    <Tooltip
+                      contentStyle={{
+                        background: 'rgba(28, 28, 30, 0.95)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '12px',
+                        color: '#F5F5F7',
+                        fontSize: '12px',
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="you"
+                      stroke="#10B981"
+                      strokeWidth={3}
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
+                    {comparisonUsers.map((name, i) => (
+                      <Line
+                        key={name}
+                        type="monotone"
+                        dataKey={name}
+                        stroke={`rgba(255,255,255,${0.4 - i * 0.1})`}
+                        strokeWidth={1.5}
+                        strokeDasharray="4 4"
+                        dot={false}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center border border-dashed border-dark-border rounded-xl">
+                  <p className="text-[10px] font-bold text-dark-muted uppercase tracking-widest">NO LIVE DATA</p>
+                </div>
+              )}
+            </div>
+          </GlassCard>
+        </motion.div>
 
         {/* Standings */}
         <div>

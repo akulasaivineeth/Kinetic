@@ -1,6 +1,5 @@
-'use client';
-
 import { motion } from 'framer-motion';
+import { GlassCard } from './glass-card';
 
 interface ProgressBarProps {
   value: number;
@@ -13,7 +12,7 @@ export function ProgressBar({ value, max, label, remaining }: ProgressBarProps) 
   const percentage = Math.min((value / max) * 100, 100);
 
   return (
-    <div className="glass-card p-4">
+    <GlassCard animate={false}>
       <div className="flex items-center justify-between mb-2">
         <div>
           <p className="text-[10px] font-semibold tracking-widest uppercase text-dark-muted mb-0.5">
@@ -40,6 +39,6 @@ export function ProgressBar({ value, max, label, remaining }: ProgressBarProps) 
           }}
         />
       </div>
-    </div>
+    </GlassCard>
   );
 }
