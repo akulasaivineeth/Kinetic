@@ -53,9 +53,24 @@ export async function GET(request: Request) {
         }
       }
 
+      if (inviteCode) {
+        // ...Existing Logic...
+      } else {
+        // No invite provided - check if this is the first user
+        const serviceClient = await createServiceClient();
+        const { count } = await serviceClient
+          .from('profiles')
+          .select('*', { count: 'exact', head: true });
+        
+        if (count && count > 0) {
+          // Not the first user and no invite - DENY
+          return NextResponse.redirect(`${origin}/unauthorized`);
+        }
+      }
+
       return NextResponse.redirect(`${origin}/dashboard`);
     }
   }
 
-  return NextResponse.redirect(`${origin}/?error=auth_failed`);
+  return NextResponse.redirect(`${origin}/unauthorized?error=auth_failed`);
 }

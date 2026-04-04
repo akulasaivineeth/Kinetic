@@ -40,10 +40,11 @@ export function GlassCard({
       className={cn(
         elevated ? 'glass-card-elevated' : 'glass-card',
         'p-4',
-        onClick && 'cursor-pointer active:scale-[0.98] transition-spring',
+        onClick && 'cursor-pointer',
         className
       )}
       onClick={onClick}
+      whileTap={onClick ? { scale: 0.97 } : undefined}
       {...animateProps}
     >
       {children}

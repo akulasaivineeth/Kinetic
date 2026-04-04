@@ -1,21 +1,62 @@
-'use client';
-
-import { type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { Header } from './header';
 import { BottomNav } from './bottom-nav';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface AppShellProps {
   children: ReactNode;
 }
 
 export function AppShell({ children }: AppShellProps) {
+  const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
+
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      const timer = setTimeout(() => setShowNotificationPrompt(true), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  const requestPermission = async () => {
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      // Logic would go here to register VAPID sub
+    }
+    setShowNotificationPrompt(false);
+  };
+
   return (
-    <div className="min-h-dvh bg-dark-bg flex flex-col max-w-lg mx-auto relative">
+    <div className="min-h-dvh bg-dark-bg flex flex-col max-w-lg mx-auto relative overflow-hidden">
       <Header />
-      <main className="flex-1 px-5 pb-24 overflow-y-auto">
+      <main className="flex-1 px-5 pb-24 overflow-y-auto overflow-x-hidden">
         {children}
       </main>
       <BottomNav />
+
+      {/* Notification Prompt */}
+      <AnimatePresence>
+        {showNotificationPrompt && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className="fixed bottom-24 left-5 right-5 z-50"
+          >
+            <div className="p-4 rounded-2xl bg-dark-elevated border border-emerald-500/30 glass-card-elevated flex items-center justify-between gap-4">
+              <div className="flex-1">
+                <p className="text-xs font-black text-dark-text">ENABLE NOTIFICATIONS</p>
+                <p className="text-[10px] text-dark-muted mt-0.5">Stay updated with live arena scores and Whoop workouts.</p>
+              </div>
+              <button 
+                onClick={requestPermission}
+                className="px-4 py-2 rounded-xl bg-emerald-500 text-black text-[10px] font-black tracking-widest uppercase hover:bg-emerald-400 transition-colors"
+              >
+                ENABLE
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

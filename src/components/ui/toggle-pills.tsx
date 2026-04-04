@@ -19,7 +19,7 @@ export function TogglePills<T extends string>({
   return (
     <div className="flex gap-2 flex-wrap">
       {options.map((option) => (
-        <button
+        <motion.button
           key={option.value}
           onClick={() => onChange(option.value)}
           className={cn(
@@ -29,6 +29,7 @@ export function TogglePills<T extends string>({
               ? 'text-emerald-400'
               : 'text-dark-muted hover:text-dark-text'
           )}
+          whileTap={{ scale: 0.95 }}
         >
           {selected === option.value && (
             <motion.div
@@ -38,7 +39,7 @@ export function TogglePills<T extends string>({
             />
           )}
           <span className="relative z-10">{option.label}</span>
-        </button>
+        </motion.button>
       ))}
     </div>
   );
