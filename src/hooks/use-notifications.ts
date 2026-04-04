@@ -5,11 +5,10 @@ import { useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/providers/auth-provider';
 
-const supabase = createClient();
-
 export function useNotifications() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const supabase = createClient();
 
   // Real-time subscription
   useEffect(() => {
@@ -55,6 +54,7 @@ export function useNotifications() {
 
 export function useMarkNotificationRead() {
   const queryClient = useQueryClient();
+  const supabase = createClient();
 
   return useMutation({
     mutationFn: async (notificationId: string) => {

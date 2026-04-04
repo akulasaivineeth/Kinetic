@@ -5,8 +5,6 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/providers/auth-provider';
 import type { PerformanceGoals } from '@/types/database';
 
-const supabase = createClient();
-
 const DEFAULT_GOALS: Omit<PerformanceGoals, 'id' | 'user_id' | 'created_at' | 'updated_at'> = {
   pushup_weekly_goal: 500,
   plank_weekly_goal: 600,
@@ -18,6 +16,7 @@ const DEFAULT_GOALS: Omit<PerformanceGoals, 'id' | 'user_id' | 'created_at' | 'u
 
 export function useGoals() {
   const { user } = useAuth();
+  const supabase = createClient();
 
   return useQuery({
     queryKey: ['goals', user?.id],
@@ -38,6 +37,7 @@ export function useGoals() {
 export function useUpdateGoals() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const supabase = createClient();
 
   return useMutation({
     mutationFn: async (goals: Partial<PerformanceGoals>) => {

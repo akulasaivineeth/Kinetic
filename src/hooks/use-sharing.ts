@@ -4,10 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/providers/auth-provider';
 
-const supabase = createClient();
-
 export function useSharingConnections() {
   const { user } = useAuth();
+  const supabase = createClient();
 
   return useQuery({
     queryKey: ['sharing-connections', user?.id],
@@ -31,6 +30,7 @@ export function useSharingConnections() {
 export function useSendSharingRequest() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const supabase = createClient();
 
   return useMutation({
     mutationFn: async (recipientEmail: string) => {
@@ -70,6 +70,7 @@ export function useSendSharingRequest() {
 
 export function useRespondToSharing() {
   const queryClient = useQueryClient();
+  const supabase = createClient();
 
   return useMutation({
     mutationFn: async ({
@@ -108,6 +109,7 @@ export function useRespondToSharing() {
 
 export function useRemoveSharing() {
   const queryClient = useQueryClient();
+  const supabase = createClient();
 
   return useMutation({
     mutationFn: async (connectionId: string) => {

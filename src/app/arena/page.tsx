@@ -11,8 +11,9 @@ import { useLeaderboard } from '@/hooks/use-leaderboard';
 import { useWorkoutLogs, type DateRange } from '@/hooks/use-workout-logs';
 import { useAuth } from '@/providers/auth-provider';
 import { formatPercentage, getInitials } from '@/lib/utils';
+import type { LeaderboardEntry } from '@/types/database';
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { format } from 'date-fns';
 
@@ -21,9 +22,15 @@ export default function ArenaPage() {
   const [dateRange, setDateRange] = useState<DateRange>('week');
   const [metric, setMetric] = useState<'volume' | 'peak'>('volume');
   const [mode, setMode] = useState<'raw' | 'percent'>('raw');
+  const [customFrom, setCustomFrom] = useState<Date | undefined>();
+  const [customTo, setCustomTo] = useState<Date | undefined>();
 
-  const { data: leaderboard = [] } = useLeaderboard(dateRange, metric, mode);
-  const { data: logs = [] } = useWorkoutLogs(dateRange);
+  const { data: leaderboardRaw = [] } = useLeaderboard(dateRange, metric, mode, customFrom, customTo);
+  const leaderboard = leaderboardRaw as LeaderboardEntry[];
+  const { data: logs = [] } = useWorkoutLogs(dateRange, customFrom, customTo);
+
+  // Find current user entry
+  const myEntry = leaderboard.find((e) => e.user_id === profile?.id);
 
   // Podium (top 3)
   const top3 = leaderboard.slice(0, 3);
@@ -31,7 +38,7 @@ export default function ArenaPage() {
     ? [top3[1], top3[0], top3[2]] // 2nd, 1st, 3rd
     : top3;
 
-  // Chart data from logs
+  // Chart data — user's own line from real logs (no placeholders)
   const chartData = logs.map((log) => ({
     date: format(new Date(log.logged_at), 'EEE').toUpperCase(),
     you: metric === 'volume'
@@ -39,16 +46,11 @@ export default function ArenaPage() {
       : Math.max(log.pushup_reps, log.plank_seconds, Number(log.run_distance) * 100),
   }));
 
-  // Placeholder chart data when no logs
-  const defaultChart = [
-    { date: 'MON', you: 30, shared: 25 },
-    { date: 'TUE', you: 28, shared: 30 },
-    { date: 'WED', you: 35, shared: 28 },
-    { date: 'THU', you: 40, shared: 35 },
-    { date: 'FRI', you: 45, shared: 42 },
-    { date: 'SAT', you: 50, shared: 48 },
-    { date: 'SUN', you: 55, shared: 45 },
-  ];
+  // Leader's name for chart legend
+  const leader = leaderboard[0];
+  const leaderName = leader && leader.user_id !== profile?.id
+    ? leader.full_name?.split(' ')[0]?.toUpperCase() || 'LEADER'
+    : leaderboard[1]?.full_name?.split(' ')[0]?.toUpperCase() || 'FRIEND';
 
   return (
     <AppShell>
@@ -65,22 +67,13 @@ export default function ArenaPage() {
               LIVE RANKINGS
             </p>
           </div>
-          <button className="w-10 h-10 rounded-xl bg-dark-elevated border border-dark-border flex items-center justify-center">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2" strokeLinecap="round">
-              <line x1="4" y1="21" x2="4" y2="14" />
-              <line x1="4" y1="10" x2="4" y2="3" />
-              <line x1="12" y1="21" x2="12" y2="12" />
-              <line x1="12" y1="8" x2="12" y2="3" />
-              <line x1="20" y1="21" x2="20" y2="16" />
-              <line x1="20" y1="12" x2="20" y2="3" />
-              <line x1="1" y1="14" x2="7" y2="14" />
-              <line x1="9" y1="8" x2="15" y2="8" />
-              <line x1="17" y1="16" x2="23" y2="16" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-dark-elevated border border-dark-border">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-emerald-500 text-[10px] font-bold tracking-wider">LIVE</span>
+          </div>
         </motion.div>
 
-        {/* Toggles */}
+        {/* Toggles — these update BOTH podium/table AND chart */}
         <div className="space-y-2">
           <div className="flex gap-3">
             <TogglePills
@@ -102,75 +95,86 @@ export default function ArenaPage() {
               size="sm"
             />
           </div>
-          <DateRangeTabs selected={dateRange} onChange={setDateRange} />
+          <DateRangeTabs
+            selected={dateRange}
+            onChange={setDateRange}
+            onCustomDates={(from, to) => { setCustomFrom(from); setCustomTo(to); }}
+          />
         </div>
 
         {/* Podium */}
         <GlassCard className="py-8 px-4 relative overflow-hidden bg-gradient-to-b from-emerald-900/20 to-transparent" delay={0.1}>
-          <div className="flex items-end justify-center gap-4">
-            {podiumOrder.map((entry, idx) => {
-              if (!entry) return null;
-              const isFirst = idx === 1; // Center position = 1st place
-              const rank = idx === 0 ? 2 : idx === 1 ? 1 : 3;
-              const isYou = entry.user_id === profile?.id;
+          {podiumOrder.length > 0 ? (
+            <div className="flex items-end justify-center gap-4">
+              {podiumOrder.map((entry, idx) => {
+                if (!entry) return null;
+                const isFirst = idx === 1;
+                const rank = idx === 0 ? 2 : idx === 1 ? 1 : 3;
+                const isYou = entry.user_id === profile?.id;
 
-              return (
-                <motion.div
-                  key={entry.user_id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 + idx * 0.1 }}
-                  className="flex flex-col items-center"
-                >
-                  <div className={`relative ${isFirst ? 'mb-2' : ''}`}>
-                    {isFirst && (
-                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
-                        <span className="text-emerald-500">⭐</span>
+                return (
+                  <motion.div
+                    key={entry.user_id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 + idx * 0.1 }}
+                    className="flex flex-col items-center"
+                  >
+                    <div className={`relative ${isFirst ? 'mb-2' : ''}`}>
+                      {isFirst && (
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
+                          <span className="text-emerald-500">⭐</span>
+                        </div>
+                      )}
+                      <div
+                        className={`rounded-full overflow-hidden border-2 ${
+                          isFirst
+                            ? 'w-20 h-20 border-emerald-500'
+                            : 'w-14 h-14 border-dark-border'
+                        }`}
+                      >
+                        {entry.avatar_url ? (
+                          <Image
+                            src={entry.avatar_url}
+                            alt={entry.full_name || ''}
+                            width={isFirst ? 80 : 56}
+                            height={isFirst ? 80 : 56}
+                            className="object-cover w-full h-full"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-dark-elevated flex items-center justify-center text-xs font-bold text-emerald-500">
+                            {getInitials(entry.full_name || 'U')}
+                          </div>
+                        )}
                       </div>
-                    )}
-                    <div
-                      className={`rounded-full overflow-hidden border-2 ${
-                        isFirst
-                          ? 'w-20 h-20 border-emerald-500'
-                          : 'w-14 h-14 border-dark-border'
-                      }`}
-                    >
-                      {entry.avatar_url ? (
-                        <Image
-                          src={entry.avatar_url}
-                          alt={entry.full_name || ''}
-                          width={isFirst ? 80 : 56}
-                          height={isFirst ? 80 : 56}
-                          className="object-cover w-full h-full"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-dark-elevated flex items-center justify-center text-xs font-bold text-emerald-500">
-                          {getInitials(entry.full_name || 'U')}
+                      {!isFirst && (
+                        <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-dark-elevated border border-dark-border flex items-center justify-center">
+                          <span className="text-[10px] font-bold text-emerald-500">{rank}</span>
                         </div>
                       )}
                     </div>
-                    {!isFirst && (
-                      <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-dark-elevated border border-dark-border flex items-center justify-center">
-                        <span className="text-[10px] font-bold text-emerald-500">{rank}</span>
-                      </div>
-                    )}
-                  </div>
-                  <p className={`font-bold mt-2 ${isFirst ? 'text-sm' : 'text-xs'} text-dark-text`}>
-                    {isYou ? 'YOU' : entry.full_name?.split(' ')[0]?.toUpperCase() || 'USER'}
-                  </p>
-                  <p className="text-emerald-500 font-bold text-xs">
-                    {mode === 'percent'
-                      ? formatPercentage(entry.total_score)
-                      : `${Math.round(entry.total_score).toLocaleString()}`
-                    }
-                  </p>
-                </motion.div>
-              );
-            })}
-          </div>
+                    <p className={`font-bold mt-2 ${isFirst ? 'text-sm' : 'text-xs'} text-dark-text`}>
+                      {isYou ? 'YOU' : entry.full_name?.split(' ')[0]?.toUpperCase() || 'USER'}
+                    </p>
+                    <p className="text-emerald-500 font-bold text-xs">
+                      {Math.round(entry.total_score).toLocaleString()}
+                    </p>
+                    {/* Show % improvement alongside raw */}
+                    <p className="text-[10px] text-dark-muted">
+                      {formatPercentage(((entry.total_score / Math.max(leaderboard[leaderboard.length - 1]?.total_score || 1, 1)) - 1) * 100)}
+                    </p>
+                  </motion.div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-4">
+              <p className="text-sm text-dark-muted">Submit workouts to see the podium!</p>
+            </div>
+          )}
         </GlassCard>
 
-        {/* Intensity Velocity Chart */}
+        {/* Intensity Velocity Chart — Real data only */}
         <GlassCard delay={0.3}>
           <p className="text-xs font-bold tracking-wider text-dark-muted uppercase mb-1">
             INTENSITY VELOCITY
@@ -182,52 +186,49 @@ export default function ArenaPage() {
             </div>
             <div className="flex items-center gap-1.5">
               <div className="w-2 h-2 rounded-full bg-dark-muted/50" />
-              <span className="text-[10px] font-semibold text-dark-muted">
-                {leaderboard[0]?.full_name?.split(' ')[0]?.toUpperCase() || 'FRIEND'}
-              </span>
+              <span className="text-[10px] font-semibold text-dark-muted">{leaderName}</span>
             </div>
           </div>
           <div className="h-44">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData.length > 0 ? chartData : defaultChart}>
-                <XAxis
-                  dataKey="date"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: '#8E8E93', fontSize: 10 }}
-                />
-                <YAxis hide />
-                <Tooltip
-                  contentStyle={{
-                    background: 'rgba(28, 28, 30, 0.95)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '12px',
-                    color: '#F5F5F7',
-                    fontSize: '12px',
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="you"
-                  stroke="#10B981"
-                  strokeWidth={2.5}
-                  dot={false}
-                  activeDot={{ r: 4 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="shared"
-                  stroke="rgba(142,142,147,0.4)"
-                  strokeWidth={2}
-                  strokeDasharray="5 5"
-                  dot={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData}>
+                  <XAxis
+                    dataKey="date"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#8E8E93', fontSize: 10 }}
+                  />
+                  <YAxis hide />
+                  <Tooltip
+                    contentStyle={{
+                      background: 'rgba(28, 28, 30, 0.95)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '12px',
+                      color: '#F5F5F7',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="you"
+                    stroke="#10B981"
+                    strokeWidth={2.5}
+                    dot={false}
+                    activeDot={{ r: 4 }}
+                    name="YOU"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center">
+                <p className="text-sm text-dark-muted">Log workouts to see your trend line</p>
+              </div>
+            )}
           </div>
         </GlassCard>
 
-        {/* Detailed Standings */}
+        {/* Detailed Standings — shows raw + % improvement side-by-side */}
         <div>
           <h3 className="text-sm font-black tracking-wider uppercase mb-3">
             DETAILED STANDINGS
@@ -280,29 +281,25 @@ export default function ArenaPage() {
                       )}
                     </div>
 
-                    {/* Name & stats */}
+                    {/* Name + individual metrics */}
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-sm text-dark-text truncate">
                         {isYou ? `YOU (${entry.full_name?.split(' ')[0] || ''})` : entry.full_name?.toUpperCase() || 'USER'}
                       </p>
                       <p className="text-[10px] text-dark-muted">
-                        {mode === 'raw'
-                          ? `${(entry.total_score / 1000).toFixed(1)}k ${metric === 'volume' ? 'total' : 'peak'}`
-                          : `${formatPercentage(entry.total_score)} improvement`
-                        }
+                        💪 {Math.round(entry.pushup_value)} • 🧘 {Math.round(entry.plank_value / 60)}m • 🏃 {Number(entry.run_value).toFixed(1)}km
                       </p>
                     </div>
 
-                    {/* Score */}
-                    <div className="text-right">
+                    {/* Raw score + % improvement side-by-side */}
+                    <div className="text-right flex-shrink-0">
                       <p className="font-bold text-emerald-500 text-sm">
-                        {mode === 'percent'
-                          ? formatPercentage(entry.total_score)
-                          : Math.round(entry.total_score).toLocaleString()
-                        }
+                        {Math.round(entry.total_score).toLocaleString()}
                       </p>
-                      <p className="text-[10px] text-dark-muted uppercase">
-                        {rank <= 3 ? 'UP' : 'MAINTAINED'}
+                      <p className="text-[10px] font-semibold text-emerald-400">
+                        {formatPercentage(
+                          ((entry.total_score / Math.max(leaderboard[leaderboard.length - 1]?.total_score || 1, 1)) - 1) * 100
+                        )}
                       </p>
                     </div>
                   </GlassCard>
