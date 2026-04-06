@@ -10,7 +10,7 @@ import { useGoals } from '@/hooks/use-goals';
 import { useWeeklyVolume, useDraftLog, useSaveDraft, useSubmitLog } from '@/hooks/use-workout-logs';
 import { formatPlankTime } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 
 export default function LogPageWrapper() {
@@ -24,6 +24,7 @@ export default function LogPageWrapper() {
 function LogPage() {
   const { user, profile } = useAuth();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { data: goals } = useGoals();
   const { data: weeklyVolume } = useWeeklyVolume();
@@ -144,14 +145,32 @@ function LogPage() {
 
   // Submit
   const handleSubmit = async () => {
-    if (!draftId) {
-      // Save first
-      autoSave();
-      return;
-    }
+    if (!user) return;
     setIsSubmitting(true);
     try {
-      await submitLog.mutateAsync(draftId);
+      let logId = draftId;
+
+      // If no draft saved yet, save it now and get the ID
+      if (!logId) {
+        const finalRunDist = profile?.unit_preference === 'imperial'
+          ? Number((runDistance * 1.60934).toFixed(3))
+          : runDistance;
+
+        const saved = await saveDraft.mutateAsync({
+          pushup_reps: pushupReps,
+          plank_seconds: plankSeconds,
+          run_distance: finalRunDist,
+          notes,
+          photo_url: photoUrl,
+          whoop_activity_type: whoopActivity || undefined,
+          whoop_strain: whoopStrain ? parseFloat(whoopStrain) : undefined,
+          whoop_duration_seconds: whoopDuration ? parseInt(whoopDuration) * 60 : undefined,
+        });
+        logId = saved?.id;
+        if (!logId) throw new Error('Failed to save draft');
+      }
+
+      await submitLog.mutateAsync(logId);
       setSubmitted(true);
       // Reset form
       setPushupReps(0);
@@ -160,9 +179,10 @@ function LogPage() {
       setNotes('');
       setPhotoUrl(null);
       setDraftId(null);
-      setTimeout(() => setSubmitted(false), 3000);
-    } catch {
-      // Error handling
+      // Navigate to dashboard after brief success feedback
+      setTimeout(() => router.push('/dashboard'), 1200);
+    } catch (err) {
+      console.error('Submit failed:', err);
     } finally {
       setIsSubmitting(false);
     }
@@ -240,6 +260,7 @@ function LogPage() {
             type="number"
             value={pushupReps || ''}
             onChange={(e) => setPushupReps(parseInt(e.target.value) || 0)}
+            onWheel={(e) => (e.target as HTMLElement).blur()}
             placeholder="0"
             className="w-full text-center text-6xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors duration-200 py-4"
           />
@@ -263,6 +284,7 @@ function LogPage() {
                 const mins = parseInt(e.target.value) || 0;
                 setPlankSeconds(mins * 60 + (plankSeconds % 60));
               }}
+              onWheel={(e) => (e.target as HTMLElement).blur()}
               placeholder="00"
               className="w-24 text-center text-6xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors duration-200"
             />
@@ -274,6 +296,7 @@ function LogPage() {
                 const secs = Math.min(parseInt(e.target.value) || 0, 59);
                 setPlankSeconds(Math.floor(plankSeconds / 60) * 60 + secs);
               }}
+              onWheel={(e) => (e.target as HTMLElement).blur()}
               placeholder="00"
               className="w-24 text-center text-6xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors duration-200"
             />
@@ -295,6 +318,7 @@ function LogPage() {
             step="0.1"
             value={runDistance || ''}
             onChange={(e) => setRunDistance(parseFloat(e.target.value) || 0)}
+            onWheel={(e) => (e.target as HTMLElement).blur()}
             placeholder="0.0"
             className="w-full text-center text-6xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors duration-200 py-4"
           />

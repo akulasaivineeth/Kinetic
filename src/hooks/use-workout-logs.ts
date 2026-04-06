@@ -190,7 +190,7 @@ export function useSubmitLog() {
       queryClient.invalidateQueries({ queryKey: ['workout-logs'] });
       queryClient.invalidateQueries({ queryKey: ['weekly-volume'] });
       queryClient.invalidateQueries({ queryKey: ['stamina'] });
-      queryClient.invalidateQueries({ queryKey: ['stamina'] });
+      queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
     },
   });
 }

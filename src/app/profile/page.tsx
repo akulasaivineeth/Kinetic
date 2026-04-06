@@ -331,6 +331,7 @@ export default function ProfilePage() {
                               updateGoals.mutate({ [item.key]: val });
                             }
                           }}
+                          onWheel={(e) => (e.target as HTMLElement).blur()}
                           className="w-16 text-right text-sm font-bold bg-transparent text-dark-text outline-none"
                         />
                         <span className="text-[10px] text-dark-muted">{item.suffix}</span>

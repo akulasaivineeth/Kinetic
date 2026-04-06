@@ -41,3 +41,5 @@ next-env.d.ts
 # supabase
 supabase/.temp/
 kinetic-privacy/
+.npm-cache/
+.npm-cache,/
