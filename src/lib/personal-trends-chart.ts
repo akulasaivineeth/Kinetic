@@ -2,13 +2,18 @@ import type { WorkoutLog } from '@/types/database';
 import {
   addDays,
   eachDayOfInterval,
+  eachMonthOfInterval,
+  endOfMonth,
   endOfWeek,
   format,
   isAfter,
   isWithinInterval,
+  max as maxDate,
   min as minDate,
   startOfDay,
+  startOfMonth,
   startOfWeek,
+  subMonths,
   subWeeks,
 } from 'date-fns';
 
@@ -32,16 +37,36 @@ export function isWeekLineMode(
   return false;
 }
 
+/** Month preset keeps weekly bars; longer presets use monthly buckets. Custom &gt; ~1 month → monthly. */
+export function shouldUseMonthBars(
+  range: 'week' | 'month' | '3mo' | '6mo' | 'year' | 'custom',
+  customFrom?: Date,
+  customTo?: Date
+): boolean {
+  if (range === 'week' || range === 'month') return false;
+  if (range === 'custom' && customFrom && customTo) {
+    const days =
+      (startOfDay(customTo).getTime() - startOfDay(customFrom).getTime()) / 86400000;
+    return days > 31;
+  }
+  return true;
+}
+
 /** Extra history for overlays / % baselines. */
 export function getChartLogFetchRange(
   visibleFrom: Date,
   visibleTo: Date,
-  lineMode: boolean
+  lineMode: boolean,
+  monthBuckets: boolean
 ): { from: Date; to: Date } {
   if (lineMode) {
     const wkStart = startOfWeek(visibleFrom, { weekStartsOn: 1 });
     const wkEnd = endOfWeek(visibleFrom, { weekStartsOn: 1 });
     return { from: subWeeks(wkStart, 2), to: wkEnd };
+  }
+  if (monthBuckets) {
+    const m0 = startOfMonth(visibleFrom);
+    return { from: subMonths(m0, 6), to: visibleTo };
   }
   const wkStart = startOfWeek(visibleFrom, { weekStartsOn: 1 });
   return { from: subWeeks(wkStart, 5), to: visibleTo };
@@ -96,10 +121,16 @@ function plankScale(category: PersonalTrendCategory, mode: TrendMode): number {
 }
 
 export type WeekLinePoint = {
-  date: string;
+  /** XAxis tick: weekday */
+  weekday: string;
+  /** XAxis tick: calendar date */
+  datePart: string;
+  /** Tooltip / legend */
+  tooltipLabel: string;
   sortKey: string;
-  total: number;
-  overlay?: number;
+  /** Raw mode: null = no workout that day (line gaps, not a flat zero runway). */
+  total: number | null;
+  overlay?: number | null;
   peakHighlight?: boolean;
 };
 
@@ -127,17 +158,17 @@ export function buildWeekLineChart(
     const curRaw = dayRaw(map, sk, agg);
     const prevRaw = dayRaw(map, prevSk, agg);
 
-    let total: number;
+    let total: number | null;
     if (mode === 'raw') {
-      total = curRaw / scale;
+      total = curRaw === 0 ? null : curRaw / scale;
     } else {
       total = pctDiff(curRaw, prevRaw);
     }
 
-    let overlay: number | undefined;
+    let overlay: number | null | undefined;
     if (showOverlay) {
       if (mode === 'raw') {
-        overlay = prevRaw / scale;
+        overlay = prevRaw === 0 ? null : prevRaw / scale;
       } else {
         const prev2Raw = dayRaw(map, dayKey(addDays(d, -14)), agg);
         overlay = pctDiff(prevRaw, prev2Raw);
@@ -145,7 +176,9 @@ export function buildWeekLineChart(
     }
 
     points.push({
-      date: format(d, 'EEE\nMMM d'),
+      weekday: format(d, 'EEE'),
+      datePart: format(d, 'MMM d'),
+      tooltipLabel: `${format(d, 'EEE')} ${format(d, 'MMM d')}`,
       sortKey: sk,
       total,
       overlay,
@@ -156,8 +189,9 @@ export function buildWeekLineChart(
     let maxI = -1;
     let maxV = -Infinity;
     points.forEach((p, i) => {
-      if (p.total > maxV) {
-        maxV = p.total;
+      const v = p.total;
+      if (typeof v === 'number' && v > maxV) {
+        maxV = v;
         maxI = i;
       }
     });
@@ -170,10 +204,14 @@ export function buildWeekLineChart(
 }
 
 export type WeekBarRow = {
+  /** Single-line label (tooltips / fallback) */
   label: string;
   sortKey: string;
   total: number;
   isPartial: boolean;
+  /** Two-line X-axis: top (e.g. range or month), bottom (e.g. year) */
+  tickTop: string;
+  tickBottom: string;
 };
 
 function mean(nums: number[]): number {
@@ -225,14 +263,105 @@ export function buildMultiWeekBars(
 
     const rawVal = (agg === 'volume' ? weekVol : weekPeakMax) / scale;
 
+    const sameMonth = format(wStart, 'yyyy-MM') === format(sliceEnd, 'yyyy-MM');
+    const tickTop = sameMonth
+      ? `${format(wStart, 'MMM d')}–${format(sliceEnd, 'd')}`
+      : `${format(wStart, 'MMM d')} – ${format(sliceEnd, 'MMM d')}`;
+    const tickBottom = format(wStart, 'yyyy');
+
     bars.push({
       label: `${format(wStart, 'MMM d')} – ${format(sliceEnd, 'MMM d')}`,
       sortKey: dayKey(wStart),
       total: rawVal,
       isPartial,
+      tickTop,
+      tickBottom,
     });
 
     wStart = addDays(wEnd, 1);
+  }
+
+  const rawTotals = bars.map((b) => b.total);
+
+  if (mode === 'percent') {
+    const pctBars: WeekBarRow[] = bars.map((b, i) => {
+      const prev = rawTotals.slice(Math.max(0, i - 4), i);
+      const base = mean(prev);
+      return {
+        ...b,
+        total: pctDiff(b.total, base),
+      };
+    });
+    const completed = pctBars.filter((b) => !b.isPartial);
+    const last4 = completed.slice(-4).map((b) => b.total);
+    const avgLine = last4.length ? mean(last4) : null;
+    return { bars: pctBars, avgLine };
+  }
+
+  const completedRaw = bars.filter((b) => !b.isPartial);
+  const last4raw = completedRaw.slice(-4).map((b) => b.total);
+  const avgLine = last4raw.length ? mean(last4raw) : null;
+
+  return { bars, avgLine };
+}
+
+export function buildMonthlyBars(
+  logs: WorkoutLog[],
+  rangeFrom: Date,
+  rangeTo: Date,
+  category: PersonalTrendCategory,
+  agg: TrendAgg,
+  mode: TrendMode,
+  now: Date = new Date()
+): { bars: WeekBarRow[]; avgLine: number | null } {
+  const map = buildDayMap(
+    logs,
+    category,
+    subMonths(startOfMonth(rangeFrom), 6).getTime(),
+    rangeTo.getTime()
+  );
+  const scale = plankScale(category, mode);
+
+  const months = eachMonthOfInterval({
+    start: startOfMonth(rangeFrom),
+    end: startOfMonth(rangeTo),
+  });
+  const bars: WeekBarRow[] = [];
+
+  for (const monthStart of months) {
+    const monthEnd = endOfMonth(monthStart);
+    const sliceStart = maxDate([rangeFrom, monthStart]);
+    const sliceEnd = minDate([rangeTo, monthEnd, now]);
+    if (isAfter(sliceStart, sliceEnd)) continue;
+
+    const isPartial = isWithinInterval(startOfDay(now), {
+      start: monthStart,
+      end: monthEnd,
+    });
+
+    const days = eachDayOfInterval({ start: sliceStart, end: sliceEnd });
+    let monthVol = 0;
+    let monthPeakMax = 0;
+    for (const d of days) {
+      const sk = dayKey(d);
+      const day = map.get(sk);
+      if (day) {
+        monthVol += day.vol;
+        monthPeakMax = Math.max(monthPeakMax, day.peak);
+      }
+    }
+
+    const rawVal = (agg === 'volume' ? monthVol : monthPeakMax) / scale;
+    const yk = format(monthStart, 'yyyy-MM');
+
+    bars.push({
+      label: format(monthStart, 'MMM yyyy'),
+      sortKey: yk,
+      total: rawVal,
+      isPartial,
+      tickTop: format(monthStart, 'MMM'),
+      tickBottom: format(monthStart, 'yyyy'),
+    });
   }
 
   const rawTotals = bars.map((b) => b.total);

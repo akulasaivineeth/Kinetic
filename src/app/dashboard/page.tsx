@@ -10,10 +10,14 @@ import { DateRangeTabs } from '@/components/ui/date-range-tabs';
 import { useWorkoutLogs, type DateRange, getDateRange } from '@/hooks/use-workout-logs';
 import {
   isWeekLineMode,
+  shouldUseMonthBars,
   getChartLogFetchRange,
   buildWeekLineChart,
   buildMultiWeekBars,
+  buildMonthlyBars,
   type PersonalTrendCategory,
+  type WeekLinePoint,
+  type WeekBarRow,
 } from '@/lib/personal-trends-chart';
 import { useLeaderboard } from '@/hooks/use-leaderboard';
 import { useStamina } from '@/hooks/use-stamina';
@@ -40,12 +44,14 @@ import { format, startOfWeek, endOfWeek } from 'date-fns';
 function PersonalTrendTooltip({
   active,
   payload,
+  heading,
   category,
   metric,
   mode,
   unitPref,
 }: {
   active?: boolean;
+  heading?: string;
   // Recharts Payload<ValueType, NameType> — value may be an array for some chart types
   payload?: ReadonlyArray<{
     name?: string | number;
@@ -59,14 +65,20 @@ function PersonalTrendTooltip({
   unitPref: 'metric' | 'imperial' | undefined;
 }) {
   if (!active || !payload?.length) return null;
-  const fmt = (v: number) => {
-    if (mode === 'percent') return `${Number(v).toFixed(1)}%`;
-    if (category === 'plank') return `${Number(v).toFixed(1)} min`;
-    if (category === 'run') {
-      const n = formatDistance(Number(v), unitPref);
-      return `${n} ${unitPref === 'imperial' ? 'mi' : 'km'}`;
+  const fmt = (v: unknown, seriesName?: string) => {
+    if (v === null || v === undefined || (typeof v === 'number' && Number.isNaN(v))) {
+      const s = String(seriesName ?? '');
+      if (mode === 'raw' && s.startsWith('This week')) return 'Rest day';
+      return '—';
     }
-    return `${Math.round(v)}`;
+    const n = typeof v === 'number' ? v : Number(v);
+    if (mode === 'percent') return `${Number(n).toFixed(1)}%`;
+    if (category === 'plank') return `${Number(n).toFixed(1)} min`;
+    if (category === 'run') {
+      const d = formatDistance(Number(n), unitPref);
+      return `${d} ${unitPref === 'imperial' ? 'mi' : 'km'}`;
+    }
+    return `${Math.round(n)}`;
   };
   const catLabel =
     category === 'pushups' ? 'Push-ups' : category === 'plank' ? 'Plank' : 'Run';
@@ -82,22 +94,68 @@ function PersonalTrendTooltip({
         padding: '10px 12px',
       }}
     >
+      {heading ? (
+        <p className="text-[11px] font-bold text-dark-text mb-1">{heading}</p>
+      ) : null}
       <p className="text-[10px] font-semibold uppercase mb-1 opacity-80">
         {catLabel} · {subtitle}
       </p>
       {payload.map((p) => (
         <p key={String(p.dataKey)} className="font-semibold" style={{ color: p.color }}>
-          {String(p.name ?? '')}:{' '}
-          {fmt(
-            typeof p.value === 'number'
-              ? p.value
-              : typeof p.value === 'string'
-                ? Number(p.value)
-                : 0
-          )}
+          {String(p.name ?? '')}: {fmt(p.value, String(p.name ?? ''))}
         </p>
       ))}
     </div>
+  );
+}
+
+function PersonalTrendLineTick({
+  x,
+  y,
+  payload,
+  points,
+}: {
+  x: number;
+  y: number;
+  payload: { value: string };
+  points: WeekLinePoint[];
+}) {
+  const pt = points.find((p) => p.sortKey === payload.value);
+  if (!pt) return null;
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text textAnchor="middle" fill="#8E8E93" fontSize={9} dy={10}>
+        {pt.weekday}
+      </text>
+      <text textAnchor="middle" fill="#8E8E93" fontSize={8} dy={22}>
+        {pt.datePart}
+      </text>
+    </g>
+  );
+}
+
+function PersonalTrendBarTick({
+  x,
+  y,
+  payload,
+  bars,
+}: {
+  x: number;
+  y: number;
+  payload: { value: string };
+  bars: WeekBarRow[];
+}) {
+  const row = bars.find((b) => b.sortKey === payload.value);
+  if (!row) return null;
+  return (
+    <g transform={`translate(${x},${y}) rotate(-32)`}>
+      <text textAnchor="end" fill="#8E8E93" fontSize={8} x={0} y={0} dy={4}>
+        {row.tickTop}
+      </text>
+      <text textAnchor="end" fill="#8E8E93" fontSize={7} x={0} y={0} dy={14}>
+        {row.tickBottom}
+      </text>
+    </g>
   );
 }
 
@@ -117,9 +175,14 @@ export default function DashboardPage() {
     [trendDateRange, trendCustomFrom, trendCustomTo]
   );
   const lineMode = isWeekLineMode(trendDateRange, trendCustomFrom, trendCustomTo);
+  const monthBarBuckets = useMemo(
+    () => shouldUseMonthBars(trendDateRange, trendCustomFrom, trendCustomTo),
+    [trendDateRange, trendCustomFrom, trendCustomTo]
+  );
   const chartLogRange = useMemo(
-    () => getChartLogFetchRange(visibleRange.from, visibleRange.to, lineMode),
-    [visibleRange.from, visibleRange.to, lineMode]
+    () =>
+      getChartLogFetchRange(visibleRange.from, visibleRange.to, lineMode, monthBarBuckets),
+    [visibleRange.from, visibleRange.to, lineMode, monthBarBuckets]
   );
 
   const { data: trendLogs = [] } = useWorkoutLogs(trendDateRange, trendCustomFrom, trendCustomTo);
@@ -180,6 +243,16 @@ export default function DashboardPage() {
 
   const barBundle = useMemo(() => {
     if (lineMode) return null;
+    if (monthBarBuckets) {
+      return buildMonthlyBars(
+        chartLogs,
+        visibleRange.from,
+        visibleRange.to,
+        trendCategory,
+        trendMetric,
+        trendMode
+      );
+    }
     return buildMultiWeekBars(
       chartLogs,
       visibleRange.from,
@@ -188,7 +261,16 @@ export default function DashboardPage() {
       trendMetric,
       trendMode
     );
-  }, [lineMode, chartLogs, visibleRange.from, visibleRange.to, trendCategory, trendMetric, trendMode]);
+  }, [
+    lineMode,
+    monthBarBuckets,
+    chartLogs,
+    visibleRange.from,
+    visibleRange.to,
+    trendCategory,
+    trendMetric,
+    trendMode,
+  ]);
 
   const primarySeries = lineMode ? weekLinePoints ?? [] : barBundle?.bars ?? [];
   const showTrendOverlayLine =
@@ -222,12 +304,13 @@ export default function DashboardPage() {
     return ((currentVal - baselineVal) / baselineVal) * 100;
   };
 
-  const velocityPts =
-    primarySeries.length > 1
-      ? ((primarySeries[primarySeries.length - 1]?.total ?? 0) -
-          (primarySeries[0]?.total ?? 0)) /
-        Math.max(primarySeries.length - 1, 1)
-      : 0;
+  const velocityPts = useMemo(() => {
+    const nums = primarySeries
+      .map((p) => p.total)
+      .filter((t): t is number => typeof t === 'number' && !Number.isNaN(t));
+    if (nums.length < 2) return 0;
+    return (nums[nums.length - 1]! - nums[0]!) / (nums.length - 1);
+  }, [primarySeries]);
 
   return (
     <AppShell>
@@ -471,6 +554,9 @@ export default function DashboardPage() {
                 setTrendCustomTo(to);
               }}
             />
+            <p className="text-[9px] font-semibold tracking-[0.15em] text-dark-muted uppercase">
+              Exercise
+            </p>
             <TogglePills
               motionScope="dash-trends-cat"
               options={[
@@ -536,31 +622,72 @@ export default function DashboardPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   {lineMode ? (
                     <LineChart
+                      margin={{ top: 4, right: 4, left: 4, bottom: 4 }}
                       data={
                         weekLinePoints && weekLinePoints.length > 0
                           ? weekLinePoints
-                          : [{ date: '—', sortKey: 'x', total: 0 }]
+                          : [
+                              {
+                                sortKey: '_',
+                                weekday: '—',
+                                datePart: '',
+                                tooltipLabel: 'No data',
+                                total: 0,
+                              },
+                            ]
                       }
                     >
                       <XAxis
-                        dataKey="date"
+                        dataKey="sortKey"
+                        type="category"
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fill: '#8E8E93', fontSize: 9 }}
                         interval={0}
+                        height={36}
+                        tick={(tickProps) => {
+                          const p = tickProps as {
+                            x: number;
+                            y: number;
+                            payload: { value: string };
+                          };
+                          const pts: WeekLinePoint[] =
+                            weekLinePoints && weekLinePoints.length > 0
+                              ? weekLinePoints
+                              : [
+                                  {
+                                    sortKey: '_',
+                                    weekday: '—',
+                                    datePart: '',
+                                    tooltipLabel: 'No data',
+                                    total: 0,
+                                  },
+                                ];
+                          return (
+                            <PersonalTrendLineTick
+                              x={p.x}
+                              y={p.y}
+                              payload={p.payload}
+                              points={pts}
+                            />
+                          );
+                        }}
                       />
                       <YAxis hide />
                       <Tooltip
-                        content={({ active, payload }) => (
-                          <PersonalTrendTooltip
-                            active={active}
-                            payload={payload}
-                            category={trendCategory}
-                            metric={trendMetric}
-                            mode={trendMode}
-                            unitPref={profile?.unit_preference}
-                          />
-                        )}
+                        content={({ active, payload }) => {
+                          const row = payload?.[0]?.payload as WeekLinePoint | undefined;
+                          return (
+                            <PersonalTrendTooltip
+                              active={active}
+                              payload={payload}
+                              heading={row?.tooltipLabel}
+                              category={trendCategory}
+                              metric={trendMetric}
+                              mode={trendMode}
+                              unitPref={profile?.unit_preference}
+                            />
+                          );
+                        }}
                       />
                       <Line
                         type="monotone"
@@ -573,6 +700,7 @@ export default function DashboardPage() {
                         stroke="#10B981"
                         strokeWidth={3}
                         dot={false}
+                        connectNulls={false}
                         activeDot={{ r: 4, fill: '#10B981' }}
                       />
                       {showTrendOverlayLine ? (
@@ -588,12 +716,14 @@ export default function DashboardPage() {
                           strokeWidth={2}
                           strokeDasharray="4 4"
                           dot={false}
+                          connectNulls={false}
                           activeDot={{ r: 3, fill: '#6B7280' }}
                         />
                       ) : null}
-                      {peakHighlightPoint ? (
+                      {peakHighlightPoint &&
+                      typeof peakHighlightPoint.total === 'number' ? (
                         <ReferenceDot
-                          x={peakHighlightPoint.date}
+                          x={peakHighlightPoint.sortKey}
                           y={peakHighlightPoint.total}
                           r={5}
                           fill="#10B981"
@@ -607,32 +737,71 @@ export default function DashboardPage() {
                       data={
                         barBundle && barBundle.bars.length > 0
                           ? barBundle.bars
-                          : [{ label: 'No data', sortKey: 'x', total: 0, isPartial: false }]
+                          : [
+                              {
+                                label: 'No data',
+                                sortKey: 'x',
+                                total: 0,
+                                isPartial: false,
+                                tickTop: '—',
+                                tickBottom: '',
+                              },
+                            ]
                       }
-                      margin={{ bottom: 8, left: 4, right: 4, top: 4 }}
+                      margin={{ bottom: 36, left: 4, right: 4, top: 4 }}
                     >
                       <XAxis
-                        dataKey="label"
+                        dataKey="sortKey"
+                        type="category"
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fill: '#8E8E93', fontSize: 8 }}
                         interval={0}
-                        angle={-22}
-                        textAnchor="end"
-                        height={48}
+                        height={44}
+                        tick={(tickProps) => {
+                          const p = tickProps as {
+                            x: number;
+                            y: number;
+                            payload: { value: string };
+                          };
+                          const rows: WeekBarRow[] =
+                            barBundle && barBundle.bars.length > 0
+                              ? barBundle.bars
+                              : [
+                                  {
+                                    label: 'No data',
+                                    sortKey: 'x',
+                                    total: 0,
+                                    isPartial: false,
+                                    tickTop: '—',
+                                    tickBottom: '',
+                                  },
+                                ];
+                          return (
+                            <PersonalTrendBarTick
+                              x={p.x}
+                              y={p.y}
+                              payload={p.payload}
+                              bars={rows}
+                            />
+                          );
+                        }}
                       />
                       <YAxis hide />
                       <Tooltip
-                        content={({ active, payload }) => (
-                          <PersonalTrendTooltip
-                            active={active}
-                            payload={payload}
-                            category={trendCategory}
-                            metric={trendMetric}
-                            mode={trendMode}
-                            unitPref={profile?.unit_preference}
-                          />
-                        )}
+                        content={({ active, payload }) => {
+                          const row = payload?.[0]?.payload as WeekBarRow | undefined;
+                          return (
+                            <PersonalTrendTooltip
+                              active={active}
+                              payload={payload}
+                              heading={row?.label}
+                              category={trendCategory}
+                              metric={trendMetric}
+                              mode={trendMode}
+                              unitPref={profile?.unit_preference}
+                            />
+                          );
+                        }}
                       />
                       {barBundle?.avgLine != null ? (
                         <ReferenceLine
@@ -666,6 +835,13 @@ export default function DashboardPage() {
                   )}
                 </ResponsiveContainer>
               </div>
+              <p className="text-[9px] text-dark-muted mt-3 leading-relaxed">
+                {lineMode
+                  ? 'Green line: your daily total for the exercise above (raw) or vs same weekday last week (%). Dashed: prior week for comparison. Days with no workout are gaps, not zeros. “pts” is average day-to-day change on the line.'
+                  : monthBarBuckets
+                    ? 'Each bar is one calendar month. AVG. is the mean of your last four completed months in view.'
+                    : 'Each bar is one week (ISO Mon–Sun). AVG. is the mean of your last four completed weeks in view.'}
+              </p>
             </GlassCard>
           </motion.div>
         </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useId } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import type { DateRange as DateRangeType } from '@/hooks/use-workout-logs';
 import { DayPicker, type DateRange } from 'react-day-picker';
@@ -89,12 +89,10 @@ export function DateRangeTabs({ selected, onChange, onCustomDates, motionScope }
         ))}
       </div>
 
-      <AnimatePresence>
-        {selected === 'custom' && (
+      {selected === 'custom' ? (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
             className="mt-3"
           >
             <Popover.Root>
@@ -139,8 +137,7 @@ export function DateRangeTabs({ selected, onChange, onCustomDates, motionScope }
               </Popover.Portal>
             </Popover.Root>
           </motion.div>
-        )}
-      </AnimatePresence>
+      ) : null}
     </div>
   );
 }
