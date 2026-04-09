@@ -35,7 +35,14 @@ function artifactSummary(result: TestResult): string {
 }
 
 export default class IssuesMdReporter implements Reporter {
-  private issuesPath = path.join(process.cwd(), 'issues.md');
+  /** Under `tests/uat/test-results/` (gitignored) so generated output is never committed. */
+  private issuesPath = path.join(
+    process.cwd(),
+    'tests',
+    'uat',
+    'test-results',
+    'issues.md'
+  );
 
   onTestEnd(test: TestCase, result: TestResult): void {
     if (result.status !== 'failed') return;
@@ -62,6 +69,8 @@ export default class IssuesMdReporter implements Reporter {
     ].join('\n');
 
     try {
+      const dir = path.dirname(this.issuesPath);
+      fs.mkdirSync(dir, { recursive: true });
       if (!fs.existsSync(this.issuesPath)) {
         fs.writeFileSync(
           this.issuesPath,
@@ -71,7 +80,7 @@ export default class IssuesMdReporter implements Reporter {
       }
       fs.appendFileSync(this.issuesPath, block, 'utf8');
     } catch (e) {
-      console.error('[issues-md-reporter] Failed to append issues.md:', e);
+      console.error('[issues-md-reporter] Failed to append test-results/issues.md:', e);
     }
   }
 }

@@ -89,9 +89,9 @@ Optional:
 BASE_URL=http://127.0.0.1:3000 npm run uat
 ```
 
-## Failure tracking (`issues.md`)
+## Failure tracking (`test-results/issues.md`)
 
-The custom reporter appends a markdown block to **`issues.md`** at the repo root for each failed test (file path, title, error line, attachment paths). Use it as a fix queue for humans or agents.
+The custom reporter appends a markdown block to **`tests/uat/test-results/issues.md`** for each failed test (file path, title, error line, attachment paths). That path lives under the gitignored Playwright output directory so it is not committed. Use it as a fix queue for humans or agents.
 
 HTML report: `tests/uat/playwright-report/index.html` after a run (relative to the config directory).
 
@@ -118,4 +118,4 @@ npx playwright test --config tests/uat/playwright.config.ts --grep @whoop
 1. Ensure `.env.local` is present and `npm run dev` works.
 2. Ensure `.auth/user.json` exists (`npm run uat:export-auth` after manual Chrome login, or `npm run uat:setup`).
 3. Run `npm run uat` (or `UAT_SKIP_WEBSERVER=1 npm run uat` if the app is already running).
-4. On non-zero exit, open **`issues.md`** (new entries at the bottom) and the HTML report under `tests/uat/playwright-report/` to triage.
+4. On non-zero exit, open **`tests/uat/test-results/issues.md`** (new entries at the bottom) and the HTML report under `tests/uat/playwright-report/` to triage.

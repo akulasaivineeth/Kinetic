@@ -13,7 +13,7 @@ tests/uat/test-results/
 **/playwright-report/
 **/test-results/
 
-# UAT issues reporter writes this at repo root when Playwright cwd is the project root
+# Legacy: reporter used to write here; keep ignored if the file still exists locally
 /issues.md
 
 # next.js
