@@ -24,12 +24,12 @@ const config: Config = {
           900: '#064E3B',
         },
         dark: {
-          bg: '#0A0A0A',
-          card: '#141414',
-          elevated: '#1C1C1E',
-          border: '#2C2C2E',
-          text: '#F5F5F7',
-          muted: '#8E8E93',
+          bg: 'var(--dark-bg)',
+          card: 'var(--dark-card)',
+          elevated: 'var(--dark-elevated)',
+          border: 'var(--dark-border)',
+          text: 'var(--dark-text)',
+          muted: 'var(--dark-muted)',
         },
       },
       fontFamily: {

@@ -1,8 +1,34 @@
 'use client';
 
+let subscribeInFlight: Promise<boolean> | null = null;
+let pushUnavailableNotified = false;
+
 export async function subscribeToPush(): Promise<boolean> {
+  if (subscribeInFlight) return subscribeInFlight;
+  subscribeInFlight = subscribeToPushInternal().finally(() => {
+    subscribeInFlight = null;
+  });
+  return subscribeInFlight;
+}
+
+async function subscribeToPushInternal(): Promise<boolean> {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    console.log('Push notifications not supported');
+    if (!pushUnavailableNotified) {
+      console.log('Push notifications not supported in this browser.');
+      pushUnavailableNotified = true;
+    }
+    return false;
+  }
+
+  if (!window.isSecureContext) {
+    if (!pushUnavailableNotified) {
+      console.log('Push requires a secure context (https or localhost).');
+      pushUnavailableNotified = true;
+    }
+    return false;
+  }
+
+  if (!('Notification' in window) || Notification.permission !== 'granted') {
     return false;
   }
 
@@ -19,32 +45,57 @@ export async function subscribeToPush(): Promise<boolean> {
         return false;
       }
 
-      try {
-        const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
-        if (convertedKey.length === 0) {
-          console.error('Invalid VAPID key - could not decode');
-          return false;
-        }
+      const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
+      if (convertedKey.length === 0) {
+        console.error('Invalid VAPID key - could not decode');
+        return false;
+      }
 
+      try {
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: convertedKey.buffer as ArrayBuffer,
+          applicationServerKey: convertedKey as unknown as BufferSource,
         });
-      } catch (keyError) {
-        console.error('VAPID key conversion failed:', keyError);
-        return false;
+      } catch (error) {
+        // AbortError is common on unsupported platforms / blocked push services.
+        if (
+          error instanceof DOMException &&
+          (error.name === 'AbortError' || error.name === 'NotSupportedError')
+        ) {
+          if (!pushUnavailableNotified) {
+            console.log('Push service unavailable in this environment.');
+            pushUnavailableNotified = true;
+          }
+          return false;
+        }
+        throw error;
       }
     }
 
+    if (!subscription || typeof subscription !== 'object') {
+      return false;
+    }
+
     // Send subscription to our API
-    await fetch('/api/push/subscribe', {
+    const response = await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(subscription),
     });
+    if (!response.ok) return false;
 
     return true;
   } catch (error) {
+    if (
+      error instanceof DOMException &&
+      (error.name === 'AbortError' || error.name === 'NotSupportedError')
+    ) {
+      if (!pushUnavailableNotified) {
+        console.log('Push service unavailable in this environment.');
+        pushUnavailableNotified = true;
+      }
+      return false;
+    }
     console.error('Push subscription error:', error);
     return false;
   }

@@ -11,6 +11,7 @@ interface GlassCardProps {
   animate?: boolean;
   delay?: number;
   onClick?: () => void;
+  'data-testid'?: string;
 }
 
 export function GlassCard({
@@ -20,6 +21,7 @@ export function GlassCard({
   animate = true,
   delay = 0,
   onClick,
+  'data-testid': dataTestId,
 }: GlassCardProps) {
   const motionProps = animate
     ? {
@@ -36,6 +38,7 @@ export function GlassCard({
 
   return (
     <motion.div
+      data-testid={dataTestId}
       className={cn(
         elevated ? 'glass-card-elevated' : 'glass-card',
         'p-4',

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import type { DateRange as DateRangeType } from '@/hooks/use-workout-logs';
@@ -34,6 +34,8 @@ interface DateRangeTabsProps {
   selected: DateRangeType;
   onChange: (range: DateRangeType) => void;
   onCustomDates?: (from: Date, to: Date) => void;
+  /** Isolate Framer layoutId when multiple tab strips exist on one route. */
+  motionScope?: string;
 }
 
 const tabs: { value: DateRangeType; label: string }[] = [
@@ -45,8 +47,10 @@ const tabs: { value: DateRangeType; label: string }[] = [
   { value: 'custom', label: 'CUSTOM' },
 ];
 
-export function DateRangeTabs({ selected, onChange, onCustomDates }: DateRangeTabsProps) {
+export function DateRangeTabs({ selected, onChange, onCustomDates, motionScope }: DateRangeTabsProps) {
   const [range, setRange] = useState<DateRange | undefined>();
+  const autoScope = useId();
+  const tabScope = motionScope ?? autoScope;
 
   const handleTabClick = (value: DateRangeType) => {
     onChange(value);
@@ -75,7 +79,7 @@ export function DateRangeTabs({ selected, onChange, onCustomDates }: DateRangeTa
           >
             {selected === tab.value && (
               <motion.div
-                layoutId="date-tab"
+                layoutId={`kinetic-date-tab-${tabScope}`}
                 className="absolute inset-0 rounded-full bg-emerald-500/15 border border-emerald-500/30"
                 transition={{ type: 'spring', stiffness: 300, damping: 25 }}
               />

@@ -36,28 +36,31 @@ export function useSendSharingRequest() {
     mutationFn: async (recipientEmail: string) => {
       if (!user) throw new Error('Not authenticated');
 
-      // Find recipient by email
-      const { data: recipient, error: findError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', recipientEmail)
-        .single();
-      if (findError || !recipient) throw new Error('User not found');
+      const normalized = recipientEmail.trim();
+      const { data: recipientId, error: findError } = await supabase.rpc(
+        'lookup_profile_id_for_sharing',
+        { search_email: normalized }
+      );
+      if (findError) throw new Error(findError.message || 'Lookup failed');
+      if (!recipientId) throw new Error('No Kinetic account found for that email');
+
+      if (recipientId === user.id) throw new Error('You cannot share with yourself');
 
       const { data, error } = await supabase
         .from('sharing_connections')
-        .insert({ requester_id: user.id, recipient_id: recipient.id })
+        .insert({ requester_id: user.id, recipient_id: recipientId })
         .select()
         .single();
       if (error) throw error;
 
-      await supabase.from('notifications').insert({
-        user_id: recipient.id,
+      const { error: notifyError } = await supabase.from('notifications').insert({
+        user_id: recipientId,
         type: 'sharing_request',
         title: 'New Sharing Request',
         body: `${user.user_metadata?.full_name || user.email} wants to share activity data with you.`,
         data: { connection_id: data.id, requester_id: user.id },
       });
+      if (notifyError) throw new Error(notifyError.message || 'Could not notify recipient');
 
       // Invoke Email Edge Function (Premium Requirement: Email with 3 explicit buttons)
       try {
@@ -76,6 +79,7 @@ export function useSendSharingRequest() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sharing-connections'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
 }
@@ -115,6 +119,7 @@ export function useRespondToSharing() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sharing-connections'] });
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
 }

@@ -205,7 +205,7 @@
 - [x] Peak Performance Gain ring
 - [x] CSV Export button
 - [x] Custom date picker integration
-- [ ] **BUG: Dashboard doesn't refresh after submitting a log** (leaderboard cache not invalidated)
+- [x] **BUG FIXED: Dashboard refreshes after submitting a log** (leaderboard cache invalidated)
 - [ ] Real Stamina Score calculation (currently uses mock/estimate)
 - [ ] Apple Health / HealthKit integration for lean mass stability data
 
@@ -229,8 +229,8 @@
 - [x] Submit success animation ("SUBMITTED ✓")
 - [x] Form reset after successful submit
 - [x] `onWheel` blur to prevent accidental scroll-changes on number inputs
-- [ ] **BUG: No redirect to dashboard after successful submit**
-- [ ] **BUG: Leaderboard cache not invalidated after submit** (dashboard stale)
+- [x] **BUG FIXED: Redirect to dashboard after successful submit**
+- [x] **BUG FIXED: Leaderboard cache invalidated after submit** (dashboard no longer stale)
 - [ ] Camera capture option (not just file picker)
 
 ### 5.4 Arena Screen (`/arena`) — LIVE RANKINGS
@@ -317,7 +317,7 @@
 - [x] Workout logs invalidated after submit
 - [x] Weekly volume invalidated after submit
 - [x] Stamina invalidated after submit
-- [ ] **BUG: Leaderboard NOT invalidated after submit** ← needs fix
+- [x] **BUG FIXED: Leaderboard invalidated after submit**
 - [x] Sharing connections invalidated after send/respond/remove
 - [x] Leaderboard invalidated after sharing changes
 - [x] Notifications invalidated via realtime subscription
@@ -460,8 +460,8 @@
 ## 11. KNOWN BUGS TO FIX
 
 - [ ] **Log → Dashboard stale data**: `useSubmitLog` does not invalidate `leaderboard` query key
-- [ ] **No navigation after submit**: Log form stays on `/log` after successful submit instead of redirecting to `/dashboard`
-- [ ] **Duplicate stamina invalidation**: `useSubmitLog` calls `invalidateQueries({ queryKey: ['stamina'] })` twice
+- [x] **BUG FIXED: Navigation after submit redirects to `/dashboard`**
+- [x] **BUG FIXED: Duplicate stamina invalidation removed**
 - [ ] **Bottom nav clicks**: Verify `<Link>` components work with App Router (no `router.push` needed — just `next/link`)
 - [ ] Test that real-time subscription channel cleanup doesn't cause memory leaks
 

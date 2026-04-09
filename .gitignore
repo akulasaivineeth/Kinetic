@@ -5,6 +5,16 @@
 
 # testing
 /coverage
+.auth/
+
+# Playwright (default dirs under tests/uat/ plus any nested cwd mistakes)
+tests/uat/playwright-report/
+tests/uat/test-results/
+**/playwright-report/
+**/test-results/
+
+# UAT issues reporter writes this at repo root when Playwright cwd is the project root
+/issues.md
 
 # next.js
 /.next/
@@ -23,6 +33,7 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
 # local env files
 .env
@@ -38,8 +49,13 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# eslint / prettier caches
+.eslintcache
+.prettiercache
+
 # supabase
 supabase/.temp/
 kinetic-privacy/
+
+# npm cache if project-local (e.g. npm_config_cache)
 .npm-cache/
-.npm-cache,/

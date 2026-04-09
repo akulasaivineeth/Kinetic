@@ -10,7 +10,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const subscription = await request.json();
+    const raw = await request.text();
+    if (!raw.trim()) {
+      return NextResponse.json({ status: 'skipped', reason: 'empty body' });
+    }
+
+    let subscription: unknown;
+    try {
+      subscription = JSON.parse(raw);
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+    }
 
     await supabase
       .from('profiles')

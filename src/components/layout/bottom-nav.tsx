@@ -10,7 +10,7 @@ const navItems = [
     href: '/dashboard',
     label: 'DASHBOARD',
     icon: (active: boolean) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? '#10B981' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" className={active ? 'text-emerald-500' : 'text-dark-muted'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
         <polyline points="14,2 14,8 20,8" />
       </svg>
@@ -20,7 +20,7 @@ const navItems = [
     href: '/arena',
     label: 'ARENA',
     icon: (active: boolean) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? '#10B981' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" className={active ? 'text-emerald-500' : 'text-dark-muted'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <line x1="18" y1="20" x2="18" y2="10" />
         <line x1="12" y1="20" x2="12" y2="4" />
         <line x1="6" y1="20" x2="6" y2="14" />
@@ -47,7 +47,7 @@ const navItems = [
     href: '/profile',
     label: 'PROFILE',
     icon: (active: boolean) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? '#10B981' : '#8E8E93'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" className={active ? 'text-emerald-500' : 'text-dark-muted'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
         <circle cx="12" cy="7" r="4" />
       </svg>
@@ -59,7 +59,7 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 glass-card border-t border-white/5">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 glass-card border-t border-dark-border/60">
       <div className="flex items-center justify-around px-4 py-2 pb-[max(8px,env(safe-area-inset-bottom))] max-w-lg mx-auto">
         {navItems.map((item) => {
           const isActive = pathname === item.href;

@@ -17,6 +17,8 @@ import {
 } from 'recharts';
 import { format } from 'date-fns';
 
+const FRIEND_LINE_COLORS = ['#38BDF8', '#FBBF24', '#A78BFA', '#FB7185'] as const;
+
 export default function ArenaPage() {
   const { profile } = useAuth();
   const [dateRange, setDateRange] = useState<DateRange>('week');
@@ -59,37 +61,87 @@ export default function ArenaPage() {
     ? [top3[1], top3[0], top3[2]] // 2nd, 1st, 3rd
     : top3;
 
-  // Process chart data for OVERLAID comparison
+  // Process chart data for OVERLAID comparison (one row per calendar day so ranges > 1 week work)
   const chartData = useMemo(() => {
-    const dataMap: Record<string, any> = {};
+    type Row = Record<string, number | string> & { sortKey: string };
+    const dataMap = new Map<string, Row>();
 
-    // 1. Add user logs
+    const daySortKey = (log: { logged_at: string }) =>
+      format(new Date(log.logged_at), 'yyyy-MM-dd');
+    const dayLabel = (log: { logged_at: string }) =>
+      format(new Date(log.logged_at), 'MMM d');
+
+    const sessionVal = (log: {
+      pushup_reps: number;
+      plank_seconds: number;
+      run_distance: number | string | null;
+    }) => {
+      const runKm = Number(log.run_distance) || 0;
+      return metric === 'volume'
+        ? log.pushup_reps + log.plank_seconds / 6 + runKm * 10
+        : Math.max(log.pushup_reps, log.plank_seconds / 6, runKm * 10);
+    };
+
+    const touch = (log: { logged_at: string }) => {
+      const sk = daySortKey(log);
+      let row = dataMap.get(sk);
+      if (!row) {
+        row = { sortKey: sk, date: dayLabel(log), you: 0 };
+        dataMap.set(sk, row);
+      }
+      return row;
+    };
+
     myLogs.forEach((log) => {
-      const dateKey = format(new Date(log.logged_at), 'EEE').toUpperCase();
-      if (!dataMap[dateKey]) dataMap[dateKey] = { date: dateKey };
-      
-      const val = metric === 'volume'
-        ? log.pushup_reps + (log.plank_seconds / 6) + (Number(log.run_distance) * 10)
-        : Math.max(log.pushup_reps, log.plank_seconds / 6, Number(log.run_distance) * 10);
-      
-      dataMap[dateKey].you = (dataMap[dateKey].you || 0) + val;
+      const row = touch(log);
+      row.you = (Number(row.you) || 0) + sessionVal(log);
     });
 
-    // 2. Add shared logs (overlaid)
     sharedLogs.forEach((log: any) => {
-      const dateKey = format(new Date(log.logged_at), 'EEE').toUpperCase();
-      if (!dataMap[dateKey]) dataMap[dateKey] = { date: dateKey };
-      
-      const val = metric === 'volume'
-        ? log.pushup_reps + (log.plank_seconds / 6) + (Number(log.run_distance) * 10)
-        : Math.max(log.pushup_reps, log.plank_seconds / 6, Number(log.run_distance) * 10);
-      
-      const userName = log.profiles?.full_name?.split(' ')[0]?.toUpperCase() || 'FRIEND';
-      dataMap[dateKey][userName] = (dataMap[dateKey][userName] || 0) + val;
+      const row = touch(log);
+      const userName =
+        log.profiles?.full_name?.split(' ')[0]?.toUpperCase() || 'FRIEND';
+      row[userName] = (Number(row[userName]) || 0) + sessionVal(log);
     });
 
-    return Object.values(dataMap);
-  }, [myLogs, sharedLogs, metric]);
+    const rows = [...dataMap.values()].sort((a, b) =>
+      String(a.sortKey).localeCompare(String(b.sortKey))
+    );
+
+    const stripSort = rows.map(({ sortKey: _s, ...rest }) => rest);
+
+    if (mode === 'raw') return stripSort;
+
+    const valueKeys = Array.from(
+      stripSort.reduce((set, row) => {
+        Object.keys(row).forEach((k) => {
+          if (k !== 'date') set.add(k);
+        });
+        return set;
+      }, new Set<string>())
+    );
+
+    /** % change vs the previous day in this chart (rolling), aligned with dashboard "% IMP." semantics. */
+    const pctVsPrev = (cur: number, prev: number) => {
+      if (prev === 0) return cur > 0 ? 100 : 0;
+      return ((cur - prev) / prev) * 100;
+    };
+
+    return stripSort.map((row, i) => {
+      const mapped: Record<string, number | string> = { date: String(row.date) };
+      const prevRow = i > 0 ? stripSort[i - 1] : null;
+      valueKeys.forEach((key) => {
+        const rawVal = Number(row[key] || 0);
+        if (!prevRow) {
+          mapped[key] = 0;
+          return;
+        }
+        const prevRaw = Number(prevRow[key] || 0);
+        mapped[key] = pctVsPrev(rawVal, prevRaw);
+      });
+      return mapped;
+    });
+  }, [myLogs, sharedLogs, metric, mode]);
 
   // Identify comparison users for the legend
   const comparisonUsers = useMemo(() => {
@@ -100,7 +152,7 @@ export default function ArenaPage() {
 
   return (
     <AppShell>
-      <div className="max-w-md mx-auto px-6 space-y-6 pt-2 pb-32">
+      <div className="max-w-md mx-auto px-6 space-y-6 pt-2 pb-32" data-testid="uat-arena-page">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -115,6 +167,8 @@ export default function ArenaPage() {
           </div>
             <div className="flex items-center gap-2">
               <button
+                type="button"
+                data-testid="uat-arena-export"
                 onClick={handleExportCSV}
                 className="px-3 py-1 rounded-full bg-dark-elevated border border-dark-border text-[9px] font-bold tracking-widest text-dark-muted hover:text-emerald-500 hover:border-emerald-500/30 transition-all uppercase"
               >
@@ -128,9 +182,10 @@ export default function ArenaPage() {
         </motion.div>
 
         {/* Filters */}
-        <div className="space-y-2">
+        <div className="space-y-2" data-testid="uat-arena-filters">
           <div className="flex gap-3">
             <TogglePills
+              motionScope="arena-metric"
               options={[
                 { value: 'volume' as const, label: 'VOLUME' },
                 { value: 'peak' as const, label: 'PEAK' },
@@ -140,6 +195,7 @@ export default function ArenaPage() {
               size="sm"
             />
             <TogglePills
+              motionScope="arena-mode"
               options={[
                 { value: 'raw' as const, label: 'RAW' },
                 { value: 'percent' as const, label: '% IMP.' },
@@ -150,6 +206,7 @@ export default function ArenaPage() {
             />
           </div>
           <DateRangeTabs
+            motionScope="arena-date-tabs"
             selected={dateRange}
             onChange={setDateRange}
             onCustomDates={(from, to) => { setCustomFrom(from); setCustomTo(to); }}
@@ -210,7 +267,10 @@ export default function ArenaPage() {
                     <p className={`font-bold mt-2 ${isFirst ? 'text-sm' : 'text-xs'} text-dark-text`}>
                       {isYou ? 'YOU' : entry.full_name?.split(' ')[0]?.toUpperCase() || 'USER'}
                     </p>
-                    <p className="text-emerald-500 font-bold text-xs">
+                    <p
+                      className="text-emerald-500 font-bold text-xs"
+                      title="Total score for the selected range and metric (same basis as standings)"
+                    >
                       {Math.round(entry.total_score).toLocaleString()}
                     </p>
                   </motion.div>
@@ -240,9 +300,12 @@ export default function ArenaPage() {
                   <div className="w-2 h-2 rounded-full bg-emerald-500" />
                   <span className="text-[10px] font-semibold text-dark-muted uppercase">YOU</span>
                 </div>
-                {comparisonUsers.slice(0, 2).map((name) => (
+                {comparisonUsers.slice(0, 2).map((name, i) => (
                   <div key={name} className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-white/20" />
+                    <div
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: FRIEND_LINE_COLORS[i % FRIEND_LINE_COLORS.length] }}
+                    />
                     <span className="text-[10px] font-semibold text-dark-muted uppercase">{name}</span>
                   </div>
                 ))}
@@ -282,8 +345,8 @@ export default function ArenaPage() {
                         key={name}
                         type="monotone"
                         dataKey={name}
-                        stroke={`rgba(255,255,255,${0.4 - i * 0.1})`}
-                        strokeWidth={1.5}
+                        stroke={FRIEND_LINE_COLORS[i % FRIEND_LINE_COLORS.length]}
+                        strokeWidth={2}
                         strokeDasharray="4 4"
                         dot={false}
                       />

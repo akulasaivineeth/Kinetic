@@ -28,7 +28,7 @@ export async function GET() {
     // Fetch recent workouts from Whoop API
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const response = await fetch(
-      `https://api.prod.whoop.com/developer/v1/activity/workout?start=${sevenDaysAgo}&limit=25`,
+      `https://api.prod.whoop.com/developer/v2/activity/workout?start=${encodeURIComponent(sevenDaysAgo)}&limit=25`,
       {
         headers: { Authorization: `Bearer ${profile.whoop_access_token}` },
       }
@@ -49,22 +49,24 @@ export async function GET() {
     const imported: Array<{ activity: string; duration: number; strain: string }> = [];
 
     for (const workout of workouts) {
-      const activityType = workout.sport?.name || 'Strength Trainer';
+      const activityType =
+        workout.sport_name || workout.sport?.name || 'Strength Trainer';
       const durationMins = Math.round(
         (new Date(workout.end).getTime() - new Date(workout.start).getTime()) / 60000
       );
       const strain = workout.score?.strain?.toFixed(1) || '0.0';
+      const workoutId = workout.id != null ? String(workout.id) : '';
 
       // Check if we already have this workout
       const { data: existing } = await supabase
         .from('whoop_events')
         .select('id')
         .eq('user_id', user.id)
-        .eq('payload->>id', workout.id)
+        .eq('payload->>id', workoutId)
         .limit(1)
         .maybeSingle();
 
-      if (!existing) {
+      if (!existing && workoutId) {
         await supabase.from('whoop_events').insert({
           user_id: user.id,
           event_type: 'workout.updated',
@@ -72,14 +74,14 @@ export async function GET() {
           processed: true,
         });
 
-        // Create notification for the user
-        await supabase.from('notifications').insert({
+        const { error: notifErr } = await supabase.from('notifications').insert({
           user_id: user.id,
           type: 'whoop_workout',
           title: 'Imported Workout',
           body: `${activityType} • ${durationMins} min • Strain ${strain}`,
           data: { activity: activityType, duration: durationMins, strain },
         });
+        if (notifErr) console.error('Whoop import notification insert:', notifErr);
 
         imported.push({ activity: activityType, duration: durationMins, strain });
       }

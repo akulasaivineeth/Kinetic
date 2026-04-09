@@ -80,6 +80,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    try {
+      await fetch(`${window.location.origin}/auth/sign-out`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch {
+      /* still clear client session */
+    }
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);

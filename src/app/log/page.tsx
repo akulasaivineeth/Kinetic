@@ -7,11 +7,19 @@ import { GlassCard } from '@/components/ui/glass-card';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { useAuth } from '@/providers/auth-provider';
 import { useGoals } from '@/hooks/use-goals';
-import { useWeeklyVolume, useDraftLog, useSaveDraft, useSubmitLog } from '@/hooks/use-workout-logs';
+import {
+  useWeeklyVolume,
+  useDraftLog,
+  useSaveDraft,
+  useSubmitLog,
+  useRecentSubmittedLogs,
+  useUpdateSubmittedLog,
+} from '@/hooks/use-workout-logs';
 import { formatPlankTime } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
+import { format } from 'date-fns';
 
 export default function LogPageWrapper() {
   return (
@@ -29,8 +37,10 @@ function LogPage() {
   const { data: goals } = useGoals();
   const { data: weeklyVolume } = useWeeklyVolume();
   const { data: draft } = useDraftLog();
+  const { data: recentLogs = [] } = useRecentSubmittedLogs();
   const saveDraft = useSaveDraft();
   const submitLog = useSubmitLog();
+  const updateSubmittedLog = useUpdateSubmittedLog();
 
   // Whoop prefill from notification
   const whoopActivity = searchParams.get('activity') || '';
@@ -47,9 +57,11 @@ function LogPage() {
   const [submitted, setSubmitted] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [editLogId, setEditLogId] = useState<string | null>(null);
+  const [submitLabel, setSubmitLabel] = useState<'submit' | 'update'>('submit');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
-
   // Whoop import fallback
   const handleWhoopImport = async () => {
     setIsImporting(true);
@@ -73,6 +85,7 @@ function LogPage() {
 
   // Load draft
   useEffect(() => {
+    if (editLogId) return;
     if (draft) {
       setDraftId(draft.id);
       setPushupReps(draft.pushup_reps || 0);
@@ -89,11 +102,12 @@ function LogPage() {
       setNotes(draft.notes || '');
       setPhotoUrl(draft.photo_url || null);
     }
-  }, [draft, profile?.unit_preference]);
+  }, [draft, profile?.unit_preference, editLogId]);
 
   // Auto-save draft
   const autoSave = useCallback(() => {
     if (!user) return;
+    if (editLogId) return; // Never autosave as draft while editing a submitted log.
     // Normalize: MI to KM if user is in Imperial mode
     const finalRunDist = profile?.unit_preference === 'imperial' 
       ? Number((runDistance * 1.60934).toFixed(3)) 
@@ -114,7 +128,7 @@ function LogPage() {
         if (data && !draftId) setDraftId(data.id);
       },
     });
-  }, [user, profile?.unit_preference, draftId, pushupReps, plankSeconds, runDistance, notes, photoUrl, whoopActivity, whoopStrain, whoopDuration, saveDraft]);
+  }, [user, editLogId, profile?.unit_preference, draftId, pushupReps, plankSeconds, runDistance, notes, photoUrl, whoopActivity, whoopStrain, whoopDuration, saveDraft]);
 
   useEffect(() => {
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
@@ -146,16 +160,34 @@ function LogPage() {
   // Submit
   const handleSubmit = async () => {
     if (!user) return;
+    setSubmitError(null);
     setIsSubmitting(true);
     try {
+      const finalRunDist = profile?.unit_preference === 'imperial'
+        ? Number((runDistance * 1.60934).toFixed(3))
+        : runDistance;
+
+      if (editLogId) {
+        await updateSubmittedLog.mutateAsync({
+          logId: editLogId,
+          patch: {
+            pushup_reps: pushupReps,
+            plank_seconds: plankSeconds,
+            run_distance: finalRunDist,
+            notes,
+            photo_url: photoUrl,
+          },
+        });
+        setSubmitted(true);
+        setSubmitLabel('update');
+        router.push('/dashboard');
+        return;
+      }
+
       let logId = draftId;
 
       // If no draft saved yet, save it now and get the ID
       if (!logId) {
-        const finalRunDist = profile?.unit_preference === 'imperial'
-          ? Number((runDistance * 1.60934).toFixed(3))
-          : runDistance;
-
         const saved = await saveDraft.mutateAsync({
           pushup_reps: pushupReps,
           plank_seconds: plankSeconds,
@@ -172,6 +204,7 @@ function LogPage() {
 
       await submitLog.mutateAsync(logId);
       setSubmitted(true);
+      setSubmitLabel('submit');
       // Reset form
       setPushupReps(0);
       setPlankSeconds(0);
@@ -179,13 +212,35 @@ function LogPage() {
       setNotes('');
       setPhotoUrl(null);
       setDraftId(null);
-      // Navigate to dashboard after brief success feedback
-      setTimeout(() => router.push('/dashboard'), 1200);
+      // Navigate immediately — delayed push was often cleared by React Strict Mode unmount cleanup in dev
+      router.push('/dashboard');
     } catch (err) {
       console.error('Submit failed:', err);
+      setSubmitError(err instanceof Error ? err.message : 'Failed to save log');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleEditRecent = (logId: string) => {
+    const target = recentLogs.find((r) => r.id === logId);
+    if (!target) return;
+
+    setEditLogId(target.id);
+    setDraftId(null);
+    setSubmitted(false);
+    setSubmitError(null);
+
+    setPushupReps(target.pushup_reps || 0);
+    setPlankSeconds(target.plank_seconds || 0);
+    const km = Number(target.run_distance) || 0;
+    setRunDistance(
+      profile?.unit_preference === 'imperial'
+        ? Number((km * 0.621371).toFixed(1))
+        : km
+    );
+    setNotes(target.notes || '');
+    setPhotoUrl(target.photo_url || null);
   };
 
   // Computed values
@@ -246,6 +301,45 @@ function LogPage() {
           remaining={`${Math.max(pushupGoal - totalPushups, 0)} remaining`}
         />
 
+        {/* Edit Submitted Logs */}
+        <GlassCard className="space-y-2" delay={0.05}>
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-semibold tracking-[0.15em] text-dark-muted uppercase">
+              EDIT SUBMITTED LOG
+            </p>
+            {editLogId && (
+              <button
+                onClick={() => {
+                  setEditLogId(null);
+                  setSubmitError(null);
+                }}
+                className="text-[10px] font-bold text-emerald-500"
+              >
+                CANCEL EDIT
+              </button>
+            )}
+          </div>
+          {recentLogs.length === 0 ? (
+            <p className="text-xs text-dark-muted">No submitted logs yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {recentLogs.slice(0, 4).map((log) => (
+                <button
+                  key={log.id}
+                  onClick={() => handleEditRecent(log.id)}
+                  className={`w-full text-left px-3 py-2 rounded-xl border text-xs transition-colors ${
+                    editLogId === log.id
+                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                      : 'border-dark-border bg-dark-elevated text-dark-text'
+                  }`}
+                >
+                  {format(new Date(log.logged_at), 'MMM d, p')} • {log.pushup_reps} reps • {formatPlankTime(log.plank_seconds)}
+                </button>
+              ))}
+            </div>
+          )}
+        </GlassCard>
+
         {/* Push-up Reps Card */}
         <GlassCard className="relative" delay={0.1}>
           <div className="flex justify-end mb-1">
@@ -258,6 +352,7 @@ function LogPage() {
           </p>
           <input
             type="number"
+            data-testid="uat-log-pushup-reps"
             value={pushupReps || ''}
             onChange={(e) => setPushupReps(parseInt(e.target.value) || 0)}
             onWheel={(e) => (e.target as HTMLElement).blur()}
@@ -385,12 +480,12 @@ function LogPage() {
           className="w-full py-4 rounded-2xl emerald-gradient font-black text-sm tracking-wider text-white flex items-center justify-center gap-2 disabled:opacity-50 transition-all duration-200"
         >
           {submitted ? (
-            <>SUBMITTED ✓</>
+            <>{submitLabel === 'update' ? 'UPDATED ✓' : 'SUBMITTED ✓'}</>
           ) : isSubmitting ? (
-            <>SUBMITTING...</>
+            <>{editLogId ? 'UPDATING...' : 'SUBMITTING...'}</>
           ) : (
             <>
-              SUBMIT TO ARENA
+              {editLogId ? 'UPDATE LOG' : 'SUBMIT TO ARENA'}
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M22 2L11 13" />
                 <path d="M22 2L15 22L11 13L2 9L22 2Z" />
@@ -398,6 +493,9 @@ function LogPage() {
             </>
           )}
         </motion.button>
+        {submitError && (
+          <p className="text-xs text-red-400 font-semibold text-center">{submitError}</p>
+        )}
       </div>
     </AppShell>
   );

@@ -28,7 +28,16 @@ export function useStamina(): { data: StaminaData; isLoading: boolean } {
   const supabase = createClient();
 
   const query = useQuery({
-    queryKey: ['stamina', user?.id, goals, weeklyVolume],
+    queryKey: [
+      'stamina',
+      user?.id,
+      goals?.pushup_weekly_goal ?? 500,
+      goals?.plank_weekly_goal ?? 600,
+      goals?.run_weekly_goal ?? 15,
+      weeklyVolume?.total_pushups ?? 0,
+      weeklyVolume?.total_plank_seconds ?? 0,
+      Number(weeklyVolume?.total_run_distance ?? 0),
+    ],
     queryFn: async (): Promise<StaminaData> => {
       if (!user) return defaultStamina();
 
@@ -50,6 +59,7 @@ export function useStamina(): { data: StaminaData; isLoading: boolean } {
       // --- 2. Whoop Recovery (40%) ---
       let whoopRecovery = 70; // Default fallback
       try {
+        const fourWeeksAgoIso = subWeeks(new Date(), 4).toISOString();
         const { data: latestRecovery } = await supabase
           .from('whoop_events')
           .select('payload')
@@ -67,6 +77,30 @@ export function useStamina(): { data: StaminaData; isLoading: boolean } {
           if (recoveryScore !== undefined) {
             whoopRecovery = Math.round(recoveryScore);
           }
+        } else {
+          // Graceful fallback: use 4-week average if latest snapshot is unavailable.
+          const { data: fallbackRecovery } = await supabase
+            .from('whoop_events')
+            .select('payload')
+            .eq('user_id', user.id)
+            .eq('event_type', 'recovery.updated')
+            .gte('created_at', fourWeeksAgoIso)
+            .order('created_at', { ascending: false })
+            .limit(20);
+
+          if (fallbackRecovery?.length) {
+            const scores = fallbackRecovery
+              .map((row) => {
+                const payload = row.payload as Record<string, unknown>;
+                const recovery = payload?.recovery as Record<string, unknown> | undefined;
+                const score = recovery?.score as Record<string, unknown> | undefined;
+                return score?.recovery_score as number | undefined;
+              })
+              .filter((v): v is number => typeof v === 'number');
+            if (scores.length) {
+              whoopRecovery = Math.round(scores.reduce((sum, val) => sum + val, 0) / scores.length);
+            }
+          }
         }
       } catch {
         // Silently use default
@@ -76,6 +110,7 @@ export function useStamina(): { data: StaminaData; isLoading: boolean } {
       let leanMassStability = 95;
       let latestLeanMass: number | null = null;
       try {
+        const fourWeeksAgoIso = subWeeks(new Date(), 4).toISOString();
         const { data: bodyEvents } = await supabase
           .from('whoop_events')
           .select('payload, created_at')
@@ -92,6 +127,26 @@ export function useStamina(): { data: StaminaData; isLoading: boolean } {
           const baseline = (bodyEvents[bodyEvents.length - 1].payload as Record<string, unknown>)?.lean_mass as number | undefined;
           if (baseline && baseline > 0) {
             const pctChange = Math.abs((latestLeanMass - baseline) / baseline) * 100;
+            leanMassStability = Math.max(0, Math.round(100 - pctChange * 10));
+          }
+        } else if (latestLeanMass) {
+          // Graceful fallback: compare latest with 4-week average when no direct baseline sample exists.
+          const { data: baselineEvents } = await supabase
+            .from('whoop_events')
+            .select('payload')
+            .eq('user_id', user.id)
+            .eq('event_type', 'body_measurement.updated')
+            .gte('created_at', fourWeeksAgoIso)
+            .order('created_at', { ascending: false })
+            .limit(20);
+
+          const leanSamples = (baselineEvents ?? [])
+            .map((row) => (row.payload as Record<string, unknown>)?.lean_mass as number | undefined)
+            .filter((v): v is number => typeof v === 'number' && v > 0);
+
+          if (leanSamples.length) {
+            const baselineAvg = leanSamples.reduce((sum, val) => sum + val, 0) / leanSamples.length;
+            const pctChange = baselineAvg > 0 ? Math.abs((latestLeanMass - baselineAvg) / baselineAvg) * 100 : 0;
             leanMassStability = Math.max(0, Math.round(100 - pctChange * 10));
           }
         }

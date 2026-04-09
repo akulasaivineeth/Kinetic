@@ -47,20 +47,28 @@ export function Header() {
   return (
     <header className="flex items-center justify-between px-5 pt-[max(16px,env(safe-area-inset-top))] pb-3">
       <div className="flex items-center gap-3">
-        {profile?.avatar_url ? (
-          <Image
-            src={profile.avatar_url}
-            alt="Avatar"
-            width={36}
-            height={36}
-            className="rounded-full border-2 border-emerald-500/30"
-          />
-        ) : (
-          <div className="w-9 h-9 rounded-full bg-dark-elevated flex items-center justify-center text-xs font-bold text-emerald-500 border-2 border-emerald-500/30">
-            {getInitials(profile?.full_name || 'U')}
-          </div>
-        )}
-        <h1 className="text-xl font-black tracking-tight italic">KINETIC</h1>
+        <Link
+          href="/profile"
+          className="flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50"
+          aria-label="Profile"
+        >
+          {profile?.avatar_url ? (
+            <Image
+              src={profile.avatar_url}
+              alt=""
+              width={36}
+              height={36}
+              className="rounded-full border-2 border-emerald-500/30"
+            />
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-dark-elevated flex items-center justify-center text-xs font-bold text-emerald-500 border-2 border-emerald-500/30">
+              {getInitials(profile?.full_name || 'U')}
+            </div>
+          )}
+        </Link>
+        <Link href="/dashboard" className="min-w-0">
+          <h1 className="text-xl font-black tracking-tight italic">KINETIC</h1>
+        </Link>
       </div>
 
       <div className="flex items-center gap-2">
@@ -74,10 +82,13 @@ export function Header() {
         {/* Notification bell */}
         <div className="relative" ref={dropdownRef}>
           <button
+            type="button"
+            aria-label="Open notifications"
+            data-testid="uat-notifications-toggle"
             onClick={() => setShowNotifications(!showNotifications)}
             className="w-10 h-10 rounded-xl bg-dark-elevated border border-dark-border flex items-center justify-center relative"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-dark-muted" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>

@@ -2,6 +2,7 @@ import { useState, useEffect, type ReactNode } from 'react';
 import { Header } from './header';
 import { BottomNav } from './bottom-nav';
 import { motion, AnimatePresence } from 'framer-motion';
+import { subscribeToPush } from '@/lib/push';
 
 interface AppShellProps {
   children: ReactNode;
@@ -18,9 +19,13 @@ export function AppShell({ children }: AppShellProps) {
   }, []);
 
   const requestPermission = async () => {
-    const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
-      // Logic would go here to register VAPID sub
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        await subscribeToPush();
+      }
+    } catch (error) {
+      console.error('Notification permission request failed:', error);
     }
     setShowNotificationPrompt(false);
   };

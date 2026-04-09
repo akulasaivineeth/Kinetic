@@ -4,12 +4,15 @@
 
 :root {
   --emerald: #10B981;
-  --dark-bg: #0A0A0A;
-  --dark-card: #141414;
-  --dark-elevated: #1C1C1E;
-  --dark-border: #2C2C2E;
+  --dark-bg: #050508;
+  --dark-card: #121214;
+  --dark-elevated: #1A1A1E;
+  --dark-border: #2C2C32;
   --dark-text: #F5F5F7;
   --dark-muted: #8E8E93;
+  --app-glow: rgba(16, 185, 129, 0.14);
+  --app-glow-2: rgba(16, 185, 129, 0.06);
+  --noise-opacity: 0.035;
 }
 
 * {
@@ -30,23 +33,44 @@ body {
   color: var(--dark-text);
   min-height: 100dvh;
   overflow-x: hidden;
+  transition: background-color 0.35s ease, color 0.35s ease;
+}
+
+/* Elite dark: depth + subtle emerald atmosphere */
+html.dark body {
+  background-image:
+    radial-gradient(ellipse 130% 90% at 50% -25%, var(--app-glow), transparent 55%),
+    radial-gradient(ellipse 80% 50% at 100% 50%, var(--app-glow-2), transparent 50%),
+    radial-gradient(ellipse 60% 40% at 0% 80%, rgba(16, 185, 129, 0.04), transparent 45%),
+    linear-gradient(180deg, #0c0c10 0%, var(--dark-bg) 35%, var(--dark-bg) 100%);
+  background-attachment: fixed;
+}
+
+/* Light: crisp, app-store polish */
+html.light body {
+  background-image:
+    radial-gradient(ellipse 120% 70% at 50% -20%, rgba(16, 185, 129, 0.1), transparent 50%),
+    linear-gradient(180deg, #fafafa 0%, var(--dark-bg) 45%, var(--dark-bg) 100%);
+  background-attachment: fixed;
 }
 
 /* Glassmorphism card base */
 .glass-card {
-  background: rgba(28, 28, 30, 0.8);
+  background: rgba(28, 28, 30, 0.78);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 16px;
+  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.35);
 }
 
 .glass-card-elevated {
-  background: rgba(44, 44, 46, 0.6);
+  background: rgba(36, 36, 40, 0.72);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 20px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45);
 }
 
 /* Emerald gradient accent */
@@ -113,23 +137,36 @@ input[type="number"] {
   transition: all 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Light theme overrides */
-.light body,
-.light {
-  --dark-bg: #F5F5F7;
+html.light,
+html.light body {
+  --dark-bg: #ECECF0;
   --dark-card: #FFFFFF;
-  --dark-elevated: #F2F2F7;
-  --dark-border: #E5E5EA;
-  --dark-text: #1C1C1E;
-  --dark-muted: #8E8E93;
+  --dark-elevated: #F4F4F8;
+  --dark-border: #D8D8DE;
+  --dark-text: #0D0D0F;
+  --dark-muted: #63636B;
+  --app-glow: rgba(16, 185, 129, 0.12);
+  --app-glow-2: rgba(16, 185, 129, 0.05);
 }
 
-.light .glass-card {
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+html.light .glass-card {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
 }
 
-.light .glass-card-elevated {
-  background: rgba(242, 242, 247, 0.8);
+html.light .glass-card-elevated {
+  background: rgba(255, 255, 255, 0.95);
   border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+html.light .emerald-glow {
+  box-shadow: 0 0 24px rgba(16, 185, 129, 0.22), 0 0 48px rgba(16, 185, 129, 0.08);
+}
+
+html.light .tab-active {
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.35);
 }

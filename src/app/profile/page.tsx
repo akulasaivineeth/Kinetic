@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { AppShell } from '@/components/layout/app-shell';
@@ -11,10 +11,14 @@ import { useGoals, useUpdateGoals } from '@/hooks/use-goals';
 import { useSharingConnections, useSendSharingRequest, useRemoveSharing } from '@/hooks/use-sharing';
 import { getInitials } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function ProfilePage() {
+function ProfilePageContent() {
   const { user, profile, signOut, refreshProfile } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const whoopParam = searchParams.get('whoop');
+  const whoopReason = searchParams.get('reason');
   const { theme, toggleTheme } = useTheme();
   const { data: goals } = useGoals();
   const updateGoals = useUpdateGoals();
@@ -29,6 +33,10 @@ export default function ProfilePage() {
   const [shareConfirm, setShareConfirm] = useState(false);
   const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState('');
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [updatingUnit, setUpdatingUnit] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // Avatar upload
@@ -36,20 +44,42 @@ export default function ProfilePage() {
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
+    setAvatarError(null);
     const supabase = createClient();
     const fileName = `${user.id}/${Date.now()}.jpg`;
-    const { data, error } = await supabase.storage
+    const { data, error: uploadError } = await supabase.storage
       .from('avatars')
-      .upload(fileName, file, { upsert: true });
+      .upload(fileName, file, {
+        upsert: true,
+        contentType: file.type || 'image/jpeg',
+      });
 
-    if (!error && data) {
-      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(data.path);
-      await supabase
-        .from('profiles')
-        .update({ avatar_url: urlData.publicUrl, updated_at: new Date().toISOString() })
-        .eq('id', user.id);
-      await refreshProfile();
+    if (uploadError) {
+      setAvatarError(uploadError.message);
+      e.target.value = '';
+      return;
     }
+
+    if (!data) {
+      setAvatarError('Upload failed');
+      e.target.value = '';
+      return;
+    }
+
+    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(data.path);
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ avatar_url: urlData.publicUrl, updated_at: new Date().toISOString() })
+      .eq('id', user.id);
+
+    if (profileError) {
+      setAvatarError(profileError.message);
+      e.target.value = '';
+      return;
+    }
+
+    await refreshProfile();
+    e.target.value = '';
   };
 
   // Generate invite link
@@ -70,6 +100,7 @@ export default function ProfilePage() {
   // Send sharing request
   const handleSendShare = async () => {
     if (!shareEmail) return;
+    setShareError(null);
     if (!shareConfirm) {
       setShareConfirm(true);
       return;
@@ -78,14 +109,31 @@ export default function ProfilePage() {
       await sendRequest.mutateAsync(shareEmail);
       setShareEmail('');
       setShareConfirm(false);
-    } catch {
-      // Error
+    } catch (e) {
+      setShareError(e instanceof Error ? e.message : 'Could not send request');
     }
   };
 
   return (
     <AppShell>
       <div className="space-y-6 pt-4">
+        {whoopParam === 'connected' && (
+          <div className="px-1 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-center text-xs font-semibold text-emerald-500">
+            Whoop connected successfully.
+          </div>
+        )}
+        {whoopParam === 'error' && (
+          <div className="px-1 py-2 rounded-xl bg-red-500/10 border border-red-500/25 text-center text-[11px] font-semibold text-red-400">
+            Whoop connection failed
+            {whoopReason === 'no_session'
+              ? ' — sign in to Kinetic in this browser, then try Connect again.'
+              : whoopReason === 'token'
+                ? ' — check Whoop app redirect URL matches this site (including port).'
+                : whoopReason
+                  ? ` (${whoopReason})`
+                  : '.'}
+          </div>
+        )}
         {/* Avatar Section */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
@@ -130,6 +178,11 @@ export default function ProfilePage() {
               onChange={handleAvatarUpload}
             />
           </div>
+          {avatarError && (
+            <p className="text-center text-xs font-semibold text-red-400 px-4 -mt-2 mb-1 max-w-sm">
+              {avatarError}
+            </p>
+          )}
 
           <h2 className="text-2xl font-black text-dark-text">
             {profile?.full_name || 'User'}
@@ -225,16 +278,20 @@ export default function ProfilePage() {
             SYSTEM & GOALS
           </p>
 
-          {/* Dark Mode Toggle */}
+          {/* Appearance — full-app theme */}
           <GlassCard className="flex items-center gap-3" delay={0.2}>
             <div className="w-10 h-10 rounded-xl bg-dark-elevated flex items-center justify-center">
-              <span className="text-lg">🌙</span>
+              <span className="text-lg">{theme === 'dark' ? '🌙' : '☀️'}</span>
             </div>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-dark-text">Dark Mode</p>
-              <p className="text-[10px] text-dark-muted">Default performance theme</p>
+              <p className="text-sm font-semibold text-dark-text">Appearance</p>
+              <p className="text-[10px] text-dark-muted">
+                {theme === 'dark' ? 'Elite dark — full app' : 'Light — full app'}
+              </p>
             </div>
             <button
+              type="button"
+              data-testid="uat-profile-theme-toggle"
               onClick={toggleTheme}
               className={`w-12 h-7 rounded-full relative transition-colors duration-200 ${
                 theme === 'dark' ? 'bg-emerald-500' : 'bg-dark-border'
@@ -263,17 +320,24 @@ export default function ProfilePage() {
             </div>
             <button
               onClick={async () => {
+                if (!user || updatingUnit) return;
+                setUpdatingUnit(true);
                 const newUnit = profile?.unit_preference === 'imperial' ? 'metric' : 'imperial';
                 const supabase = createClient();
-                await supabase
-                  .from('profiles')
-                  .update({ unit_preference: newUnit, updated_at: new Date().toISOString() })
-                  .eq('id', user!.id);
-                await refreshProfile();
+                try {
+                  await supabase
+                    .from('profiles')
+                    .update({ unit_preference: newUnit, updated_at: new Date().toISOString() })
+                    .eq('id', user.id);
+                  await refreshProfile();
+                } finally {
+                  setUpdatingUnit(false);
+                }
               }}
-              className="px-3 py-1.5 rounded-xl bg-dark-elevated border border-dark-border text-[10px] font-bold tracking-wider text-emerald-500 hover:border-emerald-500/30 transition-all font-mono"
+              disabled={updatingUnit}
+              className="px-3 py-1.5 rounded-xl bg-dark-elevated border border-dark-border text-[10px] font-bold tracking-wider text-emerald-500 hover:border-emerald-500/30 transition-all font-mono disabled:opacity-60"
             >
-              {profile?.unit_preference?.toUpperCase() || 'METRIC'}
+              {updatingUnit ? 'UPDATING...' : (profile?.unit_preference?.toUpperCase() || 'METRIC')}
             </button>
           </GlassCard>
 
@@ -347,6 +411,7 @@ export default function ProfilePage() {
 
           {/* Sharing */}
           <GlassCard
+            data-testid="uat-profile-sharing-card"
             className="flex items-center gap-3 cursor-pointer"
             delay={0.3}
             onClick={() => setShowSharing(!showSharing)}
@@ -377,7 +442,11 @@ export default function ProfilePage() {
                     <input
                       type="email"
                       value={shareEmail}
-                      onChange={(e) => { setShareEmail(e.target.value); setShareConfirm(false); }}
+                      onChange={(e) => {
+                        setShareEmail(e.target.value);
+                        setShareConfirm(false);
+                        setShareError(null);
+                      }}
                       placeholder="Search by email..."
                       className="flex-1 px-3 py-2 rounded-xl bg-dark-elevated text-sm text-dark-text placeholder-dark-muted outline-none border border-dark-border focus:border-emerald-500/50 transition-colors"
                     />
@@ -392,6 +461,9 @@ export default function ProfilePage() {
                     <p className="text-[10px] text-emerald-500 px-1">
                       Press CONFIRM to send sharing request to {shareEmail}
                     </p>
+                  )}
+                  {shareError && (
+                    <p className="text-[10px] text-red-400 px-1 font-semibold">{shareError}</p>
                   )}
 
                   {/* Active connections */}
@@ -487,6 +559,7 @@ export default function ProfilePage() {
           <a
             href="/api/export"
             download
+            data-testid="uat-profile-export-csv"
             className="block w-full"
           >
             <GlassCard className="flex items-center gap-3" delay={0.35}>
@@ -511,7 +584,18 @@ export default function ProfilePage() {
         {/* Deactivate Session / Logout */}
         <motion.button
           whileTap={{ scale: 0.97 }}
-          onClick={signOut}
+          onClick={async () => {
+            if (signingOut) return;
+            setSigningOut(true);
+            try {
+              await signOut();
+              // Full navigation so middleware sees cleared session cookies (client router alone can race)
+              window.location.assign('/');
+            } finally {
+              setSigningOut(false);
+            }
+          }}
+          disabled={signingOut}
           className="w-full py-4 rounded-2xl border border-red-500/30 bg-red-500/5 font-bold text-sm tracking-wider text-red-400 flex items-center justify-center gap-2"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -522,7 +606,7 @@ export default function ProfilePage() {
             <polyline points="16 17 21 12 16 7" />
             <line x1="21" y1="12" x2="9" y2="12" />
           </svg>
-          DEACTIVATE SESSION
+          {signingOut ? 'SIGNING OUT...' : 'LOG OUT'}
         </motion.button>
 
         {/* Version */}
@@ -531,5 +615,21 @@ export default function ProfilePage() {
         </p>
       </div>
     </AppShell>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense
+      fallback={
+        <AppShell>
+          <div className="flex items-center justify-center pt-20 text-dark-muted text-sm">
+            Loading profile…
+          </div>
+        </AppShell>
+      }
+    >
+      <ProfilePageContent />
+    </Suspense>
   );
 }

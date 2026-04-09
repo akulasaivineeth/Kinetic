@@ -2,9 +2,11 @@
 
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/providers/auth-provider';
 
 export default function UnauthorizedPage() {
   const router = useRouter();
+  const { user, signOut } = useAuth();
 
   return (
     <div className="min-h-dvh bg-dark-bg flex flex-col items-center justify-center px-8 relative overflow-hidden">
@@ -53,6 +55,19 @@ export default function UnauthorizedPage() {
         >
           RETURN TO BASE
         </motion.button>
+
+        {user && (
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={async () => {
+              await signOut();
+              router.push('/');
+            }}
+            className="w-full mt-3 py-3 rounded-2xl border border-dark-border text-dark-muted font-bold text-xs tracking-wider uppercase"
+          >
+            Sign out and try again
+          </motion.button>
+        )}
 
         <div className="flex flex-col items-center mt-12 space-y-2 opacity-30">
           <div className="w-1 h-1 rounded-full bg-red-500" />

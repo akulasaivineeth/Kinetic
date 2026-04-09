@@ -195,6 +195,66 @@ export function useSubmitLog() {
   });
 }
 
+export function useRecentSubmittedLogs(limit = 8) {
+  const { user } = useAuth();
+  const supabase = createClient();
+
+  return useQuery({
+    queryKey: ['recent-workout-logs', user?.id, limit],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from('workout_logs')
+        .select('*')
+        .eq('user_id', user.id)
+        .not('submitted_at', 'is', null)
+        .order('logged_at', { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return (data ?? []) as WorkoutLog[];
+    },
+    enabled: !!user,
+  });
+}
+
+export function useUpdateSubmittedLog() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const supabase = createClient();
+
+  return useMutation({
+    mutationFn: async ({
+      logId,
+      patch,
+    }: {
+      logId: string;
+      patch: Partial<Pick<WorkoutLog, 'pushup_reps' | 'plank_seconds' | 'run_distance' | 'notes' | 'photo_url'>>;
+    }) => {
+      if (!user) throw new Error('Not authenticated');
+      const { data, error } = await supabase
+        .from('workout_logs')
+        .update({
+          ...patch,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', logId)
+        .eq('user_id', user.id)
+        .not('submitted_at', 'is', null)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as WorkoutLog;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workout-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['weekly-volume'] });
+      queryClient.invalidateQueries({ queryKey: ['stamina'] });
+      queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      queryClient.invalidateQueries({ queryKey: ['recent-workout-logs'] });
+    },
+  });
+}
+
 export function useSharedLogs(dateRange: DateRange, customFrom?: Date, customTo?: Date) {
   const { user } = useAuth();
   const supabase = createClient();

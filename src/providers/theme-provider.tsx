@@ -23,9 +23,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-    document.documentElement.classList.toggle('light', theme === 'light');
+    const root = document.documentElement;
+    root.classList.remove('dark', 'light');
+    root.classList.add(theme === 'dark' ? 'dark' : 'light');
     localStorage.setItem('kinetic-theme', theme);
+
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) {
+      meta.setAttribute('content', theme === 'dark' ? '#050508' : '#ECECF0');
+    }
   }, [theme]);
 
   const toggleTheme = () => setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));

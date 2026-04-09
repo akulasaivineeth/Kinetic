@@ -1,5 +1,6 @@
 'use client';
 
+import { useId } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
@@ -8,6 +9,8 @@ interface TogglePillsProps<T extends string> {
   selected: T;
   onChange: (value: T) => void;
   size?: 'sm' | 'md';
+  /** Unique per group so Framer layoutId does not animate across unrelated toggles. */
+  motionScope?: string;
 }
 
 export function TogglePills<T extends string>({
@@ -15,7 +18,11 @@ export function TogglePills<T extends string>({
   selected,
   onChange,
   size = 'md',
+  motionScope,
 }: TogglePillsProps<T>) {
+  const autoScope = useId();
+  const scope = motionScope ?? autoScope;
+
   return (
     <div className="flex gap-2 flex-wrap">
       {options.map((option) => (
@@ -33,7 +40,7 @@ export function TogglePills<T extends string>({
         >
           {selected === option.value && (
             <motion.div
-              layoutId="toggle-pill"
+              layoutId={`kinetic-toggle-pill-${scope}`}
               className="absolute inset-0 rounded-full bg-emerald-500/15 border border-emerald-500/30"
               transition={{ type: 'spring', stiffness: 300, damping: 25 }}
             />

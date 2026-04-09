@@ -13,8 +13,9 @@ export function PWAInit() {
   }, []);
 
   useEffect(() => {
-    if (user) {
-      // Subscribe to push after login
+    // Avoid prompting on mount; browser requires user gesture.
+    // If already granted, we can safely sync subscription silently.
+    if (user && 'Notification' in window && Notification.permission === 'granted') {
       subscribeToPush();
     }
   }, [user]);
