@@ -10,6 +10,9 @@ import { DateRangeTabs } from '@/components/ui/date-range-tabs';
 import { useLeaderboard } from '@/hooks/use-leaderboard';
 import { useWorkoutLogs, useSharedLogs, type DateRange } from '@/hooks/use-workout-logs';
 import { useAuth } from '@/providers/auth-provider';
+import { useStreak } from '@/hooks/use-streak';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
+import { StandingsSkeleton } from '@/components/ui/skeleton';
 import { getInitials, formatDistance } from '@/lib/utils';
 import type { LeaderboardEntry } from '@/types/database';
 import {
@@ -73,6 +76,7 @@ export default function ArenaPage() {
 
   const { data: myLogs = [] } = useWorkoutLogs(dateRange, customFrom, customTo);
   const { data: sharedLogs = [] } = useSharedLogs(dateRange, customFrom, customTo);
+  const { data: streak = 0 } = useStreak();
 
   const handleExportCSV = () => {
     if (!leaderboard.length) return;
@@ -457,6 +461,9 @@ export default function ArenaPage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-sm text-dark-text truncate">
                         {isYou ? `YOU (${entry.full_name?.split(' ')[0]})` : entry.full_name?.toUpperCase()}
+                        {isYou && streak >= 1 && (
+                          <span className="ml-1.5 text-[10px] text-amber-400 font-bold" title={`${streak}-week streak`}>🔥{streak}</span>
+                        )}
                       </p>
                       <div className="flex items-center gap-2 text-[10px] text-dark-muted mt-0.5">
                         <span className="flex items-center gap-0.5"><Dumbbell size={10} className="text-emerald-500/50" /> {Math.round(entry.pushup_value)}</span>

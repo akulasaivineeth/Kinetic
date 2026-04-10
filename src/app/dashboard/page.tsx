@@ -7,6 +7,8 @@ import { GlassCard } from '@/components/ui/glass-card';
 import { ScoreRing } from '@/components/ui/score-ring';
 import { TogglePills } from '@/components/ui/toggle-pills';
 import { DateRangeTabs } from '@/components/ui/date-range-tabs';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
+import { DashboardCardSkeleton, ChartSkeleton } from '@/components/ui/skeleton';
 import { useWorkoutLogs, type DateRange, getDateRange } from '@/hooks/use-workout-logs';
 import {
   isWeekLineMode,
@@ -24,8 +26,13 @@ import { useRecentWeeks } from '@/hooks/use-recent-weeks';
 import { useWeeklyVolume } from '@/hooks/use-workout-logs';
 import { useGoals } from '@/hooks/use-goals';
 import { useStreak } from '@/hooks/use-streak';
+import { useGoalSuggestions } from '@/hooks/use-goal-suggestions';
 import { useAuth } from '@/providers/auth-provider';
 import { formatDistance, formatPlankTime } from '@/lib/utils';
+import { generateInsights } from '@/lib/insights';
+import { getEarnedMilestones } from '@/lib/milestones';
+import { TrendingUp, TrendingDown, Lightbulb, AlertTriangle, Award } from 'lucide-react';
+import { Onboarding } from '@/components/ui/onboarding';
 import type { WorkoutLog } from '@/types/database';
 import {
   LineChart,
@@ -164,6 +171,10 @@ function PersonalTrendBarTick({
 
 export default function DashboardPage() {
   const { profile } = useAuth();
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return !localStorage.getItem('kinetic-onboarded');
+  });
   const [trendDateRange, setTrendDateRange] = useState<DateRange>('week');
   const [trendCustomFrom, setTrendCustomFrom] = useState<Date | undefined>();
   const [trendCustomTo, setTrendCustomTo] = useState<Date | undefined>();
@@ -291,6 +302,7 @@ export default function DashboardPage() {
 
   return (
     <AppShell>
+      {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
       <div className="max-w-md mx-auto px-6 space-y-6 pt-2 pb-32">
         {/* System Status */}
         <motion.div
@@ -318,6 +330,13 @@ export default function DashboardPage() {
         </div>
 
         {/* Metric Cards — All-Time Total + Peak */}
+        {!allTimeStats ? (
+          <div className="space-y-3">
+            <DashboardCardSkeleton />
+            <DashboardCardSkeleton />
+            <DashboardCardSkeleton />
+          </div>
+        ) : (
         <div className="space-y-3">
           {/* Push-ups Card */}
           <GlassCard className="relative overflow-hidden" delay={0.1}>
@@ -441,6 +460,7 @@ export default function DashboardPage() {
             )}
           </GlassCard>
         </div>
+        )}
 
         {/* Personal Trends Section */}
         <div className="pt-4" data-testid="uat-dashboard-trends">
@@ -811,7 +831,110 @@ export default function DashboardPage() {
             <span className="font-semibold text-emerald-500/70">STREAK</span> — Consecutive weeks with 4+ logged workouts. Miss a week and it resets.
           </p>
         </div>
+
+        {/* Insights */}
+        <ErrorBoundary fallbackTitle="Insights unavailable">
+          <InsightsSection logs={trendLogs} goals={goals ?? null} streak={streak} />
+        </ErrorBoundary>
+
+        {/* Goal Suggestions */}
+        <ErrorBoundary fallbackTitle="Goal suggestions unavailable">
+          <GoalSuggestionsSection />
+        </ErrorBoundary>
+
+        {/* Milestones */}
+        <ErrorBoundary fallbackTitle="Milestones unavailable">
+          <MilestonesSection allTimeStats={allTimeStats ?? null} />
+        </ErrorBoundary>
       </div>
     </AppShell>
+  );
+}
+
+function InsightsSection({ logs, goals, streak }: { logs: WorkoutLog[]; goals: import('@/types/database').PerformanceGoals | null; streak: number }) {
+  const insights = useMemo(() => generateInsights(logs, goals, streak), [logs, goals, streak]);
+  if (insights.length === 0) return null;
+
+  const iconMap = { positive: TrendingUp, suggestion: Lightbulb, warning: AlertTriangle };
+  const colorMap = { positive: 'text-emerald-500', suggestion: 'text-amber-400', warning: 'text-red-400' };
+
+  return (
+    <div className="pt-2">
+      <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-2">INSIGHTS</p>
+      <div className="space-y-2">
+        {insights.map((insight, i) => {
+          const Icon = iconMap[insight.type];
+          return (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.1 }}
+              className="flex items-start gap-3 px-4 py-3 rounded-2xl bg-white/[0.02] border border-white/[0.06]"
+            >
+              <Icon size={14} className={`${colorMap[insight.type]} mt-0.5 shrink-0`} />
+              <p className="text-[11px] text-dark-text leading-relaxed">{insight.text}</p>
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function GoalSuggestionsSection() {
+  const suggestions = useGoalSuggestions();
+  if (suggestions.length === 0) return null;
+
+  return (
+    <div className="pt-2">
+      <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-2">GOAL ADJUSTMENT</p>
+      <div className="space-y-2">
+        {suggestions.map((s, i) => (
+          <div key={i} className="flex items-start gap-3 px-4 py-3 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
+            {s.direction === 'up' ? (
+              <TrendingUp size={14} className="text-emerald-500 mt-0.5 shrink-0" />
+            ) : (
+              <TrendingDown size={14} className="text-amber-400 mt-0.5 shrink-0" />
+            )}
+            <div>
+              <p className="text-[11px] text-dark-text leading-relaxed">{s.reason}</p>
+              <p className="text-[10px] text-dark-muted mt-1">
+                {s.current} → <span className="text-emerald-500 font-bold">{s.suggested}</span>
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MilestonesSection({ allTimeStats }: { allTimeStats: import('@/hooks/use-alltime-stats').AllTimeStats | null }) {
+  const milestones = useMemo(() => {
+    if (!allTimeStats) return [];
+    return getEarnedMilestones(allTimeStats.totalPushups, allTimeStats.totalPlankSeconds, allTimeStats.totalRunDistance);
+  }, [allTimeStats]);
+
+  if (milestones.length === 0) return null;
+
+  return (
+    <div className="pt-2 pb-4">
+      <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-2">MILESTONES EARNED</p>
+      <div className="flex flex-wrap gap-2">
+        {milestones.map((m, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: i * 0.05 }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20"
+          >
+            <Award size={12} className="text-emerald-500" />
+            <span className="text-[10px] font-bold text-emerald-400 tracking-wider">{m.emoji} {m.label}</span>
+          </motion.div>
+        ))}
+      </div>
+    </div>
   );
 }
