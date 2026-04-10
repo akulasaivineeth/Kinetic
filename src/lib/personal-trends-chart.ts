@@ -134,6 +134,21 @@ export type WeekLinePoint = {
   peakHighlight?: boolean;
 };
 
+/**
+ * Mean day-to-day change across an ordered calendar series (e.g. Mon–Sun).
+ * Null/undefined/NaN totals are treated as 0 so rest days still define the
+ * calendar span: divisor is (n − 1), not “workout days only”.
+ */
+export function averageDailyDeltaOverCalendarSpan(
+  points: ReadonlyArray<{ total: number | null | undefined }>
+): number {
+  const n = points.length;
+  if (n < 2) return 0;
+  const y = (t: number | null | undefined) =>
+    typeof t === 'number' && !Number.isNaN(t) ? t : 0;
+  return (y(points[n - 1]!.total) - y(points[0]!.total)) / (n - 1);
+}
+
 export function buildWeekLineChart(
   logs: WorkoutLog[],
   currentWeekStart: Date,

@@ -17,6 +17,7 @@ import {
   buildWeekLineChart,
   buildMultiWeekBars,
   buildMonthlyBars,
+  averageDailyDeltaOverCalendarSpan,
   type PersonalTrendCategory,
   type WeekLinePoint,
   type WeekBarRow,
@@ -289,15 +290,16 @@ export default function DashboardPage() {
 
   const weekComparison = useMemo(() => {
     if (!lineMode || !weekLinePoints) return { thisWeek: 0, lastWeek: 0 };
-    const thisWeekNums = weekLinePoints
-      .map((p) => p.total)
-      .filter((t): t is number => typeof t === 'number' && !Number.isNaN(t));
-    const lastWeekNums = weekLinePoints
-      .map((p) => p.overlay)
-      .filter((t): t is number => typeof t === 'number' && !Number.isNaN(t));
-    const thisWeek = thisWeekNums.reduce((a, b) => a + b, 0);
-    const lastWeek = lastWeekNums.reduce((a, b) => a + b, 0);
+    const num = (t: number | null | undefined) =>
+      typeof t === 'number' && !Number.isNaN(t) ? t : 0;
+    const thisWeek = weekLinePoints.reduce((s, p) => s + num(p.total), 0);
+    const lastWeek = weekLinePoints.reduce((s, p) => s + num(p.overlay), 0);
     return { thisWeek, lastWeek };
+  }, [lineMode, weekLinePoints]);
+
+  const lineTrendVelocity = useMemo(() => {
+    if (!lineMode || !weekLinePoints || weekLinePoints.length < 2) return null;
+    return averageDailyDeltaOverCalendarSpan(weekLinePoints);
   }, [lineMode, weekLinePoints]);
 
   return (
@@ -536,8 +538,8 @@ export default function DashboardPage() {
             <GlassCard className="p-5" animate={false}>
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <p className="text-lg font-black">PROGRESS</p>
-                  <p className="text-lg font-black">TRACKER</p>
+                  <p className="text-lg font-black">PERFORMANCE</p>
+                  <p className="text-lg font-black">VELOCITY</p>
                   <p className="text-[10px] font-semibold tracking-wider text-dark-muted mt-1">
                     {lineMode ? 'THIS WEEK vs LAST WEEK' : trendDateRange === 'month' ? 'WEEKLY TOTALS' : 'MONTHLY TOTALS'}
                   </p>
@@ -552,6 +554,28 @@ export default function DashboardPage() {
                     <p className="text-base font-bold text-gray-400">
                       {trendMode === 'percent' ? `${weekComparison.lastWeek.toFixed(1)}%` : Math.round(weekComparison.lastWeek).toLocaleString()}
                     </p>
+                    {lineTrendVelocity != null ? (
+                      <>
+                        <p className="text-[9px] font-semibold tracking-wider text-dark-muted mt-1">
+                          AVG / DAY
+                        </p>
+                        <p className="text-sm font-bold text-gray-500">
+                          {trendMode === 'percent'
+                            ? `${lineTrendVelocity >= 0 ? '+' : ''}${lineTrendVelocity.toFixed(2)}%/d`
+                            : trendCategory === 'plank'
+                              ? `${lineTrendVelocity >= 0 ? '+' : ''}${lineTrendVelocity.toFixed(1)} min/d`
+                              : trendCategory === 'run'
+                                ? (() => {
+                                    const v = lineTrendVelocity;
+                                    const sign = v > 0 ? '+' : v < 0 ? '-' : '';
+                                    const n = formatDistance(Math.abs(v), profile?.unit_preference);
+                                    const u = profile?.unit_preference === 'imperial' ? 'mi' : 'km';
+                                    return `${sign}${n} ${u}/d`;
+                                  })()
+                                : `${lineTrendVelocity >= 0 ? '+' : ''}${Math.round(lineTrendVelocity).toLocaleString()} /d`}
+                        </p>
+                      </>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="text-right">
