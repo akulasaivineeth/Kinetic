@@ -22,7 +22,7 @@ import {
 import { useAllTimeStats } from '@/hooks/use-alltime-stats';
 import { useStamina } from '@/hooks/use-stamina';
 import { useAuth } from '@/providers/auth-provider';
-import { formatPercentage, formatDistance, formatPlankTime } from '@/lib/utils';
+import { formatDistance, formatPlankTime } from '@/lib/utils';
 import type { WorkoutLog } from '@/types/database';
 import {
   LineChart,
@@ -271,13 +271,18 @@ export default function DashboardPage() {
     document.body.removeChild(link);
   };
 
-  const velocityPts = useMemo(() => {
-    const nums = primarySeries
+  const weekComparison = useMemo(() => {
+    if (!lineMode || !weekLinePoints) return { thisWeek: 0, lastWeek: 0 };
+    const thisWeekNums = weekLinePoints
       .map((p) => p.total)
       .filter((t): t is number => typeof t === 'number' && !Number.isNaN(t));
-    if (nums.length < 2) return 0;
-    return (nums[nums.length - 1]! - nums[0]!) / (nums.length - 1);
-  }, [primarySeries]);
+    const lastWeekNums = weekLinePoints
+      .map((p) => p.overlay)
+      .filter((t): t is number => typeof t === 'number' && !Number.isNaN(t));
+    const thisWeek = thisWeekNums.reduce((a, b) => a + b, 0);
+    const lastWeek = lastWeekNums.reduce((a, b) => a + b, 0);
+    return { thisWeek, lastWeek };
+  }, [lineMode, weekLinePoints]);
 
   return (
     <AppShell>
@@ -482,22 +487,39 @@ export default function DashboardPage() {
             <GlassCard className="p-5" animate={false}>
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <p className="text-lg font-black">PERFORMANCE</p>
-                  <p className="text-lg font-black">VELOCITY</p>
+                  <p className="text-lg font-black">
+                    {lineMode ? 'WEEKLY' : 'PROGRESS'}
+                  </p>
+                  <p className="text-lg font-black">
+                    {lineMode ? 'COMPARISON' : 'TRACKER'}
+                  </p>
                   <p className="text-[10px] font-semibold tracking-wider text-dark-muted mt-1">
-                    PERSONAL TRACKING
+                    {lineMode ? 'THIS WEEK vs LAST WEEK' : trendDateRange === 'month' ? 'WEEKLY BARS' : 'MONTHLY BARS'}
                   </p>
                 </div>
-                <div className="text-right">
-                  <p className="text-2xl font-black text-emerald-500">
-                    {Math.abs(velocityPts).toFixed(1)}
-                    <span className="text-xs text-dark-muted ml-0.5">{trendMode === 'percent' ? '%' : 'pts'}</span>
-                  </p>
-                  <p className="text-xs font-semibold text-emerald-500">
-                    {formatPercentage(stamina.peakGain)}
-                  </p>
-                  <p className="text-[10px] text-dark-muted">IMPROVEMENT</p>
-                </div>
+                {lineMode ? (
+                  <div className="text-right">
+                    <p className="text-[9px] font-semibold tracking-wider text-dark-muted">THIS WEEK</p>
+                    <p className="text-xl font-black text-emerald-500">
+                      {trendMode === 'percent' ? `${weekComparison.thisWeek.toFixed(1)}%` : Math.round(weekComparison.thisWeek).toLocaleString()}
+                    </p>
+                    <p className="text-[9px] font-semibold tracking-wider text-dark-muted mt-1">LAST WEEK</p>
+                    <p className="text-base font-bold text-gray-400">
+                      {trendMode === 'percent' ? `${weekComparison.lastWeek.toFixed(1)}%` : Math.round(weekComparison.lastWeek).toLocaleString()}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="text-right">
+                    {barBundle?.avgLine != null && (
+                      <>
+                        <p className="text-[9px] font-semibold tracking-wider text-dark-muted">4-{trendDateRange === 'month' ? 'WEEK' : 'MONTH'} AVG</p>
+                        <p className="text-xl font-black text-emerald-500">
+                          {trendMode === 'percent' ? `${barBundle.avgLine.toFixed(1)}%` : Math.round(barBundle.avgLine).toLocaleString()}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="h-40" data-testid="uat-dashboard-trends-chart">
@@ -719,10 +741,10 @@ export default function DashboardPage() {
               </div>
               <p className="text-[9px] text-dark-muted mt-3 leading-relaxed">
                 {lineMode
-                  ? 'Green line: your daily total for the exercise above (raw) or vs same weekday last week (%). Dashed: prior week for comparison. Days with no workout are gaps, not zeros. “pts” is average day-to-day change on the line.'
+                  ? "Green = this week's daily totals. Dashed gray = last week (same weekday). Gaps = rest days."
                   : monthBarBuckets
-                    ? 'Each bar is one calendar month. AVG. is the mean of your last four completed months in view.'
-                    : 'Each bar is one week (ISO Mon–Sun). AVG. is the mean of your last four completed weeks in view.'}
+                    ? 'Each bar = one calendar month. Dashed line = rolling 4-month average.'
+                    : 'Each bar = one week (Mon–Sun). Dashed line = rolling 4-week average.'}
               </p>
             </GlassCard>
           </motion.div>
