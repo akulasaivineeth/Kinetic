@@ -20,6 +20,7 @@ import {
   type WeekBarRow,
 } from '@/lib/personal-trends-chart';
 import { useAllTimeStats } from '@/hooks/use-alltime-stats';
+import { useRecentWeeks } from '@/hooks/use-recent-weeks';
 import { useWeeklyVolume } from '@/hooks/use-workout-logs';
 import { useGoals } from '@/hooks/use-goals';
 import { useStreak } from '@/hooks/use-streak';
@@ -33,6 +34,8 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
+  AreaChart,
+  Area,
   BarChart,
   Bar,
   Cell,
@@ -187,6 +190,7 @@ export default function DashboardPage() {
   const { data: chartLogs = [] } = useWorkoutLogs('custom', chartLogRange.from, chartLogRange.to);
 
   const { data: allTimeStats } = useAllTimeStats();
+  const { data: recentWeeks = [] } = useRecentWeeks(4);
   const { data: weeklyVolume } = useWeeklyVolume();
   const { data: goals } = useGoals();
   const { data: streak = 0 } = useStreak();
@@ -339,6 +343,21 @@ export default function DashboardPage() {
                 <span className="text-xs text-dark-muted ml-1">reps</span>
               </div>
             </div>
+            {recentWeeks.length > 0 && (
+              <div className="h-10 mt-3 -mx-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={recentWeeks}>
+                    <defs>
+                      <linearGradient id="pushupGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#10B981" stopOpacity={0.3} />
+                        <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <Area type="monotone" dataKey="pushups" stroke="#10B981" strokeWidth={2} fill="url(#pushupGrad)" dot={{ r: 3, fill: '#10B981' }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </GlassCard>
 
           {/* Plank Card */}
@@ -364,6 +383,21 @@ export default function DashboardPage() {
                 </span>
               </div>
             </div>
+            {recentWeeks.length > 0 && (
+              <div className="h-10 mt-3 -mx-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={recentWeeks}>
+                    <defs>
+                      <linearGradient id="plankGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#10B981" stopOpacity={0.3} />
+                        <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <Area type="monotone" dataKey="plankMin" stroke="#10B981" strokeWidth={2} fill="url(#plankGrad)" dot={{ r: 3, fill: '#10B981' }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </GlassCard>
 
           {/* Running Card */}
@@ -390,6 +424,21 @@ export default function DashboardPage() {
                 <span className="text-xs text-dark-muted ml-1">{profile?.unit_preference === 'imperial' ? 'mi' : 'km'}</span>
               </div>
             </div>
+            {recentWeeks.length > 0 && (
+              <div className="h-10 mt-3 -mx-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={recentWeeks}>
+                    <defs>
+                      <linearGradient id="runGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#10B981" stopOpacity={0.3} />
+                        <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <Area type="monotone" dataKey="runKm" stroke="#10B981" strokeWidth={2} fill="url(#runGrad)" dot={{ r: 3, fill: '#10B981' }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </GlassCard>
         </div>
 

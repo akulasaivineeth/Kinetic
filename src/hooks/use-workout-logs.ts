@@ -192,6 +192,7 @@ export function useSubmitLog() {
       queryClient.invalidateQueries({ queryKey: ['stamina'] });
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
       queryClient.invalidateQueries({ queryKey: ['alltime-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['recent-weeks'] });
     },
   });
 }
