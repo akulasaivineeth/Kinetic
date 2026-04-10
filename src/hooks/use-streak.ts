@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/providers/auth-provider';
 import { startOfWeek, subWeeks, format } from 'date-fns';
 
+const MIN_WORKOUTS_PER_WEEK = 4;
+
 export function useStreak() {
   const { user } = useAuth();
   const supabase = createClient();
@@ -24,13 +26,13 @@ export function useStreak() {
       if (error) throw error;
       if (!logs || logs.length === 0) return 0;
 
-      const weeksWithLogs = new Set<string>();
+      const weekCounts = new Map<string, number>();
       for (const log of logs) {
         const wk = format(
           startOfWeek(new Date(log.logged_at), { weekStartsOn: 1 }),
           'yyyy-MM-dd'
         );
-        weeksWithLogs.add(wk);
+        weekCounts.set(wk, (weekCounts.get(wk) || 0) + 1);
       }
 
       let streak = 0;
@@ -38,7 +40,8 @@ export function useStreak() {
 
       while (true) {
         const wk = format(cursor, 'yyyy-MM-dd');
-        if (weeksWithLogs.has(wk)) {
+        const count = weekCounts.get(wk) || 0;
+        if (count >= MIN_WORKOUTS_PER_WEEK) {
           streak++;
           cursor = subWeeks(cursor, 1);
         } else {
