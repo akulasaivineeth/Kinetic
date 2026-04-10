@@ -42,8 +42,6 @@ const tabs: { value: DateRangeType; label: string }[] = [
   { value: 'week', label: 'WEEK' },
   { value: 'month', label: 'MONTH' },
   { value: '3mo', label: '3MO' },
-  { value: '6mo', label: '6MO' },
-  { value: 'year', label: 'YEAR' },
   { value: 'custom', label: 'CUSTOM' },
 ];
 
