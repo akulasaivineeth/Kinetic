@@ -803,6 +803,14 @@ export default function DashboardPage() {
             />
           </motion.div>
         </div>
+        <div className="space-y-2 px-2 -mt-2 pb-2">
+          <p className="text-[9px] text-dark-muted text-center leading-relaxed">
+            <span className="font-semibold text-emerald-500/70">WEEKLY GOAL</span> — Average progress across your push-up, plank, and run targets. Set goals in Profile.
+          </p>
+          <p className="text-[9px] text-dark-muted text-center leading-relaxed">
+            <span className="font-semibold text-emerald-500/70">STREAK</span> — Consecutive weeks with 4+ logged workouts. Miss a week and it resets.
+          </p>
+        </div>
       </div>
     </AppShell>
   );
