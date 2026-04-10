@@ -191,6 +191,7 @@ export function useSubmitLog() {
       queryClient.invalidateQueries({ queryKey: ['weekly-volume'] });
       queryClient.invalidateQueries({ queryKey: ['stamina'] });
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      queryClient.invalidateQueries({ queryKey: ['alltime-stats'] });
     },
   });
 }
@@ -251,6 +252,7 @@ export function useUpdateSubmittedLog() {
       queryClient.invalidateQueries({ queryKey: ['stamina'] });
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
       queryClient.invalidateQueries({ queryKey: ['recent-workout-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['alltime-stats'] });
     },
   });
 }
