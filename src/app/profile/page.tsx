@@ -11,6 +11,7 @@ import { useGoals, useUpdateGoals } from '@/hooks/use-goals';
 import { useSharingConnections, useSendSharingRequest, useRemoveSharing } from '@/hooks/use-sharing';
 import { getInitials } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
+import { resizeImage } from '@/lib/image-resize';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 function ProfilePageContent() {
@@ -45,13 +46,20 @@ function ProfilePageContent() {
     if (!file || !user) return;
 
     setAvatarError(null);
+    let uploadBlob: Blob | File = file;
+    try {
+      uploadBlob = await resizeImage(file, 200, 200, 0.85);
+    } catch {
+      /* fall through */
+    }
+
     const supabase = createClient();
     const fileName = `${user.id}/${Date.now()}.jpg`;
     const { data, error: uploadError } = await supabase.storage
       .from('avatars')
-      .upload(fileName, file, {
+      .upload(fileName, uploadBlob, {
         upsert: true,
-        contentType: file.type || 'image/jpeg',
+        contentType: 'image/jpeg',
       });
 
     if (uploadError) {

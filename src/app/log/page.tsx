@@ -20,6 +20,10 @@ import { createClient } from '@/lib/supabase/client';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { useAllTimeStats } from '@/hooks/use-alltime-stats';
+import { Confetti } from '@/components/ui/confetti';
+import { resizeImage } from '@/lib/image-resize';
+import { checkNewMilestones } from '@/lib/milestones';
 
 export default function LogPageWrapper() {
   return (
@@ -41,6 +45,7 @@ function LogPage() {
   const saveDraft = useSaveDraft();
   const submitLog = useSubmitLog();
   const updateSubmittedLog = useUpdateSubmittedLog();
+  const { data: allTimeStats } = useAllTimeStats();
 
   // Whoop prefill from notification
   const whoopActivity = searchParams.get('activity') || '';
@@ -60,6 +65,7 @@ function LogPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [editLogId, setEditLogId] = useState<string | null>(null);
   const [submitLabel, setSubmitLabel] = useState<'submit' | 'update'>('submit');
+  const [pbCelebration, setPbCelebration] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
   // Whoop import fallback
@@ -143,11 +149,18 @@ function LogPage() {
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
+    let uploadFile: Blob | File = file;
+    try {
+      uploadFile = await resizeImage(file, 1200, 1200, 0.8);
+    } catch {
+      /* fall through to original file */
+    }
+
     const supabase = createClient();
     const fileName = `${user.id}/${Date.now()}-${file.name}`;
     const { data, error } = await supabase.storage
       .from('workout-photos')
-      .upload(fileName, file);
+      .upload(fileName, uploadFile);
 
     if (!error && data) {
       const { data: urlData } = supabase.storage
@@ -203,16 +216,40 @@ function LogPage() {
       }
 
       await submitLog.mutateAsync(logId);
+
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate([100, 50, 200]);
+      }
+
+      const isPB =
+        (allTimeStats && pushupReps > allTimeStats.peakPushups) ||
+        (allTimeStats && plankSeconds > allTimeStats.peakPlankSeconds) ||
+        (allTimeStats && finalRunDist > allTimeStats.peakRunDistance);
+
+      if (isPB) {
+        setPbCelebration('NEW PB!');
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+
+      if (allTimeStats) {
+        const milestones = checkNewMilestones(
+          allTimeStats.totalPushups, allTimeStats.totalPlankSeconds, allTimeStats.totalRunDistance,
+          allTimeStats.totalPushups + pushupReps, allTimeStats.totalPlankSeconds + plankSeconds, allTimeStats.totalRunDistance + finalRunDist
+        );
+        if (milestones.length > 0 && !isPB) {
+          setPbCelebration(milestones[0].emoji + ' ' + milestones[0].label);
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+      }
+
       setSubmitted(true);
       setSubmitLabel('submit');
-      // Reset form
       setPushupReps(0);
       setPlankSeconds(0);
       setRunDistance(0);
       setNotes('');
       setPhotoUrl(null);
       setDraftId(null);
-      // Navigate immediately — delayed push was often cleared by React Strict Mode unmount cleanup in dev
       router.push('/dashboard');
     } catch (err) {
       console.error('Submit failed:', err);
@@ -257,7 +294,32 @@ function LogPage() {
 
   return (
     <AppShell>
+      <Confetti active={!!pbCelebration} message={pbCelebration || undefined} />
       <div className="max-w-md mx-auto px-6 space-y-6 pt-2 pb-32">
+        {/* Quick Log Presets */}
+        {!editLogId && pushupReps === 0 && plankSeconds === 0 && runDistance === 0 && (
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+            {[
+              { label: '50 push-ups', p: 50, pl: 0, r: 0 },
+              { label: '100 push-ups', p: 100, pl: 0, r: 0 },
+              { label: '2 min plank', p: 0, pl: 120, r: 0 },
+              { label: '5K run', p: 0, pl: 0, r: 5 },
+            ].map((preset) => (
+              <button
+                key={preset.label}
+                onClick={() => {
+                  if (preset.p) setPushupReps(preset.p);
+                  if (preset.pl) setPlankSeconds(preset.pl);
+                  if (preset.r) setRunDistance(preset.r);
+                }}
+                className="shrink-0 px-3 py-1.5 rounded-full bg-dark-elevated border border-dark-border text-[10px] font-bold tracking-wider text-dark-muted hover:text-emerald-500 hover:border-emerald-500/30 transition-all"
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Current Session (Whoop prefill) */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
