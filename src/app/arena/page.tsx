@@ -39,8 +39,11 @@ function getEntryValue(entry: LeaderboardEntry, metric: ArenaMetric): number {
   }
 }
 
-function formatVal(v: number, metric: ArenaMetric, unitPref?: string): string {
-  if (metric === 'overall') return Math.round(v).toLocaleString();
+function formatVal(v: number, metric: ArenaMetric, unitPref?: string, isFair?: boolean): string {
+  if (metric === 'overall') {
+    if (isFair) return `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
+    return Math.round(v).toLocaleString();
+  }
   if (metric === 'plank') return `${v.toFixed(1)}m`;
   if (metric === 'run') {
     const d = unitPref === 'imperial' ? v * 0.621371 : v;
@@ -53,12 +56,13 @@ export default function ArenaPage() {
   const { profile } = useAuth();
   const [dateRange, setDateRange] = useState<DateRange>('week');
   const [arenaMetric, setArenaMetric] = useState<ArenaMetric>('overall');
+  const [fairMode, setFairMode] = useState(false);
   const [customFrom, setCustomFrom] = useState<Date | undefined>();
   const [customTo, setCustomTo] = useState<Date | undefined>();
 
   const isOverall = arenaMetric === 'overall';
   const rpcMetric = 'volume';
-  const rpcMode = 'raw';
+  const rpcMode = isOverall && fairMode ? 'percent' : 'raw';
 
   const { data: leaderboardRaw = [] } = useLeaderboard(dateRange, rpcMetric, rpcMode, customFrom, customTo);
   const leaderboard = useMemo(() => {
@@ -80,7 +84,7 @@ export default function ArenaPage() {
       Math.round(e.pushup_value),
       Math.round(e.plank_value / 60),
       formatDistance(Number(e.run_value), profile?.unit_preference),
-      isOverall ? `${e.total_score.toFixed(1)}%` : Math.round(getEntryValue(e, arenaMetric)),
+      isOverall && fairMode ? `${e.total_score.toFixed(1)}%` : Math.round(getEntryValue(e, arenaMetric)),
     ]);
     const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -205,6 +209,18 @@ export default function ArenaPage() {
             onChange={setArenaMetric}
             size="sm"
           />
+          {isOverall && (
+            <button
+              onClick={() => setFairMode((p) => !p)}
+              className={`px-3 py-1.5 rounded-full text-[9px] font-black tracking-widest uppercase transition-all ${
+                fairMode
+                  ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
+                  : 'bg-dark-elevated border border-dark-border text-dark-muted hover:text-emerald-500 hover:border-emerald-500/30'
+              }`}
+            >
+              {fairMode ? '⚖ FAIR MODE ON' : '⚖ FAIR MODE'}
+            </button>
+          )}
           <DateRangeTabs
             motionScope="arena-date-tabs"
             selected={dateRange}
@@ -270,7 +286,7 @@ export default function ArenaPage() {
                         {isYou ? 'YOU' : entry.full_name?.split(' ')[0]?.toUpperCase() || 'USER'}
                       </p>
                       <p className="text-emerald-500 font-bold text-xs">
-                        {formatVal(val, arenaMetric, profile?.unit_preference)}
+                        {formatVal(val, arenaMetric, profile?.unit_preference, fairMode)}
                       </p>
                     </motion.div>
                   );
@@ -278,7 +294,9 @@ export default function ArenaPage() {
               </div>
               {isOverall && (
                 <p className="text-[8px] text-dark-muted text-center mt-4 leading-relaxed">
-                  OVERALL score = push-ups + plank (min) + run (km) × 10. Switch to a single metric to compare raw values.
+                  {fairMode
+                    ? 'FAIR MODE: Ranked by avg % improvement vs prior period. A beginner who 5× their output outranks a veteran who doubles theirs.'
+                    : 'OVERALL score = push-ups + plank (min) + run (km) × 10. Switch to a single metric to compare raw values.'}
                 </p>
               )}
             </>
@@ -449,10 +467,10 @@ export default function ArenaPage() {
 
                     <div className="text-right">
                       <p className="font-bold text-emerald-500 text-sm">
-                        {formatVal(val, arenaMetric, profile?.unit_preference)}
+                        {formatVal(val, arenaMetric, profile?.unit_preference, fairMode)}
                       </p>
                       <p className="text-[9px] text-dark-muted uppercase">
-                        {mc.unit}
+                        {isOverall && fairMode ? '% imp.' : mc.unit}
                       </p>
                     </div>
                   </GlassCard>
