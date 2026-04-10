@@ -20,7 +20,9 @@ import {
   type WeekBarRow,
 } from '@/lib/personal-trends-chart';
 import { useAllTimeStats } from '@/hooks/use-alltime-stats';
-import { useStamina } from '@/hooks/use-stamina';
+import { useWeeklyVolume } from '@/hooks/use-workout-logs';
+import { useGoals } from '@/hooks/use-goals';
+import { useStreak } from '@/hooks/use-streak';
 import { useAuth } from '@/providers/auth-provider';
 import { formatDistance, formatPlankTime } from '@/lib/utils';
 import type { WorkoutLog } from '@/types/database';
@@ -185,7 +187,19 @@ export default function DashboardPage() {
   const { data: chartLogs = [] } = useWorkoutLogs('custom', chartLogRange.from, chartLogRange.to);
 
   const { data: allTimeStats } = useAllTimeStats();
-  const { data: stamina } = useStamina();
+  const { data: weeklyVolume } = useWeeklyVolume();
+  const { data: goals } = useGoals();
+  const { data: streak = 0 } = useStreak();
+
+  const weeklyGoalPct = useMemo(() => {
+    const pushGoal = goals?.pushup_weekly_goal || 500;
+    const plankGoal = goals?.plank_weekly_goal || 600;
+    const runGoal = goals?.run_weekly_goal || 15;
+    const pushProg = Math.min((weeklyVolume?.total_pushups || 0) / pushGoal, 1);
+    const plankProg = Math.min((weeklyVolume?.total_plank_seconds || 0) / plankGoal, 1);
+    const runProg = Math.min(Number(weeklyVolume?.total_run_distance || 0) / runGoal, 1);
+    return Math.round(((pushProg + plankProg + runProg) / 3) * 100);
+  }, [weeklyVolume, goals]);
 
   const weekLinePoints = useMemo(() => {
     if (!lineMode) return null;
@@ -712,7 +726,7 @@ export default function DashboardPage() {
           </motion.div>
         </div>
 
-        {/* Stamina Score + Peak Gain Rings — REAL VALUES */}
+        {/* Weekly Goal % + Streak Rings */}
         <div className="flex justify-center gap-8 py-6" data-testid="uat-dashboard-stamina">
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
@@ -720,9 +734,9 @@ export default function DashboardPage() {
             transition={{ type: 'spring', delay: 0.5 }}
           >
             <ScoreRing
-              value={stamina.staminaScore}
-              label="STAMINA SCORE"
-              sublabel={stamina.staminaScore >= 80 ? 'OPTIMAL' : stamina.staminaScore >= 50 ? 'GOOD' : 'BUILDING'}
+              value={weeklyGoalPct}
+              label="WEEKLY GOAL"
+              sublabel={weeklyGoalPct >= 100 ? 'CRUSHED IT' : weeklyGoalPct >= 75 ? 'ALMOST THERE' : weeklyGoalPct >= 50 ? 'ON TRACK' : 'KEEP GOING'}
               color="#10B981"
             />
           </motion.div>
@@ -732,11 +746,11 @@ export default function DashboardPage() {
             transition={{ type: 'spring', delay: 0.6 }}
           >
             <ScoreRing
-              value={Math.abs(Math.round(stamina.peakGain))}
-              label="PEAK GAIN"
-              sublabel={stamina.peakGain > 10 ? 'RECORD HIGH' : stamina.peakGain > 0 ? 'IMPROVING' : 'BASELINE'}
+              value={streak}
+              max={52}
+              label="STREAK"
+              sublabel={streak >= 12 ? 'ON FIRE' : streak >= 4 ? 'CONSISTENT' : streak >= 1 ? 'BUILDING' : 'START NOW'}
               color="#10B981"
-              showPercent
             />
           </motion.div>
         </div>
