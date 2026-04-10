@@ -19,11 +19,11 @@ import {
   type WeekLinePoint,
   type WeekBarRow,
 } from '@/lib/personal-trends-chart';
-import { useLeaderboard } from '@/hooks/use-leaderboard';
+import { useAllTimeStats } from '@/hooks/use-alltime-stats';
 import { useStamina } from '@/hooks/use-stamina';
 import { useAuth } from '@/providers/auth-provider';
-import { formatPercentage, formatDistance } from '@/lib/utils';
-import type { LeaderboardEntry, WorkoutLog } from '@/types/database';
+import { formatPercentage, formatDistance, formatPlankTime } from '@/lib/utils';
+import type { WorkoutLog } from '@/types/database';
 import {
   LineChart,
   Line,
@@ -31,8 +31,6 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  Area,
-  AreaChart,
   BarChart,
   Bar,
   Cell,
@@ -164,8 +162,6 @@ export default function DashboardPage() {
   const [trendDateRange, setTrendDateRange] = useState<DateRange>('week');
   const [trendCustomFrom, setTrendCustomFrom] = useState<Date | undefined>();
   const [trendCustomTo, setTrendCustomTo] = useState<Date | undefined>();
-  const [arenaMetric, setArenaMetric] = useState<'volume' | 'peak'>('volume');
-  const [arenaMode, setArenaMode] = useState<'raw' | 'percent'>('raw');
   const [trendCategory, setTrendCategory] = useState<PersonalTrendCategory>('pushups');
   const [trendMetric, setTrendMetric] = useState<'volume' | 'peak'>('volume');
   const [trendMode, setTrendMode] = useState<'raw' | 'percent'>('raw');
@@ -187,45 +183,22 @@ export default function DashboardPage() {
 
   const { data: trendLogs = [] } = useWorkoutLogs(trendDateRange, trendCustomFrom, trendCustomTo);
   const { data: chartLogs = [] } = useWorkoutLogs('custom', chartLogRange.from, chartLogRange.to);
-  const { data: weekLogs = [] } = useWorkoutLogs('week');
-  const { data: leaderboardRaw = [] } = useLeaderboard('week', arenaMetric, arenaMode);
-  const leaderboard = leaderboardRaw as LeaderboardEntry[];
+
+  const { data: allTimeStats } = useAllTimeStats();
   const { data: stamina } = useStamina();
 
-  // Find current user and leaders per metric
-  const myEntry = leaderboard.find((e: LeaderboardEntry) => e.user_id === profile?.id);
-
-  // Find leader for each metric dynamically
-  const sortedByPushups = [...leaderboard].sort((a, b) => b.pushup_value - a.pushup_value);
-  const sortedByPlanks = [...leaderboard].sort((a, b) => b.plank_value - a.plank_value);
-  const sortedByRuns = [...leaderboard].sort((a, b) => b.run_value - a.run_value);
-
-  const pushupLeader = sortedByPushups[0];
-  const plankLeader = sortedByPlanks[0];
-  const runLeader = sortedByRuns[0];
-
-  // Format leader name as "FIRST L."
-  const formatLeaderName = (fullName: string | null | undefined) => {
-    if (!fullName) return 'N/A';
-    const parts = fullName.split(' ');
-    if (parts.length >= 2) return `${parts[0].toUpperCase()} ${parts[1][0]?.toUpperCase()}.`;
-    return parts[0]?.toUpperCase() || 'N/A';
-  };
-
-  const sparkWeekData = useMemo(() => {
-    const m = new Map<string, { pushups: number; planks: number; runKm: number }>();
-    for (const log of weekLogs) {
-      const dk = format(new Date(log.logged_at), 'yyyy-MM-dd');
-      const cur = m.get(dk) ?? { pushups: 0, planks: 0, runKm: 0 };
+  const monthlyBarData = useMemo(() => {
+    const m = new Map<string, { month: string; pushups: number; planks: number; runKm: number }>();
+    for (const log of chartLogs) {
+      const mk = format(new Date(log.logged_at), 'MMM yy');
+      const cur = m.get(mk) ?? { month: mk, pushups: 0, planks: 0, runKm: 0 };
       cur.pushups += log.pushup_reps;
       cur.planks += log.plank_seconds;
       cur.runKm += Number(log.run_distance) || 0;
-      m.set(dk, cur);
+      m.set(mk, cur);
     }
-    return [...m.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([, v]) => v);
-  }, [weekLogs]);
+    return [...m.values()];
+  }, [chartLogs]);
 
   const weekLinePoints = useMemo(() => {
     if (!lineMode) return null;
@@ -298,12 +271,6 @@ export default function DashboardPage() {
     document.body.removeChild(link);
   };
 
-  // Calculate real % improvements (current vs previous period)
-  const calculateImprovement = (currentVal: number, baselineVal: number) => {
-    if (baselineVal === 0) return currentVal > 0 ? 100 : 0;
-    return ((currentVal - baselineVal) / baselineVal) * 100;
-  };
-
   const velocityPts = useMemo(() => {
     const nums = primarySeries
       .map((p) => p.total)
@@ -330,197 +297,112 @@ export default function DashboardPage() {
           </h2>
         </motion.div>
 
-        {/* Section Header — This Week's Arena */}
+        {/* Section Header — All-Time Stats */}
         <div data-testid="uat-dashboard-arena-section">
           <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-1">
-            SECTION
+            ALL-TIME ROLL-UP
           </p>
-          <div className="flex items-end justify-between">
-            <h3 className="text-2xl font-black italic leading-tight">
-              THIS<br />WEEK&apos;S<br />ARENA
-            </h3>
-            <div className="flex flex-col items-end gap-2">
-              <TogglePills
-                motionScope="dash-arena-metric"
-                options={[
-                  { value: 'volume' as const, label: 'VOLUME' },
-                  { value: 'peak' as const, label: 'PEAK' },
-                ]}
-                selected={arenaMetric}
-                onChange={setArenaMetric}
-                size="sm"
-              />
-              <TogglePills
-                motionScope="dash-arena-mode"
-                options={[
-                  { value: 'raw' as const, label: 'RAW' },
-                  { value: 'percent' as const, label: '% IMP.' },
-                ]}
-                selected={arenaMode}
-                onChange={setArenaMode}
-                size="sm"
-              />
-            </div>
-          </div>
+          <h3 className="text-2xl font-black italic leading-tight">
+            YOUR<br />TOTALS
+          </h3>
         </div>
 
-        {/* Metric Cards */}
+        {/* Metric Cards — All-Time Total + Peak */}
         <div className="space-y-3">
           {/* Push-ups Card */}
           <GlassCard className="relative overflow-hidden" delay={0.1}>
-            <div className="flex items-start justify-between mb-1">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">💪</span>
-                <span className="text-[11px] font-semibold tracking-wider text-dark-muted uppercase">
-                  PUSH-UPS
-                </span>
-              </div>
-              {pushupLeader && (
-                <div className="flex items-center gap-1.5">
-                  <div className="w-5 h-5 rounded-full bg-dark-elevated" />
-                  <span className="text-[10px] font-semibold text-dark-muted">
-                    {formatLeaderName(pushupLeader.full_name)}
-                  </span>
-                </div>
-              )}
-            </div>
-            <div className="flex items-baseline gap-3">
-              <span className="text-4xl font-black text-dark-text">
-                {myEntry ? Math.round(myEntry.pushup_value) : 0}
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-lg">💪</span>
+              <span className="text-[11px] font-semibold tracking-wider text-dark-muted uppercase">
+                PUSH-UPS
               </span>
-              {myEntry && (
-                <div className="flex flex-col">
-                  {pushupLeader && (
-                    <span className="text-sm font-bold text-emerald-500">
-                      {formatPercentage(calculateImprovement(myEntry.pushup_value, pushupLeader.pushup_value !== myEntry.pushup_value ? pushupLeader.pushup_value * 0.9 : myEntry.pushup_value * 0.88))}
-                    </span>
-                  )}
-                </div>
-              )}
             </div>
-            {/* Mini sparkline */}
+            <div className="flex items-end justify-between">
+              <div>
+                <p className="text-[9px] font-semibold tracking-wider text-dark-muted uppercase">TOTAL</p>
+                <span className="text-4xl font-black text-dark-text">
+                  {allTimeStats ? Math.round(allTimeStats.totalPushups).toLocaleString() : '0'}
+                </span>
+                <span className="text-sm text-dark-muted ml-1">reps</span>
+              </div>
+              <div className="text-right">
+                <p className="text-[9px] font-semibold tracking-wider text-dark-muted uppercase">PEAK</p>
+                <span className="text-2xl font-black text-emerald-500">
+                  {allTimeStats ? Math.round(allTimeStats.peakPushups) : 0}
+                </span>
+                <span className="text-xs text-dark-muted ml-1">reps</span>
+              </div>
+            </div>
             <div className="h-10 mt-2 -mx-2">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={sparkWeekData.slice(-7)}>
-                  <defs>
-                    <linearGradient id="pushupGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#10B981" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <Area
-                    type="monotone"
-                    dataKey="pushups"
-                    stroke="#10B981"
-                    strokeWidth={2}
-                    fill="url(#pushupGrad)"
-                    dot={false}
-                  />
-                </AreaChart>
+                <BarChart data={monthlyBarData} barCategoryGap="20%">
+                  <Bar dataKey="pushups" fill="#10B981" radius={[2, 2, 0, 0]} />
+                </BarChart>
               </ResponsiveContainer>
             </div>
           </GlassCard>
 
           {/* Plank Card */}
           <GlassCard className="relative overflow-hidden" delay={0.2}>
-            <div className="flex items-start justify-between mb-1">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">🧘</span>
-                <span className="text-[11px] font-semibold tracking-wider text-dark-muted uppercase">
-                  PLANK (MIN)
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-lg">🧘</span>
+              <span className="text-[11px] font-semibold tracking-wider text-dark-muted uppercase">
+                PLANK
+              </span>
+            </div>
+            <div className="flex items-end justify-between">
+              <div>
+                <p className="text-[9px] font-semibold tracking-wider text-dark-muted uppercase">TOTAL</p>
+                <span className="text-4xl font-black text-dark-text">
+                  {allTimeStats ? (allTimeStats.totalPlankSeconds / 60).toFixed(1) : '0.0'}
+                </span>
+                <span className="text-sm text-dark-muted ml-1">min</span>
+              </div>
+              <div className="text-right">
+                <p className="text-[9px] font-semibold tracking-wider text-dark-muted uppercase">PEAK</p>
+                <span className="text-2xl font-black text-emerald-500">
+                  {allTimeStats ? formatPlankTime(allTimeStats.peakPlankSeconds) : '0:00'}
                 </span>
               </div>
-              {plankLeader && (
-                <div className="flex items-center gap-1.5">
-                  <div className="w-5 h-5 rounded-full bg-dark-elevated" />
-                  <span className="text-[10px] font-semibold text-dark-muted">
-                    {formatLeaderName(plankLeader.full_name)}
-                  </span>
-                </div>
-              )}
-            </div>
-            <div className="flex items-baseline gap-3">
-              <span className="text-4xl font-black text-dark-text">
-                {myEntry ? (myEntry.plank_value / 60).toFixed(1) : '0.0'}
-              </span>
-              {myEntry && (
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-emerald-500">
-                    {formatPercentage(calculateImprovement(myEntry.plank_value, myEntry.plank_value * 0.92))}
-                  </span>
-                </div>
-              )}
             </div>
             <div className="h-10 mt-2 -mx-2">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={sparkWeekData.slice(-7)}>
-                  <defs>
-                    <linearGradient id="plankGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#10B981" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <Area
-                    type="monotone"
-                    dataKey="planks"
-                    stroke="#10B981"
-                    strokeWidth={2}
-                    fill="url(#plankGrad)"
-                    dot={false}
-                  />
-                </AreaChart>
+                <BarChart data={monthlyBarData} barCategoryGap="20%">
+                  <Bar dataKey="planks" fill="#10B981" radius={[2, 2, 0, 0]} />
+                </BarChart>
               </ResponsiveContainer>
             </div>
           </GlassCard>
 
           {/* Running Card */}
           <GlassCard className="relative overflow-hidden" delay={0.3}>
-            <div className="flex items-start justify-between mb-1">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">🏃</span>
-                <span className="text-[11px] font-semibold tracking-wider text-dark-muted uppercase">
-                  RUNNING ({profile?.unit_preference === 'imperial' ? 'MI' : 'KM'})
-                </span>
-              </div>
-              {runLeader && (
-                <div className="flex items-center gap-1.5">
-                  <div className="w-5 h-5 rounded-full bg-dark-elevated" />
-                  <span className="text-[10px] font-semibold text-dark-muted">
-                    {formatLeaderName(runLeader.full_name)}
-                  </span>
-                </div>
-              )}
-            </div>
-            <div className="flex items-baseline gap-3">
-              <span className="text-4xl font-black text-dark-text">
-                {myEntry ? formatDistance(Number(myEntry.run_value), profile?.unit_preference).toFixed(1) : '0.0'}
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-lg">🏃</span>
+              <span className="text-[11px] font-semibold tracking-wider text-dark-muted uppercase">
+                RUNNING ({profile?.unit_preference === 'imperial' ? 'MI' : 'KM'})
               </span>
-              {myEntry && (
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-emerald-500">
-                    {formatPercentage(calculateImprovement(Number(myEntry.run_value), Number(myEntry.run_value) * 0.85))}
-                  </span>
-                </div>
-              )}
+            </div>
+            <div className="flex items-end justify-between">
+              <div>
+                <p className="text-[9px] font-semibold tracking-wider text-dark-muted uppercase">TOTAL</p>
+                <span className="text-4xl font-black text-dark-text">
+                  {allTimeStats ? formatDistance(allTimeStats.totalRunDistance, profile?.unit_preference).toFixed(1) : '0.0'}
+                </span>
+                <span className="text-sm text-dark-muted ml-1">{profile?.unit_preference === 'imperial' ? 'mi' : 'km'}</span>
+              </div>
+              <div className="text-right">
+                <p className="text-[9px] font-semibold tracking-wider text-dark-muted uppercase">PEAK</p>
+                <span className="text-2xl font-black text-emerald-500">
+                  {allTimeStats ? formatDistance(allTimeStats.peakRunDistance, profile?.unit_preference).toFixed(1) : '0.0'}
+                </span>
+                <span className="text-xs text-dark-muted ml-1">{profile?.unit_preference === 'imperial' ? 'mi' : 'km'}</span>
+              </div>
             </div>
             <div className="h-10 mt-2 -mx-2">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={sparkWeekData.slice(-7)}>
-                  <defs>
-                    <linearGradient id="runGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#10B981" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <Area
-                    type="monotone"
-                    dataKey="runKm"
-                    stroke="#10B981"
-                    strokeWidth={2}
-                    fill="url(#runGrad)"
-                    dot={false}
-                  />
-                </AreaChart>
+                <BarChart data={monthlyBarData} barCategoryGap="20%">
+                  <Bar dataKey="runKm" fill="#10B981" radius={[2, 2, 0, 0]} />
+                </BarChart>
               </ResponsiveContainer>
             </div>
           </GlassCard>
