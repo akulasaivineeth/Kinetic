@@ -187,19 +187,6 @@ export default function DashboardPage() {
   const { data: allTimeStats } = useAllTimeStats();
   const { data: stamina } = useStamina();
 
-  const monthlyBarData = useMemo(() => {
-    const m = new Map<string, { month: string; pushups: number; planks: number; runKm: number }>();
-    for (const log of chartLogs) {
-      const mk = format(new Date(log.logged_at), 'MMM yy');
-      const cur = m.get(mk) ?? { month: mk, pushups: 0, planks: 0, runKm: 0 };
-      cur.pushups += log.pushup_reps;
-      cur.planks += log.plank_seconds;
-      cur.runKm += Number(log.run_distance) || 0;
-      m.set(mk, cur);
-    }
-    return [...m.values()];
-  }, [chartLogs]);
-
   const weekLinePoints = useMemo(() => {
     if (!lineMode) return null;
     const wkStart = startOfWeek(visibleRange.from, { weekStartsOn: 1 });
@@ -338,13 +325,6 @@ export default function DashboardPage() {
                 <span className="text-xs text-dark-muted ml-1">reps</span>
               </div>
             </div>
-            <div className="h-10 mt-2 -mx-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyBarData} barCategoryGap="20%">
-                  <Bar dataKey="pushups" fill="#10B981" radius={[2, 2, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
           </GlassCard>
 
           {/* Plank Card */}
@@ -369,13 +349,6 @@ export default function DashboardPage() {
                   {allTimeStats ? formatPlankTime(allTimeStats.peakPlankSeconds) : '0:00'}
                 </span>
               </div>
-            </div>
-            <div className="h-10 mt-2 -mx-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyBarData} barCategoryGap="20%">
-                  <Bar dataKey="planks" fill="#10B981" radius={[2, 2, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
             </div>
           </GlassCard>
 
@@ -402,13 +375,6 @@ export default function DashboardPage() {
                 </span>
                 <span className="text-xs text-dark-muted ml-1">{profile?.unit_preference === 'imperial' ? 'mi' : 'km'}</span>
               </div>
-            </div>
-            <div className="h-10 mt-2 -mx-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyBarData} barCategoryGap="20%">
-                  <Bar dataKey="runKm" fill="#10B981" radius={[2, 2, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
             </div>
           </GlassCard>
         </div>
@@ -487,14 +453,10 @@ export default function DashboardPage() {
             <GlassCard className="p-5" animate={false}>
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <p className="text-lg font-black">
-                    {lineMode ? 'WEEKLY' : 'PROGRESS'}
-                  </p>
-                  <p className="text-lg font-black">
-                    {lineMode ? 'COMPARISON' : 'TRACKER'}
-                  </p>
+                  <p className="text-lg font-black">PROGRESS</p>
+                  <p className="text-lg font-black">TRACKER</p>
                   <p className="text-[10px] font-semibold tracking-wider text-dark-muted mt-1">
-                    {lineMode ? 'THIS WEEK vs LAST WEEK' : trendDateRange === 'month' ? 'WEEKLY BARS' : 'MONTHLY BARS'}
+                    {lineMode ? 'THIS WEEK vs LAST WEEK' : trendDateRange === 'month' ? 'WEEKLY TOTALS' : 'MONTHLY TOTALS'}
                   </p>
                 </div>
                 {lineMode ? (
@@ -512,7 +474,7 @@ export default function DashboardPage() {
                   <div className="text-right">
                     {barBundle?.avgLine != null && (
                       <>
-                        <p className="text-[9px] font-semibold tracking-wider text-dark-muted">4-{trendDateRange === 'month' ? 'WEEK' : 'MONTH'} AVG</p>
+                        <p className="text-[9px] font-semibold tracking-wider text-dark-muted">ROLLING AVG</p>
                         <p className="text-xl font-black text-emerald-500">
                           {trendMode === 'percent' ? `${barBundle.avgLine.toFixed(1)}%` : Math.round(barBundle.avgLine).toLocaleString()}
                         </p>
