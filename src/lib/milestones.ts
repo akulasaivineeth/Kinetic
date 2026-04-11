@@ -5,6 +5,10 @@ export interface Milestone {
   emoji: string;
 }
 
+export function milestoneKey(m: Milestone): string {
+  return `${m.metric}_${m.threshold}`;
+}
+
 const MILESTONES: Milestone[] = [
   { metric: 'pushups', threshold: 1000, label: '1K PUSH-UPS', emoji: '💪' },
   { metric: 'pushups', threshold: 5000, label: '5K PUSH-UPS', emoji: '🔥' },

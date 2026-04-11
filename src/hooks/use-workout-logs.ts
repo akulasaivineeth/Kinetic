@@ -193,6 +193,8 @@ export function useSubmitLog() {
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
       queryClient.invalidateQueries({ queryKey: ['alltime-stats'] });
       queryClient.invalidateQueries({ queryKey: ['recent-weeks'] });
+      queryClient.invalidateQueries({ queryKey: ['user-milestone-unlocks'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
 }
@@ -254,6 +256,8 @@ export function useUpdateSubmittedLog() {
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
       queryClient.invalidateQueries({ queryKey: ['recent-workout-logs'] });
       queryClient.invalidateQueries({ queryKey: ['alltime-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['user-milestone-unlocks'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
 }

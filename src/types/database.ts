@@ -91,6 +91,15 @@ export interface WhoopEvent {
   created_at: string;
 }
 
+export interface UserMilestoneUnlock {
+  id: string;
+  user_id: string;
+  milestone_key: string;
+  label: string;
+  emoji: string;
+  earned_at: string;
+}
+
 // ---------- Function return types ----------
 
 export interface LeaderboardEntry {
@@ -148,6 +157,11 @@ export interface Database {
         Row: WhoopEvent;
         Insert: Partial<WhoopEvent> & { event_type: string; payload: Json };
         Update: Partial<WhoopEvent>;
+      };
+      user_milestone_unlocks: {
+        Row: UserMilestoneUnlock;
+        Insert: Partial<UserMilestoneUnlock> & { user_id: string; milestone_key: string; label: string; emoji: string };
+        Update: Partial<UserMilestoneUnlock>;
       };
     };
     Functions: {

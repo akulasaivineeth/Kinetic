@@ -23,7 +23,8 @@ import { format } from 'date-fns';
 import { useAllTimeStats } from '@/hooks/use-alltime-stats';
 import { Confetti } from '@/components/ui/confetti';
 import { resizeImage } from '@/lib/image-resize';
-import { checkNewMilestones } from '@/lib/milestones';
+import { checkNewMilestones, type Milestone } from '@/lib/milestones';
+import { persistNewMilestoneUnlocks } from '@/lib/milestone-persistence';
 
 export default function LogPageWrapper() {
   return (
@@ -181,6 +182,9 @@ function LogPage() {
         : runDistance;
 
       if (editLogId) {
+        const oldLog = recentLogs.find((r) => r.id === editLogId);
+        if (!oldLog) throw new Error('Could not load log to update');
+
         await updateSubmittedLog.mutateAsync({
           logId: editLogId,
           patch: {
@@ -191,6 +195,49 @@ function LogPage() {
             photo_url: photoUrl,
           },
         });
+
+        let crossed: Milestone[] = [];
+        if (allTimeStats) {
+          const oldPush = oldLog.pushup_reps || 0;
+          const oldPlank = oldLog.plank_seconds || 0;
+          const oldRun = Number(oldLog.run_distance) || 0;
+          crossed = checkNewMilestones(
+            allTimeStats.totalPushups,
+            allTimeStats.totalPlankSeconds,
+            allTimeStats.totalRunDistance,
+            allTimeStats.totalPushups - oldPush + pushupReps,
+            allTimeStats.totalPlankSeconds - oldPlank + plankSeconds,
+            allTimeStats.totalRunDistance - oldRun + finalRunDist
+          );
+          if (crossed.length > 0) {
+            await persistNewMilestoneUnlocks(createClient(), user.id, crossed);
+            queryClient.invalidateQueries({ queryKey: ['user-milestone-unlocks'] });
+            queryClient.invalidateQueries({ queryKey: ['notifications'] });
+          }
+        }
+
+        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+          navigator.vibrate([100, 50, 200]);
+        }
+
+        const isPBEdit =
+          (allTimeStats && pushupReps > allTimeStats.peakPushups) ||
+          (allTimeStats && plankSeconds > allTimeStats.peakPlankSeconds) ||
+          (allTimeStats && finalRunDist > allTimeStats.peakRunDistance);
+
+        if (isPBEdit) {
+          setPbCelebration('NEW PB!');
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+        if (crossed.length > 0) {
+          setPbCelebration(
+            crossed.length === 1
+              ? `${crossed[0].emoji} ${crossed[0].label}`
+              : `${crossed.length} milestones unlocked!`
+          );
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+
         setSubmitted(true);
         setSubmitLabel('update');
         router.push('/dashboard');
@@ -217,6 +264,23 @@ function LogPage() {
 
       await submitLog.mutateAsync(logId);
 
+      let crossedNew: Milestone[] = [];
+      if (allTimeStats) {
+        crossedNew = checkNewMilestones(
+          allTimeStats.totalPushups,
+          allTimeStats.totalPlankSeconds,
+          allTimeStats.totalRunDistance,
+          allTimeStats.totalPushups + pushupReps,
+          allTimeStats.totalPlankSeconds + plankSeconds,
+          allTimeStats.totalRunDistance + finalRunDist
+        );
+        if (crossedNew.length > 0) {
+          await persistNewMilestoneUnlocks(createClient(), user.id, crossedNew);
+          queryClient.invalidateQueries({ queryKey: ['user-milestone-unlocks'] });
+          queryClient.invalidateQueries({ queryKey: ['notifications'] });
+        }
+      }
+
       if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
         navigator.vibrate([100, 50, 200]);
       }
@@ -230,16 +294,13 @@ function LogPage() {
         setPbCelebration('NEW PB!');
         await new Promise((r) => setTimeout(r, 2000));
       }
-
-      if (allTimeStats) {
-        const milestones = checkNewMilestones(
-          allTimeStats.totalPushups, allTimeStats.totalPlankSeconds, allTimeStats.totalRunDistance,
-          allTimeStats.totalPushups + pushupReps, allTimeStats.totalPlankSeconds + plankSeconds, allTimeStats.totalRunDistance + finalRunDist
+      if (crossedNew.length > 0) {
+        setPbCelebration(
+          crossedNew.length === 1
+            ? `${crossedNew[0].emoji} ${crossedNew[0].label}`
+            : `${crossedNew.length} milestones unlocked!`
         );
-        if (milestones.length > 0 && !isPB) {
-          setPbCelebration(milestones[0].emoji + ' ' + milestones[0].label);
-          await new Promise((r) => setTimeout(r, 2000));
-        }
+        await new Promise((r) => setTimeout(r, 2000));
       }
 
       setSubmitted(true);

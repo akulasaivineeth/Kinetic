@@ -31,7 +31,7 @@ import { useGoalSuggestions } from '@/hooks/use-goal-suggestions';
 import { useAuth } from '@/providers/auth-provider';
 import { formatDistance, formatPlankTime } from '@/lib/utils';
 import { generateInsights } from '@/lib/insights';
-import { getEarnedMilestones } from '@/lib/milestones';
+import { useUserMilestoneUnlocks } from '@/hooks/use-user-milestones';
 import { TrendingUp, TrendingDown, Lightbulb, AlertTriangle, Award } from 'lucide-react';
 import { Onboarding } from '@/components/ui/onboarding';
 import type { WorkoutLog } from '@/types/database';
@@ -868,7 +868,7 @@ export default function DashboardPage() {
 
         {/* Milestones */}
         <ErrorBoundary fallbackTitle="Milestones unavailable">
-          <MilestonesSection allTimeStats={allTimeStats ?? null} />
+          <MilestonesSection />
         </ErrorBoundary>
       </div>
     </AppShell>
@@ -934,31 +934,36 @@ function GoalSuggestionsSection() {
   );
 }
 
-function MilestonesSection({ allTimeStats }: { allTimeStats: import('@/hooks/use-alltime-stats').AllTimeStats | null }) {
-  const milestones = useMemo(() => {
-    if (!allTimeStats) return [];
-    return getEarnedMilestones(allTimeStats.totalPushups, allTimeStats.totalPlankSeconds, allTimeStats.totalRunDistance);
-  }, [allTimeStats]);
+function MilestonesSection() {
+  const { data: unlocks = [], isPending } = useUserMilestoneUnlocks();
 
-  if (milestones.length === 0) return null;
+  if (isPending) return null;
 
   return (
     <div className="pt-2 pb-4">
       <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-2">MILESTONES EARNED</p>
-      <div className="flex flex-wrap gap-2">
-        {milestones.map((m, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: i * 0.05 }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20"
-          >
-            <Award size={12} className="text-emerald-500" />
-            <span className="text-[10px] font-bold text-emerald-400 tracking-wider">{m.emoji} {m.label}</span>
-          </motion.div>
-        ))}
-      </div>
+      {unlocks.length === 0 ? (
+        <p className="text-[10px] text-dark-muted leading-relaxed px-1">
+          Milestones unlock here when you cross a lifetime total (for example 1K push-ups). Submit a log that crosses the line to earn it and get a notification.
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {unlocks.map((row, i) => (
+            <motion.div
+              key={row.id}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: i * 0.05 }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20"
+            >
+              <Award size={12} className="text-emerald-500" />
+              <span className="text-[10px] font-bold text-emerald-400 tracking-wider">
+                {row.emoji} {row.label}
+              </span>
+            </motion.div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
