@@ -47,7 +47,7 @@ Dev and prod are **separate** Supabase projects — enabling Google on dev does 
 
 | Method | What it does |
 |--------|----------------|
-| **GitHub Action** `.github/workflows/supabase-prod-backup.yml` | Daily dump (roles + schema + data) → workflow artifact (private repo). Set secret `PRODUCTION_SUPABASE_DB_URL`. |
+| **GitHub Action** `.github/workflows/supabase-prod-backup.yml` | Daily dump (roles + schema + data) → workflow artifact (private repo). Set secret `PRODUCTION_SUPABASE_DB_URL` to the **full** Postgres URI with your **real** DB password (not the literal `[YOUR-PASSWORD]`). In the Supabase Database settings, use **URI** / **Direct** and either fill the password field so the copied string is complete, or toggle **URI encoded** if your password has special characters. |
 | **Local script** `npm run db:backup:prod` | Same dumps into `./backups/` (gitignored). |
 | **Supabase Dashboard** | Paid plans include automated backups / PITR — enable for production. |
 

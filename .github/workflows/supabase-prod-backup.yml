@@ -1,6 +1,11 @@
 # Scheduled logical backup of production Postgres (roles + schema + public data).
 # Requires repository secret: PRODUCTION_SUPABASE_DB_URL
-# (Supabase Dashboard → Project Settings → Database → URI, direct host db.* port 5432)
+#
+# The URI must be a REAL connection string (not the template with [YOUR-PASSWORD]):
+#   Supabase → Project Settings → Database → Connection string → URI → use "Direct"
+#   Replace [YOUR-PASSWORD] in the dashboard copy with your actual DB password, OR paste
+#   the full URI after Supabase fills it in. If the password contains @ # % / etc., use the
+#   "URI encoded" toggle in the dashboard or encode those characters yourself.
 #
 # Docs: https://supabase.com/docs/guides/cli/github-action/backups
 
@@ -19,6 +24,9 @@ concurrency:
 jobs:
   backup:
     runs-on: ubuntu-latest
+    env:
+      # GitHub is moving Actions off Node 20; opt in early (see Actions deprecation notices).
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
 
@@ -30,14 +38,29 @@ jobs:
         env:
           PRODUCTION_SUPABASE_DB_URL: ${{ secrets.PRODUCTION_SUPABASE_DB_URL }}
         run: |
-          if [ -z "$PRODUCTION_SUPABASE_DB_URL" ]; then
+          set -euo pipefail
+          if [ -z "${PRODUCTION_SUPABASE_DB_URL:-}" ]; then
             echo "Add secret PRODUCTION_SUPABASE_DB_URL in repo Settings → Secrets and variables → Actions"
             exit 1
           fi
+          RAW="$PRODUCTION_SUPABASE_DB_URL"
+          if echo "$RAW" | grep -qiE '\[YOUR-PASSWORD\]|YOUR-PASSWORD'; then
+            echo "::error::Secret still contains the placeholder [YOUR-PASSWORD]. Copy the URI from Supabase after entering your real database password (or use the URI-encoded form)."
+            exit 1
+          fi
+          # Ensure sslmode (often required for hosted Postgres from CI)
+          DB_URL="$RAW"
+          if [[ "$DB_URL" != *"sslmode="* ]]; then
+            if [[ "$DB_URL" == *"?"* ]]; then
+              DB_URL="${DB_URL}&sslmode=require"
+            else
+              DB_URL="${DB_URL}?sslmode=require"
+            fi
+          fi
           mkdir -p out
-          supabase db dump --db-url "$PRODUCTION_SUPABASE_DB_URL" -f out/roles.sql --role-only
-          supabase db dump --db-url "$PRODUCTION_SUPABASE_DB_URL" -f out/schema.sql
-          supabase db dump --db-url "$PRODUCTION_SUPABASE_DB_URL" -f out/data.sql --data-only --use-copy
+          supabase db dump --db-url "$DB_URL" -f out/roles.sql --role-only
+          supabase db dump --db-url "$DB_URL" -f out/schema.sql
+          supabase db dump --db-url "$DB_URL" -f out/data.sql --data-only --use-copy
 
       - name: Upload backup bundle
         uses: actions/upload-artifact@v4
