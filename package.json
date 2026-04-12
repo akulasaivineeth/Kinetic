@@ -12,6 +12,7 @@
     "uat:export-auth": "node tests/uat/scripts/export-auth-from-cdp.mjs",
     "uat:smoke": "playwright test --config tests/uat/playwright.config.ts --grep @smoke",
     "db:migrate": "supabase db push",
+    "db:backup:prod": "bash scripts/db-backup-prod.sh",
     "db:reset": "supabase db reset",
     "db:types": "supabase gen types typescript --local > src/types/database.ts"
   },

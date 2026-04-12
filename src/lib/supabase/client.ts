@@ -1,5 +1,6 @@
 import { createBrowserClient } from '@supabase/ssr';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { getSupabaseAnonKey, getSupabaseUrl } from '@/lib/supabase/env-profile';
 
 // Use a generic client that doesn't enforce strict table types at call sites.
 // The Database schema types are used for our own interfaces (Row, Insert, etc.)
@@ -9,9 +10,6 @@ let browserClient: SupabaseClient<any> | null = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createClient(): SupabaseClient<any> {
   if (browserClient) return browserClient;
-  browserClient = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  browserClient = createBrowserClient(getSupabaseUrl(), getSupabaseAnonKey());
   return browserClient;
 }

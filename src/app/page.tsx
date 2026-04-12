@@ -18,12 +18,15 @@ function LandingPage() {
   const searchParams = useSearchParams();
   const inviteCode = searchParams.get('invite') || undefined;
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [signInError, setSignInError] = useState<string | null>(null);
 
   const handleSignIn = async () => {
+    setSignInError(null);
     setIsSigningIn(true);
     try {
       await signInWithGoogle(inviteCode);
-    } catch {
+    } catch (e) {
+      setSignInError(e instanceof Error ? e.message : 'Sign-in failed');
       setIsSigningIn(false);
     }
   };
@@ -98,6 +101,12 @@ function LandingPage() {
           </svg>
           {isSigningIn ? 'Signing in...' : 'Continue with Google'}
         </motion.button>
+
+        {signInError ? (
+          <p className="text-red-400/90 text-xs mt-4 max-w-xs mx-auto text-center leading-relaxed" role="alert">
+            {signInError}
+          </p>
+        ) : null}
 
         <motion.p
           initial={{ opacity: 0 }}

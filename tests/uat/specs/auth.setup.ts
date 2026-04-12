@@ -25,8 +25,7 @@ setup('authenticate and save storage state', async ({ page, browser }, testInfo)
         type: 'uat-auth',
         description: `reused storageState (${existingCookieCount} cookies)`,
       });
-      // System Chrome often exceeds default worker teardown (30s) if we rely on implicit close.
-      await browser.close();
+      // Do not call browser.close() here — it can tear down the worker and skip dependent chromium tests.
       return;
     }
     try {

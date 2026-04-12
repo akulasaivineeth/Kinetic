@@ -9,6 +9,8 @@ Browser UAT for the Next.js app. OpenClaw (or any runner) can execute **`npm run
 3. **Auth storage** (once per machine, or when the session expires): see below.
 4. If **`next dev` + UAT** throws missing `.next/server/app/page.js` or invariant errors, stop the server, run **`rm -rf .next`**, start dev again, re-run UAT. Optional: **`UAT_WORKERS=2 npm run uat`** to ease HMR load.
 
+**If every signed-in test is skipped:** your `.auth/user.json` is missing a valid Supabase session for the project in `.env.local`. Common causes: (1) you changed `NEXT_PUBLIC_DEBUG_MODE` / `*_DEV` / `*_PROD` keys but kept an old `user.json` from another Supabase ref — delete `.auth/user.json` and run `npm run uat:export-auth` again; (2) the refresh token expired — same fix; (3) Playwright **`BASE_URL` port** must match where you signed in (default `http://localhost:3000`; if the app runs on **3001**, use `BASE_URL=http://localhost:3001 npm run uat`).
+
 ## Record Google session (`storageState`)
 
 Google OAuth is not scripted. You save a real session to a **gitignored** file at **`.auth/user.json`** (repo root).

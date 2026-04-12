@@ -2,9 +2,7 @@
 -- KINETIC: Complete Supabase Schema
 -- ============================================================
 
--- Enable necessary extensions
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+-- UUID defaults use gen_random_uuid() (built-in PG13+). Invite codes: two UUIDs hex, no pgcrypto path issues.
 
 -- ============================================================
 -- PROFILES
@@ -51,8 +49,10 @@ CREATE TRIGGER on_auth_user_created
 -- INVITE LINKS
 -- ============================================================
 CREATE TABLE public.invite_links (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  code TEXT UNIQUE NOT NULL DEFAULT encode(gen_random_bytes(32), 'hex'),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code TEXT UNIQUE NOT NULL DEFAULT (
+    replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', '')
+  ),
   created_by UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
   used_by UUID REFERENCES public.profiles(id),
   used_at TIMESTAMPTZ,
@@ -64,7 +64,7 @@ CREATE TABLE public.invite_links (
 -- PERFORMANCE GOALS
 -- ============================================================
 CREATE TABLE public.performance_goals (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
   pushup_weekly_goal INTEGER DEFAULT 500,
   plank_weekly_goal INTEGER DEFAULT 600, -- seconds
@@ -81,7 +81,7 @@ CREATE TABLE public.performance_goals (
 -- WORKOUT LOGS
 -- ============================================================
 CREATE TABLE public.workout_logs (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
   logged_at TIMESTAMPTZ DEFAULT NOW(),
 
@@ -122,7 +122,7 @@ CREATE INDEX idx_workout_logs_submitted ON public.workout_logs(user_id, submitte
 CREATE TYPE sharing_status AS ENUM ('pending', 'accepted', 'rejected');
 
 CREATE TABLE public.sharing_connections (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   requester_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
   recipient_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
   status sharing_status DEFAULT 'pending',
@@ -136,7 +136,7 @@ CREATE TABLE public.sharing_connections (
 -- NOTIFICATIONS
 -- ============================================================
 CREATE TABLE public.notifications (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
   type TEXT NOT NULL, -- 'sharing_request', 'whoop_workout', 'goal_reached'
   title TEXT NOT NULL,
@@ -152,7 +152,7 @@ CREATE INDEX idx_notifications_user ON public.notifications(user_id, created_at 
 -- WHOOP WEBHOOK EVENTS (audit log)
 -- ============================================================
 CREATE TABLE public.whoop_events (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES public.profiles(id),
   event_type TEXT NOT NULL,
   payload JSONB NOT NULL,

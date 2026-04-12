@@ -73,10 +73,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const redirectTo = `${window.location.origin}/auth/callback${
       inviteCode ? `?invite=${inviteCode}` : ''
     }`;
-    await supabase.auth.signInWithOAuth({
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo },
     });
+    if (error) {
+      const raw = `${error.message} ${(error as { code?: string }).code ?? ''}`.toLowerCase();
+      if (raw.includes('not enabled') || raw.includes('validation_failed') || raw.includes('provider')) {
+        throw new Error(
+          'Google sign-in is not enabled for this Supabase project. Open Supabase Dashboard → Authentication → Providers → Google, turn it on, and paste your Google OAuth Client ID and Secret. Each project (dev vs prod) must be configured separately.'
+        );
+      }
+      throw error;
+    }
+    if (data?.url) {
+      window.location.assign(data.url);
+    }
   };
 
   const signOut = async () => {

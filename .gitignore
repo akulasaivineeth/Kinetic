@@ -55,6 +55,9 @@ next-env.d.ts
 
 # supabase
 supabase/.temp/
+
+# local prod DB dumps (see npm run db:backup:prod)
+/backups/
 kinetic-privacy/
 
 # npm cache if project-local (e.g. npm_config_cache)

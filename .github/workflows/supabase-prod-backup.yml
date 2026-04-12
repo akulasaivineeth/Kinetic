@@ -1,0 +1,47 @@
+# Scheduled logical backup of production Postgres (roles + schema + public data).
+# Requires repository secret: PRODUCTION_SUPABASE_DB_URL
+# (Supabase Dashboard → Project Settings → Database → URI, direct host db.* port 5432)
+#
+# Docs: https://supabase.com/docs/guides/cli/github-action/backups
+
+name: Supabase production backup
+
+on:
+  schedule:
+    # 06:15 UTC daily — adjust as needed
+    - cron: '15 6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: supabase-prod-backup
+  cancel-in-progress: true
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Dump roles, schema, and data
+        env:
+          PRODUCTION_SUPABASE_DB_URL: ${{ secrets.PRODUCTION_SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$PRODUCTION_SUPABASE_DB_URL" ]; then
+            echo "Add secret PRODUCTION_SUPABASE_DB_URL in repo Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+          mkdir -p out
+          supabase db dump --db-url "$PRODUCTION_SUPABASE_DB_URL" -f out/roles.sql --role-only
+          supabase db dump --db-url "$PRODUCTION_SUPABASE_DB_URL" -f out/schema.sql
+          supabase db dump --db-url "$PRODUCTION_SUPABASE_DB_URL" -f out/data.sql --data-only --use-copy
+
+      - name: Upload backup bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-prod-${{ github.run_id }}-${{ github.run_attempt }}
+          path: out/
+          retention-days: 42
