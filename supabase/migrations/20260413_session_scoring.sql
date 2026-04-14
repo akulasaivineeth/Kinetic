@@ -9,7 +9,7 @@ ALTER TABLE public.workout_logs
   ADD COLUMN IF NOT EXISTS session_score NUMERIC DEFAULT 0;
 
 -- 2. Create continuous scoring function
--- Push-ups: base=1.5/rep, accel=0.08
+-- Push-ups: base=1.2/rep, accel=0.08
 -- Plank:    base=0.3/sec, accel=0.002
 -- Run:      base=12/km,   accel=2.5
 CREATE OR REPLACE FUNCTION public.calc_session_score(
@@ -21,10 +21,10 @@ DECLARE
   score NUMERIC := 0;
   n NUMERIC;
 BEGIN
-  -- Push-up score: 1.5 × reps + 0.08 × reps²
+  -- Push-up score: 1.2 × reps + 0.08 × reps²
   n := GREATEST(COALESCE(p_pushup_reps, 0), 0);
   IF n > 0 THEN
-    score := score + 1.5 * n + 0.08 * (n * n);
+    score := score + 1.2 * n + 0.08 * (n * n);
   END IF;
 
   -- Plank score: 0.3 × seconds + 0.002 × seconds²

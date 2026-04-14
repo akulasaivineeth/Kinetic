@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, Suspense, useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { AppShell } from '@/components/layout/app-shell';
 import { GlassCard } from '@/components/ui/glass-card';
 import { ProgressBar } from '@/components/ui/progress-bar';
@@ -18,7 +18,7 @@ import {
 } from '@/hooks/use-workout-logs';
 import { formatPlankTime } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { format, isSameDay, startOfDay } from 'date-fns';
 import { useAllTimeStats } from '@/hooks/use-alltime-stats';
@@ -39,7 +39,6 @@ export default function LogPageWrapper() {
 function LogPage() {
   const { user, profile } = useAuth();
   const searchParams = useSearchParams();
-  const router = useRouter();
   const queryClient = useQueryClient();
   const { data: goals } = useGoals();
   const { data: weeklyVolume } = useWeeklyVolume();
@@ -69,10 +68,12 @@ function LogPage() {
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Calendar state
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
   const { data: monthLogs = [] } = useMonthLogs(calendarMonth);
   const logsMap = useMemo(() => dateToLogsMap(monthLogs), [monthLogs]);
+  const currentDayLogs = useMemo(() => logsMap.get(format(selectedDate, 'yyyy-MM-dd')) || [], [logsMap, selectedDate]);
 
   // Whoop import fallback
   const handleWhoopImport = async () => {
@@ -95,7 +96,7 @@ function LogPage() {
     }
   };
 
-  // Load draft
+  // Load draft initially
   useEffect(() => {
     if (editLogId) return;
     if (draft) {
@@ -103,7 +104,6 @@ function LogPage() {
       setPushupReps(draft.pushup_reps || 0);
       setPlankSeconds(draft.plank_seconds || 0);
 
-      // Denormalize: KM to MI if user is in Imperial mode
       const km = Number(draft.run_distance) || 0;
       if (profile?.unit_preference === 'imperial') {
         setRunDistance(Number((km * 0.621371).toFixed(1)));
@@ -116,8 +116,7 @@ function LogPage() {
   // Auto-save draft
   const autoSave = useCallback(() => {
     if (!user) return;
-    if (editLogId) return; // Never autosave as draft while editing a submitted log.
-    // Normalize: MI to KM if user is in Imperial mode
+    if (editLogId) return;
     const finalRunDist = profile?.unit_preference === 'imperial'
       ? Number((runDistance * 1.60934).toFixed(3))
       : runDistance;
@@ -146,37 +145,34 @@ function LogPage() {
     };
   }, [pushupReps, plankSeconds, runDistance, autoSave]);
 
-  // Handle day selection from calendar
   const handleDaySelect = (day: Date | undefined) => {
     if (!day) return;
-    const dateKey = format(day, 'yyyy-MM-dd');
-    const logsForDay = logsMap.get(dateKey);
-
     setSelectedDate(startOfDay(day));
     setSubmitted(false);
     setSubmitError(null);
+    setEditLogId(null);
+    // Clear out form to ready for a new log, but they can select a card below the calendar to edit
+    setDraftId(null);
+    setPushupReps(0);
+    setPlankSeconds(0);
+    setRunDistance(0);
+  };
 
-    if (logsForDay && logsForDay.length > 0) {
-      // Load the most recent log for that day
-      const target = logsForDay[0];
-      setEditLogId(target.id);
-      setDraftId(null);
-      setPushupReps(target.pushup_reps || 0);
-      setPlankSeconds(target.plank_seconds || 0);
-      const km = Number(target.run_distance) || 0;
-      setRunDistance(
-        profile?.unit_preference === 'imperial'
-          ? Number((km * 0.621371).toFixed(1))
-          : km
-      );
-    } else {
-      // New entry for that day
-      setEditLogId(null);
-      setDraftId(null);
-      setPushupReps(0);
-      setPlankSeconds(0);
-      setRunDistance(0);
-    }
+  const handleEditLog = (logId: string) => {
+    const target = monthLogs.find((r) => r.id === logId);
+    if (!target) return;
+    setEditLogId(target.id);
+    setDraftId(null);
+    setSubmitted(false);
+    setSubmitError(null);
+    setPushupReps(target.pushup_reps || 0);
+    setPlankSeconds(target.plank_seconds || 0);
+    const km = Number(target.run_distance) || 0;
+    setRunDistance(
+      profile?.unit_preference === 'imperial'
+        ? Number((km * 0.621371).toFixed(1))
+        : km
+    );
   };
 
   // Submit
@@ -217,42 +213,16 @@ function LogPage() {
           );
           if (crossed.length > 0) {
             await persistNewMilestoneUnlocks(createClient(), user.id, crossed);
-            queryClient.invalidateQueries({ queryKey: ['user-milestone-unlocks'] });
-            queryClient.invalidateQueries({ queryKey: ['notifications'] });
           }
         }
 
-        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-          navigator.vibrate([100, 50, 200]);
-        }
-
-        const isPBEdit =
-          (allTimeStats && pushupReps > allTimeStats.peakPushups) ||
-          (allTimeStats && plankSeconds > allTimeStats.peakPlankSeconds) ||
-          (allTimeStats && finalRunDist > allTimeStats.peakRunDistance);
-
-        if (isPBEdit) {
-          setPbCelebration('NEW PB!');
-          await new Promise((r) => setTimeout(r, 2000));
-        }
-        if (crossed.length > 0) {
-          setPbCelebration(
-            crossed.length === 1
-              ? `${crossed[0].emoji} ${crossed[0].label}`
-              : `${crossed.length} milestones unlocked!`
-          );
-          await new Promise((r) => setTimeout(r, 2000));
-        }
-
         setSubmitted(true);
-        setSubmitLabel('update');
-        queryClient.invalidateQueries({ queryKey: ['month-logs'] });
+        // Using window.location.href to guarantee redirect since state changes might be swallowed.
+        window.location.href = '/dashboard';
         return;
-      }
+      } // end edit flow
 
       let logId = draftId;
-
-      // If no draft saved yet, save it now and get the ID
       if (!logId) {
         const saved = await saveDraft.mutateAsync({
           pushup_reps: pushupReps,
@@ -281,8 +251,6 @@ function LogPage() {
         );
         if (crossedNew.length > 0) {
           await persistNewMilestoneUnlocks(createClient(), user.id, crossedNew);
-          queryClient.invalidateQueries({ queryKey: ['user-milestone-unlocks'] });
-          queryClient.invalidateQueries({ queryKey: ['notifications'] });
         }
       }
 
@@ -290,14 +258,16 @@ function LogPage() {
         navigator.vibrate([100, 50, 200]);
       }
 
+      // Fast display of celebration (don't force long delays that block routing)
       const isPB =
         (allTimeStats && pushupReps > allTimeStats.peakPushups) ||
         (allTimeStats && plankSeconds > allTimeStats.peakPlankSeconds) ||
         (allTimeStats && finalRunDist > allTimeStats.peakRunDistance);
 
+      let delayTime = 0;
       if (isPB) {
         setPbCelebration('NEW PB!');
-        await new Promise((r) => setTimeout(r, 2000));
+        delayTime = 1200;
       }
       if (crossedNew.length > 0) {
         setPbCelebration(
@@ -305,41 +275,31 @@ function LogPage() {
             ? `${crossedNew[0].emoji} ${crossedNew[0].label}`
             : `${crossedNew.length} milestones unlocked!`
         );
-        await new Promise((r) => setTimeout(r, 2000));
+        delayTime = 1200;
       }
 
-      // Session score celebration
-      const { totalPts, pushupPts, plankPts, runPts } = calculateSessionScore(
-        pushupReps,
-        plankSeconds,
-        finalRunDist
-      );
-      if (totalPts > 0) {
+      const { totalPts, pushupPts, plankPts, runPts } = calculateSessionScore(pushupReps, plankSeconds, finalRunDist);
+      if (totalPts > 0 && delayTime === 0) {
         const parts = [
           pushupPts > 0 ? `💪${Math.round(pushupPts)}` : '',
           plankPts > 0 ? `🧘${Math.round(plankPts)}` : '',
           runPts > 0 ? `🏃${Math.round(runPts)}` : '',
         ].filter(Boolean).join(' + ');
         setPbCelebration(`⚡ ${Math.round(totalPts)} PTS (${parts})`);
-        await new Promise((r) => setTimeout(r, 2500));
+        delayTime = 1200;
       }
 
+      if (delayTime > 0) await new Promise((r) => setTimeout(r, delayTime));
+
       setSubmitted(true);
-      setSubmitLabel('submit');
-      setPushupReps(0);
-      setPlankSeconds(0);
-      setRunDistance(0);
-      setDraftId(null);
-      queryClient.invalidateQueries({ queryKey: ['month-logs'] });
+      window.location.href = '/dashboard';
     } catch (err) {
       console.error('Submit failed:', err);
       setSubmitError(err instanceof Error ? err.message : 'Failed to save log');
-    } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Computed values
   const totalPushups = (weeklyVolume?.total_pushups || 0) + pushupReps;
   const totalPlankSecs = (weeklyVolume?.total_plank_seconds || 0) + plankSeconds;
   const totalRunDist = Number(weeklyVolume?.total_run_distance || 0) + runDistance;
@@ -348,14 +308,11 @@ function LogPage() {
   const runGoal = goals?.run_weekly_goal || 20;
 
   const displayRunGoal = profile?.unit_preference === 'imperial' ? runGoal * 0.621371 : runGoal;
-  const displayRunDist = profile?.unit_preference === 'imperial' ? totalRunDist * 0.621371 : totalRunDist;
   const unitLabel = profile?.unit_preference === 'imperial' ? 'MI' : 'KM';
-
-  // Days with logs for calendar highlighting
+  
   const loggedDays = useMemo(() => {
     return Array.from(logsMap.keys()).map((dateStr) => new Date(dateStr + 'T12:00:00'));
   }, [logsMap]);
-
   const isToday = isSameDay(selectedDate, new Date());
 
   return (
@@ -363,95 +320,173 @@ function LogPage() {
       <Confetti active={!!pbCelebration} message={pbCelebration || undefined} />
       <div className="max-w-md mx-auto px-6 space-y-5 pt-2 pb-32">
 
-        {/* Calendar */}
-        <GlassCard className="!p-3" delay={0}>
-          <style>{`
-            .kinetic-cal {
-              --rdp-accent-color: #10B981;
-              --rdp-background-color: rgba(16,185,129,0.12);
-              width: 100%;
-              font-family: inherit;
-            }
-            .kinetic-cal .rdp-months { width: 100%; }
-            .kinetic-cal .rdp-month { width: 100%; }
-            .kinetic-cal .rdp-month_caption { 
-              font-size: 14px; font-weight: 800; 
-              color: var(--color-dark-text, #f5f5f7); 
-              letter-spacing: 0.08em; text-transform: uppercase;
-              padding: 4px 0 8px;
-            }
-            .kinetic-cal .rdp-weekday { 
-              font-size: 10px; font-weight: 700; 
-              color: #636366; letter-spacing: 0.1em;
-              text-transform: uppercase;
-            }
-            .kinetic-cal .rdp-day {
-              width: 36px; height: 36px;
-              font-size: 13px; font-weight: 600;
-              color: #a1a1a6; border-radius: 10px;
-              transition: all 0.15s ease;
-            }
-            .kinetic-cal .rdp-day:hover { background: rgba(255,255,255,0.06); }
-            .kinetic-cal .rdp-today { color: #10B981 !important; font-weight: 800; }
-            .kinetic-cal .rdp-selected .rdp-day_button {
-              background: #10B981 !important; color: #000 !important; 
-              font-weight: 900; border-radius: 10px;
-            }
-            .kinetic-cal .rdp-chevron { fill: #636366; }
-            .kinetic-cal .day-has-log { position: relative; }
-            .kinetic-cal .day-has-log::after {
-              content: ''; position: absolute; bottom: 3px; left: 50%;
-              transform: translateX(-50%);
-              width: 4px; height: 4px; border-radius: 50%; 
-              background: #10B981;
-            }
-            .kinetic-cal .rdp-nav { gap: 4px; }
-            .kinetic-cal .rdp-button_previous,
-            .kinetic-cal .rdp-button_next {
-              width: 28px; height: 28px; border-radius: 8px;
-              background: rgba(255,255,255,0.04);
-              border: 1px solid rgba(255,255,255,0.08);
-            }
-          `}</style>
-          <DayPicker
-            className="kinetic-cal"
-            mode="single"
-            selected={selectedDate}
-            onSelect={handleDaySelect}
-            month={calendarMonth}
-            onMonthChange={setCalendarMonth}
-            modifiers={{ hasLog: loggedDays }}
-            modifiersClassNames={{ hasLog: 'day-has-log' }}
-            showOutsideDays
-            fixedWeeks
-          />
-        </GlassCard>
-
-        {/* Selected date header */}
+        {/* Collapsible Session History Header */}
         <div className="flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase">
-              {editLogId ? 'EDITING LOG' : 'NEW LOG'}
+          <button 
+            onClick={() => setCalendarOpen(!calendarOpen)}
+            className="flex items-center gap-2 group"
+          >
+            <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase group-hover:text-emerald-500 transition-colors">
+              Session History
             </p>
-            <h2 className="text-lg font-black text-dark-text">
-              {isToday ? 'Today' : format(selectedDate, 'EEE, MMM d')}
-            </h2>
-          </div>
-          {editLogId && (
+            <svg 
+              width="14" height="14" viewBox="0 0 24 24" fill="none" 
+              stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              className={`text-dark-muted transition-transform duration-300 ${calendarOpen ? 'rotate-180' : ''}`}
+            >
+              <path d="m6 9 6 6 6-6"/>
+            </svg>
+          </button>
+          
+          <h2 className="text-lg font-black text-dark-text tracking-tight text-right">
+            {isToday ? 'Today' : format(selectedDate, 'EEE, MMM d')}
+          </h2>
+        </div>
+
+        {/* Calendar and Existing Logs View */}
+        <AnimatePresence>
+          {calendarOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden space-y-3"
+            >
+              <GlassCard className="!p-3" delay={0}>
+                <style>{`
+                  .kinetic-cal {
+                    --rdp-accent-color: #10B981;
+                    --rdp-background-color: rgba(16,185,129,0.12);
+                    width: 100%;
+                    font-family: inherit;
+                  }
+                  .kinetic-cal .rdp-months { width: 100%; }
+                  .kinetic-cal .rdp-month { width: 100%; }
+                  .kinetic-cal .rdp-month_caption { 
+                    font-size: 14px; font-weight: 800; 
+                    color: var(--color-dark-text, #f5f5f7); 
+                    letter-spacing: 0.08em; text-transform: uppercase;
+                    padding: 4px 0 8px;
+                  }
+                  .kinetic-cal .rdp-weekday { 
+                    font-size: 10px; font-weight: 700; 
+                    color: #636366; letter-spacing: 0.1em;
+                    text-transform: uppercase;
+                  }
+                  .kinetic-cal .rdp-day {
+                    width: 36px; height: 36px; padding: 0;
+                  }
+                  .kinetic-cal .rdp-day_button {
+                    width: 100%; height: 100%;
+                    display: flex; align-items: center; justify-content: center;
+                    font-size: 13px; font-weight: 600;
+                    color: #a1a1a6; border-radius: 10px;
+                    transition: all 0.15s ease;
+                  }
+                  .kinetic-cal .rdp-day_button:hover { background: rgba(255,255,255,0.06); }
+                  .kinetic-cal .rdp-today { color: #10B981 !important; font-weight: 800; }
+                  .kinetic-cal .rdp-selected .rdp-day_button {
+                    background: #10B981 !important; color: #000 !important; 
+                    font-weight: 900; border-radius: 10px;
+                  }
+                  .kinetic-cal .rdp-chevron { fill: #636366; }
+                  
+                  /* Green dots on button so it centers inside the cell relative to the number */
+                  .kinetic-cal .day-has-log button { position: relative; }
+                  .kinetic-cal .day-has-log button::after {
+                    content: ''; position: absolute; bottom: 3px; left: 50%;
+                    transform: translateX(-50%);
+                    width: 4px; height: 4px; border-radius: 50%; 
+                    background: #10B981;
+                  }
+                  .kinetic-cal .rdp-selected.day-has-log button::after {
+                    background: #000; /* Contrast against green selected background */
+                  }
+
+                  .kinetic-cal .rdp-nav { gap: 4px; }
+                  .kinetic-cal .rdp-button_previous,
+                  .kinetic-cal .rdp-button_next {
+                    width: 28px; height: 28px; border-radius: 8px;
+                    background: rgba(255,255,255,0.04);
+                    border: 1px solid rgba(255,255,255,0.08);
+                  }
+                `}</style>
+                <DayPicker
+                  className="kinetic-cal"
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={handleDaySelect}
+                  month={calendarMonth}
+                  onMonthChange={setCalendarMonth}
+                  modifiers={{ hasLog: loggedDays }}
+                  modifiersClassNames={{ hasLog: 'day-has-log' }}
+                  showOutsideDays
+                  fixedWeeks
+                />
+              </GlassCard>
+
+              {/* Day's existing logs */}
+              {currentDayLogs.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-widest pl-1 mt-2">
+                    Logs on {format(selectedDate, 'MMM d')}
+                  </p>
+                  {currentDayLogs.map(log => (
+                    <button
+                      key={log.id}
+                      onClick={() => handleEditLog(log.id)}
+                      className={`w-full text-left p-3 rounded-xl border flex items-center justify-between transition-colors ${
+                        editLogId === log.id
+                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                          : 'border-dark-border bg-dark-elevated text-dark-text hover:border-emerald-500/30'
+                      }`}
+                    >
+                      <div className="flex gap-4 font-bold text-sm tracking-wide">
+                        {log.pushup_reps > 0 && <span>💪 {log.pushup_reps}</span>}
+                        {log.plank_seconds > 0 && <span>🧘 {formatPlankTime(log.plank_seconds)}</span>}
+                        {Number(log.run_distance) > 0 && <span>🏃 {Number(log.run_distance)}km</span>}
+                      </div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider opacity-60">
+                        {editLogId === log.id ? 'EDITING' : 'EDIT'}
+                      </span>
+                    </button>
+                  ))}
+                  
+                  <button
+                    onClick={() => {
+                      setEditLogId(null);
+                      setPushupReps(0);
+                      setPlankSeconds(0);
+                      setRunDistance(0);
+                    }}
+                    className={`w-full p-2.5 rounded-xl border border-dashed text-xs font-bold tracking-wider transition-colors ${
+                      !editLogId ? 'border-emerald-500/50 text-emerald-500' : 'border-dark-border/60 text-dark-muted hover:text-emerald-500'
+                    }`}
+                  >
+                    + NEW ENTRY
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {editLogId && (
+          <div className="flex justify-between items-center bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20">
+            <span className="text-xs font-bold text-emerald-500 tracking-wider">EDITING LOG</span>
             <button
               onClick={() => {
                 setEditLogId(null);
-                setSubmitError(null);
                 setPushupReps(0);
                 setPlankSeconds(0);
                 setRunDistance(0);
               }}
-              className="px-3 py-1 rounded-lg text-[10px] font-bold text-red-400 bg-red-500/10 border border-red-500/20"
+              className="text-[10px] font-black text-red-400 hover:text-red-300 transition-colors uppercase tracking-widest"
             >
               CANCEL
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Quick Log Presets */}
         {!editLogId && pushupReps === 0 && plankSeconds === 0 && runDistance === 0 && (

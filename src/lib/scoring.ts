@@ -33,7 +33,7 @@ export interface ScoringConfig {
 }
 
 export const PUSHUP_CONFIG: ScoringConfig = {
-  baseRate: 1.5,
+  baseRate: 1.2,
   acceleration: 0.08,
   name: 'Push-ups',
   unit: 'reps',

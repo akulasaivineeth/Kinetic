@@ -44,6 +44,7 @@ export function useNotifications() {
         .from('notifications')
         .select('*')
         .eq('user_id', user.id)
+        .is('is_hidden', false)
         .order('created_at', { ascending: false })
         .limit(50);
       if (error) throw error;
@@ -65,9 +66,24 @@ export function useMarkNotificationRead() {
         .eq('id', notificationId);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+}
+
+export function useMarkMultipleNotificationsRead() {
+  const queryClient = useQueryClient();
+  const supabase = createClient();
+
+  return useMutation({
+    mutationFn: async (notificationIds: string[]) => {
+      if (!notificationIds.length) return;
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read: true })
+        .in('id', notificationIds);
+      if (error) throw error;
     },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
   });
 }
 
@@ -83,11 +99,47 @@ export function useMarkAllNotificationsRead() {
         .from('notifications')
         .update({ read: true })
         .eq('user_id', user.id)
-        .eq('read', false);
+        .eq('read', false)
+        .is('is_hidden', false);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+}
+
+export function useClearNotifications() {
+  const queryClient = useQueryClient();
+  const supabase = createClient();
+
+  return useMutation({
+    mutationFn: async (notificationIds: string[]) => {
+      if (!notificationIds.length) return;
+      // Soft-delete by setting is_hidden = true
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_hidden: true })
+        .in('id', notificationIds);
+      if (error) throw error;
     },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+}
+
+export function useClearAllNotifications() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const supabase = createClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error('Not authenticated');
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_hidden: true })
+        .eq('user_id', user.id)
+        .is('is_hidden', false);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
   });
 }

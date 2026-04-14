@@ -73,19 +73,16 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-2">
-        {/* Dynamic rank badge */}
         {myRank > 0 && (
           <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-dark-elevated border border-dark-border">
             <span className="text-emerald-500 text-xs font-bold">#{myRank}</span>
           </div>
         )}
 
-        {/* Notification bell */}
         <div className="relative" ref={dropdownRef}>
           <button
             type="button"
             aria-label="Open notifications"
-            data-testid="uat-notifications-toggle"
             onClick={() => setShowNotifications(!showNotifications)}
             className="w-10 h-10 rounded-xl bg-dark-elevated border border-dark-border flex items-center justify-center relative"
           >
@@ -104,126 +101,279 @@ export function Header() {
             )}
           </button>
 
-          {/* Notification Dropdown */}
           <AnimatePresence>
             {showNotifications && (
-              <motion.div
-                initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                className="absolute right-0 top-12 w-80 max-h-96 overflow-y-auto rounded-2xl glass-card-elevated border border-dark-border shadow-2xl z-50"
-              >
-                <div className="p-4 border-b border-white/5 flex items-center justify-between">
-                  <p className="text-xs font-bold tracking-wider text-dark-muted uppercase">
-                    NOTIFICATIONS
-                  </p>
-                  {unreadCount > 0 && (
-                    <button
-                      onClick={() => markAllRead.mutate()}
-                      className="text-[9px] font-bold tracking-wider text-emerald-500 hover:text-emerald-400 transition-colors uppercase"
-                    >
-                      MARK ALL READ
-                    </button>
-                  )}
-                </div>
-
-                {notifications.length === 0 ? (
-                  <div className="p-6 text-center">
-                    <p className="text-sm text-dark-muted">No notifications yet</p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-white/5">
-                    {notifications.slice(0, 20).map((notification: {
-                      id: string;
-                      type: string;
-                      title: string;
-                      body: string | null;
-                      read: boolean;
-                      data: Record<string, unknown>;
-                      created_at: string;
-                    }) => (
-                      <div
-                        key={notification.id}
-                        className={`p-4 ${!notification.read ? 'bg-emerald-500/5' : ''}`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
-                            !notification.read ? 'bg-emerald-500' : 'bg-dark-border'
-                          }`} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-dark-text">
-                              {notification.title}
-                            </p>
-                            {notification.body && (
-                              <p className="text-xs text-dark-muted mt-0.5 truncate">
-                                {notification.body}
-                              </p>
-                            )}
-                            <p className="text-[10px] text-dark-muted/50 mt-1">
-                              {new Date(notification.created_at).toLocaleDateString()}
-                            </p>
-
-                            {/* Sharing request: 3-button flow */}
-                            {notification.type === 'sharing_request' && !notification.read && (
-                              <div className="flex gap-2 mt-3">
-                                <button
-                                  onClick={() => handleSharingResponse(
-                                    notification.data?.connection_id as string,
-                                    'accept',
-                                    notification.id
-                                  )}
-                                  className="flex-1 px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-500 text-[10px] font-bold tracking-wider"
-                                >
-                                  ACCEPT
-                                </button>
-                                <button
-                                  onClick={() => handleSharingResponse(
-                                    notification.data?.connection_id as string,
-                                    'accept_mutual',
-                                    notification.id
-                                  )}
-                                  className="flex-1 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold tracking-wider"
-                                >
-                                  ACCEPT & SHARE MUTUAL
-                                </button>
-                                <button
-                                  onClick={() => handleSharingResponse(
-                                    notification.data?.connection_id as string,
-                                    'reject',
-                                    notification.id
-                                  )}
-                                  className="px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold tracking-wider"
-                                >
-                                  REJECT
-                                </button>
-                              </div>
-                            )}
-
-                            {/* Whoop workout: tap to navigate to log */}
-                            {notification.type === 'whoop_workout' && (
-                              <Link
-                                href={`/log?activity=${encodeURIComponent(String(notification.data?.activity || ''))}&duration=${notification.data?.duration || ''}&strain=${notification.data?.strain || ''}`}
-                                onClick={() => {
-                                  if (!notification.read) markRead.mutate(notification.id);
-                                  setShowNotifications(false);
-                                }}
-                                className="inline-block mt-2 px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-500 text-[10px] font-bold tracking-wider"
-                              >
-                                TAP TO LOG →
-                              </Link>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </motion.div>
+              <NotificationDropdown
+                notifications={notifications}
+                unreadCount={unreadCount}
+                onClose={() => setShowNotifications(false)}
+                markAllRead={markAllRead}
+                markRead={markRead}
+                respondToSharing={handleSharingResponse}
+              />
             )}
           </AnimatePresence>
         </div>
       </div>
     </header>
+  );
+}
+
+// Sub-component to manage the dropdown's complex state cleanly without polluting the Header
+import {
+  useClearNotifications,
+  useClearAllNotifications,
+  useMarkMultipleNotificationsRead
+} from '@/hooks/use-notifications';
+
+function NotificationDropdown({
+  notifications,
+  unreadCount,
+  onClose,
+  markAllRead,
+  markRead,
+  respondToSharing
+}: {
+  notifications: any[];
+  unreadCount: number;
+  onClose: () => void;
+  markAllRead: any;
+  markRead: any;
+  respondToSharing: (connId: string, action: any, notifId: string) => void;
+}) {
+  const [manageMode, setManageMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const clearMultiple = useClearNotifications();
+  const clearAll = useClearAllNotifications();
+  const markMultipleRead = useMarkMultipleNotificationsRead();
+
+  const toggleSelect = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === notifications.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(notifications.map(n => n.id)));
+    }
+  };
+
+  const handleClearSelected = async () => {
+    if (selectedIds.size === 0) return;
+    await clearMultiple.mutateAsync(Array.from(selectedIds));
+    setSelectedIds(new Set());
+    if (notifications.length === selectedIds.size) {
+      setManageMode(false);
+    }
+  };
+
+  const handleMarkSelectedRead = async () => {
+    if (selectedIds.size === 0) return;
+    await markMultipleRead.mutateAsync(Array.from(selectedIds));
+    setSelectedIds(new Set());
+  };
+
+  const handleClearAll = async () => {
+    await clearAll.mutateAsync();
+    setManageMode(false);
+    setSelectedIds(new Set());
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -10, scale: 0.95 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+      className="absolute right-0 top-12 w-80 sm:w-96 max-h-[28rem] overflow-hidden flex flex-col rounded-2xl glass-card-elevated border border-dark-border shadow-2xl z-50 pt-2"
+    >
+      <div className="px-4 pb-2 border-b border-white/5 flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-bold tracking-wider text-dark-text uppercase flex items-center gap-2">
+            NOTIFICATIONS
+            {notifications.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded bg-white/10 text-[9px] text-dark-muted">
+                {notifications.length}
+              </span>
+            )}
+          </p>
+          {notifications.length > 0 && (
+            <button
+              onClick={() => {
+                setManageMode(!manageMode);
+                setSelectedIds(new Set());
+              }}
+              className="text-[10px] font-bold tracking-wider text-dark-muted hover:text-white transition-colors uppercase"
+            >
+              {manageMode ? 'DONE' : 'MANAGE'}
+            </button>
+          )}
+        </div>
+        
+        {manageMode && (
+          <div className="flex items-center justify-between pt-1 pb-1">
+            <button
+              onClick={handleSelectAll}
+              className="text-[10px] font-bold text-dark-muted hover:text-white transition-colors"
+            >
+              {selectedIds.size === notifications.length ? 'DESELECT ALL' : 'SELECT ALL'}
+            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={handleMarkSelectedRead}
+                disabled={selectedIds.size === 0}
+                className="text-[10px] font-bold text-emerald-500 disabled:opacity-30 disabled:text-dark-muted transition-colors"
+              >
+                READ SELECTED
+              </button>
+              <button
+                onClick={handleClearSelected}
+                disabled={selectedIds.size === 0}
+                className="text-[10px] font-bold text-red-400 disabled:opacity-30 disabled:text-dark-muted transition-colors"
+              >
+                CLEAR SELECTED
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="overflow-y-auto flex-1 min-h-24">
+        {notifications.length === 0 ? (
+          <div className="p-8 text-center flex flex-col items-center gap-3">
+            <div className="w-12 h-12 rounded-full border border-dark-border flex items-center justify-center opacity-50">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-dark-muted" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+            </div>
+            <p className="text-xs text-dark-muted font-medium">All caught up!</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-white/5">
+            {notifications.map((notification) => (
+              <div
+                key={notification.id}
+                className={`p-4 transition-colors ${
+                  !notification.read ? 'bg-emerald-500/5' : ''
+                } ${manageMode && selectedIds.has(notification.id) ? 'bg-white/5' : ''}`}
+                onClick={() => {
+                  if (manageMode) toggleSelect(notification.id);
+                }}
+              >
+                <div className="flex items-start gap-3">
+                  {manageMode ? (
+                    <div className="mt-1 flex-shrink-0">
+                      <div className={`w-4 h-4 rounded border flex items-center justify-center ${
+                        selectedIds.has(notification.id) 
+                          ? 'bg-emerald-500 border-emerald-500 text-black' 
+                          : 'border-dark-muted/50'
+                      }`}>
+                        {selectedIds.has(notification.id) && (
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                          </svg>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
+                      !notification.read ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-dark-border'
+                    }`} />
+                  )}
+                  
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-dark-text tracking-tight">
+                      {notification.title}
+                    </p>
+                    {notification.body && (
+                      <p className="text-xs text-dark-muted mt-0.5 line-clamp-2 leading-relaxed">
+                        {notification.body}
+                      </p>
+                    )}
+                    <p className="text-[10px] text-dark-muted/40 mt-1.5 font-medium tracking-wider uppercase">
+                      {new Date(notification.created_at).toLocaleDateString(undefined, {
+                        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+                      })}
+                    </p>
+
+                    {/* Sharing request actions */}
+                    {notification.type === 'sharing_request' && !notification.read && !manageMode && (
+                      <div className="flex gap-2 mt-3">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            respondToSharing(notification.data?.connection_id as string, 'accept', notification.id);
+                          }}
+                          className="flex-1 px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-500 text-[10px] font-bold tracking-wider"
+                        >
+                          ACCEPT
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            respondToSharing(notification.data?.connection_id as string, 'accept_mutual', notification.id);
+                          }}
+                          className="flex-1 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold tracking-wider"
+                        >
+                          SHARE MUTUAL
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            respondToSharing(notification.data?.connection_id as string, 'reject', notification.id);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold tracking-wider"
+                        >
+                          REJECT
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Whoop workout actions */}
+                    {notification.type === 'whoop_workout' && !manageMode && (
+                      <Link
+                        href={`/log?activity=${encodeURIComponent(String(notification.data?.activity || ''))}&duration=${notification.data?.duration || ''}&strain=${notification.data?.strain || ''}`}
+                        onClick={() => {
+                          if (!notification.read) markRead.mutate(notification.id);
+                          onClose();
+                        }}
+                        className="inline-block mt-2 px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-500 text-[10px] font-bold tracking-wider hover:bg-emerald-500/25 transition-colors"
+                      >
+                        TAP TO LOG →
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      
+      {/* Footer Bulk Actions */}
+      {!manageMode && notifications.length > 0 && (
+        <div className="p-2 border-t border-white/5 flex gap-2 bg-dark-background/50">
+          <button
+            onClick={() => handleClearAll()}
+            className="flex-1 py-2 text-[10px] font-bold tracking-widest text-dark-muted hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+          >
+            CLEAR ALL
+          </button>
+          <button
+            onClick={() => markAllRead.mutate()}
+            disabled={unreadCount === 0}
+            className="flex-1 py-2 text-[10px] font-bold tracking-widest text-dark-text disabled:opacity-30 hover:bg-white/5 rounded-lg transition-colors"
+          >
+            READ ALL
+          </button>
+        </div>
+      )}
+    </motion.div>
   );
 }
