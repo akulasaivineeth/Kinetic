@@ -65,7 +65,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    return () => subscription.unsubscribe();
+    // PWA Lifecycle Fix: When waking from background after >1 hour, the session token naturally expires
+    // because OS suspends the background JS timer. We must manually prod Supabase to refresh it.
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        try {
+          // getSession() automatically triggers a silent refresh if the token is expired
+          await supabase.auth.getSession();
+        } catch {
+          // Silent catch to handle if phone wakes up momentarily without network
+        }
+      }
+    };
+    
+    // Add both visibility change and classic focus (for iOS PWA quirks)
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+      subscription.unsubscribe();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
