@@ -48,6 +48,28 @@ export function useLeaderboard(
           queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'sharing_connections',
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'sharing_connections',
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+        }
+      )
       .subscribe();
 
     return () => {
