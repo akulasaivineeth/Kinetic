@@ -57,6 +57,7 @@ export interface WorkoutLog {
   notes: string | null;
   is_draft: boolean;
   submitted_at: string | null;
+  session_score: number;
   created_at: string;
   updated_at: string;
 }

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/providers/auth-provider';
 import type { WorkoutLog, WeeklyVolume } from '@/types/database';
 import { startOfWeek, endOfWeek, subMonths, subWeeks, startOfMonth, endOfMonth } from 'date-fns';
+import { calculateSessionScore } from '@/lib/scoring';
 import { get, set, del } from 'idb-keyval';
 import { useEffect, useCallback } from 'react';
 
@@ -77,6 +78,51 @@ export function useWorkoutLogs(dateRange: DateRange, customFrom?: Date, customTo
     },
     enabled: !!user,
   });
+}
+
+// ─── Month-scoped logs for calendar ─────────────────────────────────────────
+
+/**
+ * Fetch all submitted logs for a given month (used by the calendar DayPicker).
+ */
+export function useMonthLogs(month: Date) {
+  const { user } = useAuth();
+  const supabase = createClient();
+  const from = startOfMonth(month);
+  const to = endOfMonth(month);
+
+  return useQuery({
+    queryKey: ['month-logs', user?.id, from.toISOString()],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from('workout_logs')
+        .select('*')
+        .eq('user_id', user.id)
+        .not('submitted_at', 'is', null)
+        .gte('logged_at', from.toISOString())
+        .lte('logged_at', to.toISOString())
+        .order('logged_at', { ascending: false });
+      if (error) throw error;
+      return data as WorkoutLog[];
+    },
+    enabled: !!user,
+  });
+}
+
+/**
+ * Build a Map from ISO date-string (YYYY-MM-DD) → logs for that date.
+ * Enables O(1) calendar-day lookups.
+ */
+export function dateToLogsMap(logs: WorkoutLog[]): Map<string, WorkoutLog[]> {
+  const map = new Map<string, WorkoutLog[]>();
+  for (const log of logs) {
+    const key = log.logged_at.slice(0, 10); // YYYY-MM-DD
+    const arr = map.get(key) || [];
+    arr.push(log);
+    map.set(key, arr);
+  }
+  return map;
 }
 
 export function useDraftLog() {
@@ -168,6 +214,21 @@ export function useSubmitLog() {
       if (!logId) throw new Error('No log id provided for submission');
       if (!user) throw new Error('Not authenticated');
 
+      // First, fetch the log to calculate the session score
+      const { data: draftData } = await supabase
+        .from('workout_logs')
+        .select('pushup_reps, plank_seconds, run_distance')
+        .eq('id', logId)
+        .single();
+
+      // Calculate difficulty-based session score
+      const { totalPts } = calculateSessionScore(
+        draftData?.pushup_reps || 0,
+        draftData?.plank_seconds || 0,
+        Number(draftData?.run_distance || 0)
+      );
+
+      // Submit the log (core fields only — guaranteed to work)
       const { data, error } = await supabase
         .from('workout_logs')
         .update({
@@ -178,8 +239,19 @@ export function useSubmitLog() {
         .eq('id', logId)
         .select()
         .single();
-      
+
       if (error) throw error;
+
+      // Write session_score separately (non-blocking if PostgREST hasn't reloaded schema)
+      try {
+        await supabase
+          .from('workout_logs')
+          .update({ session_score: totalPts } as Record<string, unknown>)
+          .eq('id', logId);
+      } catch {
+        // Score will be backfilled by server-side calc_session_score if this fails
+        console.warn('session_score update deferred — PostgREST schema cache stale');
+      }
 
       // Clean up local draft after successful submission
       await del(`draft-log-${user.id}`);
@@ -235,6 +307,27 @@ export function useUpdateSubmittedLog() {
       patch: Partial<Pick<WorkoutLog, 'pushup_reps' | 'plank_seconds' | 'run_distance' | 'notes' | 'photo_url'>>;
     }) => {
       if (!user) throw new Error('Not authenticated');
+
+      // Recalculate session score if any metric field changed
+      let sessionScore: number | undefined;
+      if ('pushup_reps' in patch || 'plank_seconds' in patch || 'run_distance' in patch) {
+        // Fetch current log to merge with patch
+        const { data: currentLog } = await supabase
+          .from('workout_logs')
+          .select('pushup_reps, plank_seconds, run_distance')
+          .eq('id', logId)
+          .single();
+        if (currentLog) {
+          const merged = { ...currentLog, ...patch };
+          const { totalPts } = calculateSessionScore(
+            merged.pushup_reps || 0,
+            merged.plank_seconds || 0,
+            Number(merged.run_distance || 0)
+          );
+          sessionScore = totalPts;
+        }
+      }
+
       const { data, error } = await supabase
         .from('workout_logs')
         .update({
@@ -247,6 +340,19 @@ export function useUpdateSubmittedLog() {
         .select()
         .single();
       if (error) throw error;
+
+      // Write session_score separately (non-blocking)
+      if (sessionScore !== undefined) {
+        try {
+          await supabase
+            .from('workout_logs')
+            .update({ session_score: sessionScore } as Record<string, unknown>)
+            .eq('id', logId);
+        } catch {
+          console.warn('session_score update deferred');
+        }
+      }
+
       return data as WorkoutLog;
     },
     onSuccess: () => {

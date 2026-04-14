@@ -31,5 +31,21 @@ export async function persistNewMilestoneUnlocks(
       data: { milestone_key: key, label: m.label, emoji: m.emoji },
     });
     if (nErr) console.error('milestone notification:', nErr.message);
+
+    // Push notification to mobile
+    try {
+      await fetch('/api/push/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          title: `Milestone Unlocked ${m.emoji}`,
+          body: m.label,
+          data: { url: '/dashboard' },
+        }),
+      });
+    } catch {
+      // Push is best-effort
+    }
   }
 }

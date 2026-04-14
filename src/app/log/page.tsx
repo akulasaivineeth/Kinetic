@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { AppShell } from '@/components/layout/app-shell';
 import { GlassCard } from '@/components/ui/glass-card';
@@ -12,19 +12,21 @@ import {
   useDraftLog,
   useSaveDraft,
   useSubmitLog,
-  useRecentSubmittedLogs,
   useUpdateSubmittedLog,
+  useMonthLogs,
+  dateToLogsMap,
 } from '@/hooks/use-workout-logs';
 import { formatPlankTime } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
+import { format, isSameDay, startOfDay } from 'date-fns';
 import { useAllTimeStats } from '@/hooks/use-alltime-stats';
 import { Confetti } from '@/components/ui/confetti';
-import { resizeImage } from '@/lib/image-resize';
 import { checkNewMilestones, type Milestone } from '@/lib/milestones';
 import { persistNewMilestoneUnlocks } from '@/lib/milestone-persistence';
+import { calculateSessionScore } from '@/lib/scoring';
+import { DayPicker } from 'react-day-picker';
 
 export default function LogPageWrapper() {
   return (
@@ -42,7 +44,6 @@ function LogPage() {
   const { data: goals } = useGoals();
   const { data: weeklyVolume } = useWeeklyVolume();
   const { data: draft } = useDraftLog();
-  const { data: recentLogs = [] } = useRecentSubmittedLogs();
   const saveDraft = useSaveDraft();
   const submitLog = useSubmitLog();
   const updateSubmittedLog = useUpdateSubmittedLog();
@@ -56,8 +57,6 @@ function LogPage() {
   const [pushupReps, setPushupReps] = useState(0);
   const [plankSeconds, setPlankSeconds] = useState(0);
   const [runDistance, setRunDistance] = useState(0);
-  const [notes, setNotes] = useState('');
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -67,8 +66,14 @@ function LogPage() {
   const [editLogId, setEditLogId] = useState<string | null>(null);
   const [submitLabel, setSubmitLabel] = useState<'submit' | 'update'>('submit');
   const [pbCelebration, setPbCelebration] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Calendar state
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
+  const { data: monthLogs = [] } = useMonthLogs(calendarMonth);
+  const logsMap = useMemo(() => dateToLogsMap(monthLogs), [monthLogs]);
+
   // Whoop import fallback
   const handleWhoopImport = async () => {
     setIsImporting(true);
@@ -97,7 +102,7 @@ function LogPage() {
       setDraftId(draft.id);
       setPushupReps(draft.pushup_reps || 0);
       setPlankSeconds(draft.plank_seconds || 0);
-      
+
       // Denormalize: KM to MI if user is in Imperial mode
       const km = Number(draft.run_distance) || 0;
       if (profile?.unit_preference === 'imperial') {
@@ -105,9 +110,6 @@ function LogPage() {
       } else {
         setRunDistance(km);
       }
-      
-      setNotes(draft.notes || '');
-      setPhotoUrl(draft.photo_url || null);
     }
   }, [draft, profile?.unit_preference, editLogId]);
 
@@ -116,8 +118,8 @@ function LogPage() {
     if (!user) return;
     if (editLogId) return; // Never autosave as draft while editing a submitted log.
     // Normalize: MI to KM if user is in Imperial mode
-    const finalRunDist = profile?.unit_preference === 'imperial' 
-      ? Number((runDistance * 1.60934).toFixed(3)) 
+    const finalRunDist = profile?.unit_preference === 'imperial'
+      ? Number((runDistance * 1.60934).toFixed(3))
       : runDistance;
 
     saveDraft.mutate({
@@ -125,8 +127,7 @@ function LogPage() {
       pushup_reps: pushupReps,
       plank_seconds: plankSeconds,
       run_distance: finalRunDist,
-      notes,
-      photo_url: photoUrl,
+      logged_at: selectedDate.toISOString(),
       whoop_activity_type: whoopActivity || undefined,
       whoop_strain: whoopStrain ? parseFloat(whoopStrain) : undefined,
       whoop_duration_seconds: whoopDuration ? parseInt(whoopDuration) * 60 : undefined,
@@ -135,7 +136,7 @@ function LogPage() {
         if (data && !draftId) setDraftId(data.id);
       },
     });
-  }, [user, editLogId, profile?.unit_preference, draftId, pushupReps, plankSeconds, runDistance, notes, photoUrl, whoopActivity, whoopStrain, whoopDuration, saveDraft]);
+  }, [user, editLogId, profile?.unit_preference, draftId, pushupReps, plankSeconds, runDistance, selectedDate, whoopActivity, whoopStrain, whoopDuration, saveDraft]);
 
   useEffect(() => {
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
@@ -143,31 +144,38 @@ function LogPage() {
     return () => {
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     };
-  }, [pushupReps, plankSeconds, runDistance, notes, autoSave]);
+  }, [pushupReps, plankSeconds, runDistance, autoSave]);
 
-  // Photo upload
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
+  // Handle day selection from calendar
+  const handleDaySelect = (day: Date | undefined) => {
+    if (!day) return;
+    const dateKey = format(day, 'yyyy-MM-dd');
+    const logsForDay = logsMap.get(dateKey);
 
-    let uploadFile: Blob | File = file;
-    try {
-      uploadFile = await resizeImage(file, 1200, 1200, 0.8);
-    } catch {
-      /* fall through to original file */
-    }
+    setSelectedDate(startOfDay(day));
+    setSubmitted(false);
+    setSubmitError(null);
 
-    const supabase = createClient();
-    const fileName = `${user.id}/${Date.now()}-${file.name}`;
-    const { data, error } = await supabase.storage
-      .from('workout-photos')
-      .upload(fileName, uploadFile);
-
-    if (!error && data) {
-      const { data: urlData } = supabase.storage
-        .from('workout-photos')
-        .getPublicUrl(data.path);
-      setPhotoUrl(urlData.publicUrl);
+    if (logsForDay && logsForDay.length > 0) {
+      // Load the most recent log for that day
+      const target = logsForDay[0];
+      setEditLogId(target.id);
+      setDraftId(null);
+      setPushupReps(target.pushup_reps || 0);
+      setPlankSeconds(target.plank_seconds || 0);
+      const km = Number(target.run_distance) || 0;
+      setRunDistance(
+        profile?.unit_preference === 'imperial'
+          ? Number((km * 0.621371).toFixed(1))
+          : km
+      );
+    } else {
+      // New entry for that day
+      setEditLogId(null);
+      setDraftId(null);
+      setPushupReps(0);
+      setPlankSeconds(0);
+      setRunDistance(0);
     }
   };
 
@@ -182,7 +190,7 @@ function LogPage() {
         : runDistance;
 
       if (editLogId) {
-        const oldLog = recentLogs.find((r) => r.id === editLogId);
+        const oldLog = monthLogs.find((r) => r.id === editLogId);
         if (!oldLog) throw new Error('Could not load log to update');
 
         await updateSubmittedLog.mutateAsync({
@@ -191,8 +199,6 @@ function LogPage() {
             pushup_reps: pushupReps,
             plank_seconds: plankSeconds,
             run_distance: finalRunDist,
-            notes,
-            photo_url: photoUrl,
           },
         });
 
@@ -240,7 +246,7 @@ function LogPage() {
 
         setSubmitted(true);
         setSubmitLabel('update');
-        router.push('/dashboard');
+        queryClient.invalidateQueries({ queryKey: ['month-logs'] });
         return;
       }
 
@@ -252,8 +258,7 @@ function LogPage() {
           pushup_reps: pushupReps,
           plank_seconds: plankSeconds,
           run_distance: finalRunDist,
-          notes,
-          photo_url: photoUrl,
+          logged_at: selectedDate.toISOString(),
           whoop_activity_type: whoopActivity || undefined,
           whoop_strain: whoopStrain ? parseFloat(whoopStrain) : undefined,
           whoop_duration_seconds: whoopDuration ? parseInt(whoopDuration) * 60 : undefined,
@@ -303,42 +308,35 @@ function LogPage() {
         await new Promise((r) => setTimeout(r, 2000));
       }
 
+      // Session score celebration
+      const { totalPts, pushupPts, plankPts, runPts } = calculateSessionScore(
+        pushupReps,
+        plankSeconds,
+        finalRunDist
+      );
+      if (totalPts > 0) {
+        const parts = [
+          pushupPts > 0 ? `💪${Math.round(pushupPts)}` : '',
+          plankPts > 0 ? `🧘${Math.round(plankPts)}` : '',
+          runPts > 0 ? `🏃${Math.round(runPts)}` : '',
+        ].filter(Boolean).join(' + ');
+        setPbCelebration(`⚡ ${Math.round(totalPts)} PTS (${parts})`);
+        await new Promise((r) => setTimeout(r, 2500));
+      }
+
       setSubmitted(true);
       setSubmitLabel('submit');
       setPushupReps(0);
       setPlankSeconds(0);
       setRunDistance(0);
-      setNotes('');
-      setPhotoUrl(null);
       setDraftId(null);
-      router.push('/dashboard');
+      queryClient.invalidateQueries({ queryKey: ['month-logs'] });
     } catch (err) {
       console.error('Submit failed:', err);
       setSubmitError(err instanceof Error ? err.message : 'Failed to save log');
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleEditRecent = (logId: string) => {
-    const target = recentLogs.find((r) => r.id === logId);
-    if (!target) return;
-
-    setEditLogId(target.id);
-    setDraftId(null);
-    setSubmitted(false);
-    setSubmitError(null);
-
-    setPushupReps(target.pushup_reps || 0);
-    setPlankSeconds(target.plank_seconds || 0);
-    const km = Number(target.run_distance) || 0;
-    setRunDistance(
-      profile?.unit_preference === 'imperial'
-        ? Number((km * 0.621371).toFixed(1))
-        : km
-    );
-    setNotes(target.notes || '');
-    setPhotoUrl(target.photo_url || null);
   };
 
   // Computed values
@@ -353,10 +351,108 @@ function LogPage() {
   const displayRunDist = profile?.unit_preference === 'imperial' ? totalRunDist * 0.621371 : totalRunDist;
   const unitLabel = profile?.unit_preference === 'imperial' ? 'MI' : 'KM';
 
+  // Days with logs for calendar highlighting
+  const loggedDays = useMemo(() => {
+    return Array.from(logsMap.keys()).map((dateStr) => new Date(dateStr + 'T12:00:00'));
+  }, [logsMap]);
+
+  const isToday = isSameDay(selectedDate, new Date());
+
   return (
     <AppShell>
       <Confetti active={!!pbCelebration} message={pbCelebration || undefined} />
-      <div className="max-w-md mx-auto px-6 space-y-6 pt-2 pb-32">
+      <div className="max-w-md mx-auto px-6 space-y-5 pt-2 pb-32">
+
+        {/* Calendar */}
+        <GlassCard className="!p-3" delay={0}>
+          <style>{`
+            .kinetic-cal {
+              --rdp-accent-color: #10B981;
+              --rdp-background-color: rgba(16,185,129,0.12);
+              width: 100%;
+              font-family: inherit;
+            }
+            .kinetic-cal .rdp-months { width: 100%; }
+            .kinetic-cal .rdp-month { width: 100%; }
+            .kinetic-cal .rdp-month_caption { 
+              font-size: 14px; font-weight: 800; 
+              color: var(--color-dark-text, #f5f5f7); 
+              letter-spacing: 0.08em; text-transform: uppercase;
+              padding: 4px 0 8px;
+            }
+            .kinetic-cal .rdp-weekday { 
+              font-size: 10px; font-weight: 700; 
+              color: #636366; letter-spacing: 0.1em;
+              text-transform: uppercase;
+            }
+            .kinetic-cal .rdp-day {
+              width: 36px; height: 36px;
+              font-size: 13px; font-weight: 600;
+              color: #a1a1a6; border-radius: 10px;
+              transition: all 0.15s ease;
+            }
+            .kinetic-cal .rdp-day:hover { background: rgba(255,255,255,0.06); }
+            .kinetic-cal .rdp-today { color: #10B981 !important; font-weight: 800; }
+            .kinetic-cal .rdp-selected .rdp-day_button {
+              background: #10B981 !important; color: #000 !important; 
+              font-weight: 900; border-radius: 10px;
+            }
+            .kinetic-cal .rdp-chevron { fill: #636366; }
+            .kinetic-cal .day-has-log { position: relative; }
+            .kinetic-cal .day-has-log::after {
+              content: ''; position: absolute; bottom: 3px; left: 50%;
+              transform: translateX(-50%);
+              width: 4px; height: 4px; border-radius: 50%; 
+              background: #10B981;
+            }
+            .kinetic-cal .rdp-nav { gap: 4px; }
+            .kinetic-cal .rdp-button_previous,
+            .kinetic-cal .rdp-button_next {
+              width: 28px; height: 28px; border-radius: 8px;
+              background: rgba(255,255,255,0.04);
+              border: 1px solid rgba(255,255,255,0.08);
+            }
+          `}</style>
+          <DayPicker
+            className="kinetic-cal"
+            mode="single"
+            selected={selectedDate}
+            onSelect={handleDaySelect}
+            month={calendarMonth}
+            onMonthChange={setCalendarMonth}
+            modifiers={{ hasLog: loggedDays }}
+            modifiersClassNames={{ hasLog: 'day-has-log' }}
+            showOutsideDays
+            fixedWeeks
+          />
+        </GlassCard>
+
+        {/* Selected date header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase">
+              {editLogId ? 'EDITING LOG' : 'NEW LOG'}
+            </p>
+            <h2 className="text-lg font-black text-dark-text">
+              {isToday ? 'Today' : format(selectedDate, 'EEE, MMM d')}
+            </h2>
+          </div>
+          {editLogId && (
+            <button
+              onClick={() => {
+                setEditLogId(null);
+                setSubmitError(null);
+                setPushupReps(0);
+                setPlankSeconds(0);
+                setRunDistance(0);
+              }}
+              className="px-3 py-1 rounded-lg text-[10px] font-bold text-red-400 bg-red-500/10 border border-red-500/20"
+            >
+              CANCEL
+            </button>
+          )}
+        </div>
+
         {/* Quick Log Presets */}
         {!editLogId && pushupReps === 0 && plankSeconds === 0 && runDistance === 0 && (
           <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
@@ -380,23 +476,6 @@ function LogPage() {
             ))}
           </div>
         )}
-
-        {/* Current Session (Whoop prefill) */}
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-        >
-          <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase">
-            CURRENT SESSION
-          </p>
-          <h2 className="text-xl font-black mt-0.5">
-            {whoopActivity || 'Strength Trainer'} • {whoopDuration || '42'} min •{' '}
-            <span className="text-emerald-500 italic">
-              Strain {whoopStrain || '15.3'}
-            </span>
-          </h2>
-        </motion.div>
 
         {/* Whoop Import Fallback */}
         {profile?.whoop_access_token && (
@@ -423,45 +502,6 @@ function LogPage() {
           label={`${pushupGoal} reps goal`}
           remaining={`${Math.max(pushupGoal - totalPushups, 0)} remaining`}
         />
-
-        {/* Edit Submitted Logs */}
-        <GlassCard className="space-y-2" delay={0.05}>
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] font-semibold tracking-[0.15em] text-dark-muted uppercase">
-              EDIT SUBMITTED LOG
-            </p>
-            {editLogId && (
-              <button
-                onClick={() => {
-                  setEditLogId(null);
-                  setSubmitError(null);
-                }}
-                className="text-[10px] font-bold text-emerald-500"
-              >
-                CANCEL EDIT
-              </button>
-            )}
-          </div>
-          {recentLogs.length === 0 ? (
-            <p className="text-xs text-dark-muted">No submitted logs yet.</p>
-          ) : (
-            <div className="space-y-2">
-              {recentLogs.slice(0, 4).map((log) => (
-                <button
-                  key={log.id}
-                  onClick={() => handleEditRecent(log.id)}
-                  className={`w-full text-left px-3 py-2 rounded-xl border text-xs transition-colors ${
-                    editLogId === log.id
-                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
-                      : 'border-dark-border bg-dark-elevated text-dark-text'
-                  }`}
-                >
-                  {format(new Date(log.logged_at), 'MMM d, p')} • {log.pushup_reps} reps • {formatPlankTime(log.plank_seconds)}
-                </button>
-              ))}
-            </div>
-          )}
-        </GlassCard>
 
         {/* Push-up Reps Card */}
         <GlassCard className="relative" delay={0.1}>
@@ -541,59 +581,6 @@ function LogPage() {
             className="w-full text-center text-6xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors duration-200 py-4"
           />
         </GlassCard>
-
-        {/* Photo + Notes Row */}
-        <div className="grid grid-cols-2 gap-3">
-          {/* Photo Upload */}
-          <GlassCard
-            className="flex flex-col items-center justify-center min-h-[120px] cursor-pointer"
-            delay={0.4}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            {photoUrl ? (
-              <div
-                className="w-full h-full min-h-[100px] rounded-xl bg-cover bg-center relative"
-                style={{ backgroundImage: `url(${photoUrl})` }}
-              >
-                <div className="absolute inset-0 bg-black/40 rounded-xl flex items-center justify-center">
-                  <div className="text-center">
-                    <span className="text-2xl">📷</span>
-                    <p className="text-[10px] font-bold tracking-wider text-dark-text mt-1">
-                      CHANGE PHOTO
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center">
-                <span className="text-3xl">📷</span>
-                <p className="text-[10px] font-bold tracking-wider text-dark-muted mt-2">
-                  CHANGE PHOTO
-                </p>
-              </div>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handlePhotoUpload}
-            />
-          </GlassCard>
-
-          {/* Notes */}
-          <GlassCard className="min-h-[120px]" delay={0.4}>
-            <p className="text-[11px] font-semibold tracking-wider text-dark-muted uppercase mb-2">
-              NOTES
-            </p>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="How did it feel?"
-              className="w-full h-20 bg-transparent text-sm text-dark-text placeholder-dark-text/30 outline-none resize-none"
-            />
-          </GlassCard>
-        </div>
 
         {/* Submit Button */}
         <motion.button

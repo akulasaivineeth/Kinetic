@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/providers/auth-provider';
-import { useNotifications, useMarkNotificationRead } from '@/hooks/use-notifications';
+import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from '@/hooks/use-notifications';
 import { useRespondToSharing } from '@/hooks/use-sharing';
 import { useLeaderboard } from '@/hooks/use-leaderboard';
 import { getInitials } from '@/lib/utils';
@@ -14,6 +14,7 @@ export function Header() {
   const { profile } = useAuth();
   const { data: notifications = [] } = useNotifications();
   const markRead = useMarkNotificationRead();
+  const markAllRead = useMarkAllNotificationsRead();
   const respondToSharing = useRespondToSharing();
   const { data: leaderboard = [] } = useLeaderboard('week');
   const [showNotifications, setShowNotifications] = useState(false);
@@ -113,10 +114,18 @@ export function Header() {
                 transition={{ type: 'spring', stiffness: 300, damping: 25 }}
                 className="absolute right-0 top-12 w-80 max-h-96 overflow-y-auto rounded-2xl glass-card-elevated border border-dark-border shadow-2xl z-50"
               >
-                <div className="p-4 border-b border-white/5">
+                <div className="p-4 border-b border-white/5 flex items-center justify-between">
                   <p className="text-xs font-bold tracking-wider text-dark-muted uppercase">
                     NOTIFICATIONS
                   </p>
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={() => markAllRead.mutate()}
+                      className="text-[9px] font-bold tracking-wider text-emerald-500 hover:text-emerald-400 transition-colors uppercase"
+                    >
+                      MARK ALL READ
+                    </button>
+                  )}
                 </div>
 
                 {notifications.length === 0 ? (

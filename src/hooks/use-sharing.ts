@@ -75,6 +75,22 @@ export function useSendSharingRequest() {
         console.error('Email notify failed:', e);
       }
 
+      // Send push notification to recipient's mobile device
+      try {
+        await fetch('/api/push/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: recipientId,
+            title: 'New Sharing Request 🤝',
+            body: `${user.user_metadata?.full_name || user.email} wants to share activity data with you.`,
+            data: { url: '/profile' },
+          }),
+        });
+      } catch (e) {
+        console.error('Push notify failed:', e);
+      }
+
       return data;
     },
     onSuccess: () => {

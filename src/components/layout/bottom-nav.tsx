@@ -5,49 +5,70 @@ import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
+/**
+ * Apple-inspired bottom tab bar.
+ * The Log button is elegantly integrated — no floating FAB.
+ * Instead, it uses a subtle pill shape with a dumbbell icon and
+ * a gentle emerald accent, matching Apple's Fitness+ aesthetic.
+ */
+
 const navItems = [
   {
     href: '/dashboard',
-    label: 'DASHBOARD',
+    label: 'Pulse',
     icon: (active: boolean) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" className={active ? 'text-emerald-500' : 'text-dark-muted'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-        <polyline points="14,2 14,8 20,8" />
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+        stroke={active ? '#10B981' : '#636366'}>
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
       </svg>
     ),
   },
   {
     href: '/arena',
-    label: 'ARENA',
+    label: 'Arena',
     icon: (active: boolean) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" className={active ? 'text-emerald-500' : 'text-dark-muted'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="18" y1="20" x2="18" y2="10" />
-        <line x1="12" y1="20" x2="12" y2="4" />
-        <line x1="6" y1="20" x2="6" y2="14" />
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+        stroke={active ? '#10B981' : '#636366'}>
+        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 9 8 12 8s5-4 7.5-4a2.5 2.5 0 0 1 0 5H18" />
+        <path d="M18 13v-3H6v3" />
+        <path d="M6 13a6.002 6.002 0 0 0 12 0" />
+        <line x1="12" y1="19" x2="12" y2="22" />
+        <line x1="8" y1="22" x2="16" y2="22" />
       </svg>
     ),
   },
   {
     href: '/log',
-    label: 'LOG',
+    label: 'Log',
     isCenter: true,
     icon: (active: boolean) => (
       <div className={cn(
-        'w-12 h-12 rounded-full flex items-center justify-center -mt-4',
-        active ? 'emerald-gradient emerald-glow' : 'bg-emerald-500'
+        'w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-300',
+        active
+          ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
+          : 'bg-emerald-500/15 border border-emerald-500/30'
       )}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
+        {/* Dumbbell icon — feels more "fitness" than a generic + */}
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+          stroke={active ? '#000' : '#10B981'}
+          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M6.5 6.5h11" />
+          <path d="M6.5 17.5h11" />
+          <path d="M12 6.5v11" />
+          <rect x="3" y="8" width="3" height="8" rx="1" />
+          <rect x="18" y="8" width="3" height="8" rx="1" />
+          <rect x="1" y="10" width="2" height="4" rx="0.5" />
+          <rect x="21" y="10" width="2" height="4" rx="0.5" />
         </svg>
       </div>
     ),
   },
   {
     href: '/profile',
-    label: 'PROFILE',
+    label: 'Profile',
     icon: (active: boolean) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" className={active ? 'text-emerald-500' : 'text-dark-muted'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+        stroke={active ? '#10B981' : '#636366'}>
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
         <circle cx="12" cy="7" r="4" />
       </svg>
@@ -59,36 +80,43 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 glass-card border-t border-dark-border/60">
-      <div className="flex items-center justify-around px-4 py-2 pb-[max(8px,env(safe-area-inset-bottom))] max-w-lg mx-auto">
+    <nav className="fixed bottom-0 left-0 right-0 z-50"
+      style={{
+        background: 'rgba(18, 18, 20, 0.82)',
+        backdropFilter: 'saturate(180%) blur(20px)',
+        WebkitBackdropFilter: 'saturate(180%) blur(20px)',
+        borderTop: '1px solid rgba(255,255,255,0.08)',
+      }}
+    >
+      <div className="flex items-center justify-around px-2 pt-2 pb-[max(6px,env(safe-area-inset-bottom))] max-w-lg mx-auto">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link
               key={item.href}
               href={item.href}
-              className="flex flex-col items-center gap-1 relative min-w-[64px]"
+              className="flex flex-col items-center gap-0.5 relative min-w-[60px]"
             >
               <motion.div
-                whileTap={{ scale: 0.9 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                whileTap={{ scale: 0.85 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
               >
                 {item.icon(isActive)}
               </motion.div>
               <span
                 className={cn(
-                  'text-[10px] font-semibold tracking-wider',
-                  isActive ? 'text-emerald-500' : 'text-dark-muted',
-                  item.isCenter && '-mt-2'
+                  'text-[10px] font-medium',
+                  isActive ? 'text-emerald-500' : 'text-[#636366]',
+                  item.isCenter && 'mt-0.5'
                 )}
               >
                 {item.label}
               </span>
               {isActive && !item.isCenter && (
                 <motion.div
-                  layoutId="nav-indicator"
-                  className="absolute -top-2 w-1 h-1 rounded-full bg-emerald-500"
-                  transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                  layoutId="nav-dot"
+                  className="absolute -top-1 w-1 h-1 rounded-full bg-emerald-500"
+                  transition={{ type: 'spring', stiffness: 350, damping: 25 }}
                 />
               )}
             </Link>

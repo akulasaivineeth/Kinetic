@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, Suspense } from 'react';
+import { useState, useRef, Suspense, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { AppShell } from '@/components/layout/app-shell';
@@ -13,6 +13,8 @@ import { getInitials } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { resizeImage } from '@/lib/image-resize';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { SCORING_FAQ } from '@/lib/scoring';
+import { useQueryClient } from '@tanstack/react-query';
 
 function ProfilePageContent() {
   const { user, profile, signOut, refreshProfile } = useAuth();
@@ -30,6 +32,7 @@ function ProfilePageContent() {
   const [showGoals, setShowGoals] = useState(false);
   const [showSharing, setShowSharing] = useState(false);
   const [showInvites, setShowInvites] = useState(false);
+  const [showFaq, setShowFaq] = useState(false);
   const [shareEmail, setShareEmail] = useState('');
   const [shareConfirm, setShareConfirm] = useState(false);
   const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
@@ -39,6 +42,48 @@ function ProfilePageContent() {
   const [signingOut, setSigningOut] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
+
+  // Controlled goal state
+  const [goalDraft, setGoalDraft] = useState<Record<string, number>>({});
+  const [goalsSaved, setGoalsSaved] = useState(false);
+  const [goalsSaving, setGoalsSaving] = useState(false);
+
+  // Sync goal draft from server data when it loads
+  useEffect(() => {
+    if (goals && Object.keys(goalDraft).length === 0) {
+      setGoalDraft({
+        pushup_weekly_goal: goals.pushup_weekly_goal,
+        plank_weekly_goal: goals.plank_weekly_goal,
+        run_weekly_goal: goals.run_weekly_goal,
+        pushup_peak_goal: goals.pushup_peak_goal,
+        plank_peak_goal: goals.plank_peak_goal,
+        run_peak_goal: goals.run_peak_goal,
+      });
+    }
+  }, [goals, goalDraft]);
+
+  const handleSaveGoals = async () => {
+    setGoalsSaving(true);
+    setGoalsSaved(false);
+    try {
+      await updateGoals.mutateAsync(goalDraft);
+      // Invalidate dashboard queries so changes reflect immediately
+      queryClient.invalidateQueries({ queryKey: ['weekly-volume'] });
+      queryClient.invalidateQueries({ queryKey: ['stamina'] });
+      queryClient.invalidateQueries({ queryKey: ['goals'] });
+      setGoalsSaved(true);
+      setTimeout(() => setGoalsSaved(false), 2500);
+    } catch (e) {
+      console.error('Goal save failed:', e);
+    } finally {
+      setGoalsSaving(false);
+    }
+  };
+
+  const goalsDirty = goals && Object.keys(goalDraft).length > 0 && Object.entries(goalDraft).some(
+    ([key, val]) => val !== (goals as Record<string, unknown>)[key]
+  );
 
   // Avatar upload
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -384,23 +429,25 @@ function ProfilePageContent() {
               >
                 <div className="pt-2 space-y-2">
                   {[
-                    { label: 'Push-up Weekly Goal', key: 'pushup_weekly_goal' as const, value: goals.pushup_weekly_goal, suffix: 'reps' },
-                    { label: 'Plank Weekly Goal', key: 'plank_weekly_goal' as const, value: goals.plank_weekly_goal, suffix: 'sec' },
-                    { label: 'Run Weekly Goal', key: 'run_weekly_goal' as const, value: goals.run_weekly_goal, suffix: 'km' },
-                    { label: 'Push-up Peak Goal', key: 'pushup_peak_goal' as const, value: goals.pushup_peak_goal, suffix: 'reps' },
-                    { label: 'Plank Peak Goal', key: 'plank_peak_goal' as const, value: goals.plank_peak_goal, suffix: 'sec' },
-                    { label: 'Run Peak Goal', key: 'run_peak_goal' as const, value: goals.run_peak_goal, suffix: 'km' },
+                    { label: 'Push-up Weekly Goal', key: 'pushup_weekly_goal' as const, suffix: 'reps' },
+                    { label: 'Plank Weekly Goal', key: 'plank_weekly_goal' as const, suffix: 'sec' },
+                    { label: 'Run Weekly Goal', key: 'run_weekly_goal' as const, suffix: 'km' },
+                    { label: 'Push-up Peak Goal', key: 'pushup_peak_goal' as const, suffix: 'reps' },
+                    { label: 'Plank Peak Goal', key: 'plank_peak_goal' as const, suffix: 'sec' },
+                    { label: 'Run Peak Goal', key: 'run_peak_goal' as const, suffix: 'km' },
                   ].map((item) => (
                     <div key={item.key} className="flex items-center justify-between px-4 py-2 rounded-xl bg-dark-elevated/50">
                       <span className="text-xs text-dark-muted">{item.label}</span>
                       <div className="flex items-center gap-1">
                         <input
                           type="number"
-                          defaultValue={item.value}
-                          onBlur={(e) => {
+                          value={goalDraft[item.key] ?? ''}
+                          onChange={(e) => {
                             const val = parseFloat(e.target.value);
                             if (!isNaN(val)) {
-                              updateGoals.mutate({ [item.key]: val });
+                              setGoalDraft((prev) => ({ ...prev, [item.key]: val }));
+                            } else if (e.target.value === '') {
+                              setGoalDraft((prev) => ({ ...prev, [item.key]: 0 }));
                             }
                           }}
                           onWheel={(e) => (e.target as HTMLElement).blur()}
@@ -410,6 +457,22 @@ function ProfilePageContent() {
                       </div>
                     </div>
                   ))}
+
+                  {/* Save Goals Button */}
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={handleSaveGoals}
+                    disabled={goalsSaving || !goalsDirty}
+                    className={`w-full py-3 rounded-xl text-[11px] font-black tracking-widest uppercase transition-all ${
+                      goalsSaved
+                        ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-400'
+                        : goalsDirty
+                          ? 'emerald-gradient text-black shadow-lg shadow-emerald-500/20'
+                          : 'bg-dark-elevated border border-dark-border text-dark-muted'
+                    }`}
+                  >
+                    {goalsSaving ? 'SAVING...' : goalsSaved ? '✓ SAVED' : goalsDirty ? 'SAVE GOALS' : 'NO CHANGES'}
+                  </motion.button>
                 </div>
               </motion.div>
             )}
@@ -429,7 +492,7 @@ function ProfilePageContent() {
             </div>
             <div className="flex-1">
               <p className="text-sm font-semibold text-dark-text">Sharing</p>
-              <p className="text-[10px] text-dark-muted">{connections.filter((c: { status: string }) => c.status === 'accepted').length} active connections</p>
+              <p className="text-[10px] text-dark-muted">{connections.filter((c: { status: string; requester_id: string; recipient_id: string }) => c.status === 'accepted' || c.status === 'pending').length} connections ({connections.filter((c: { status: string }) => c.status === 'accepted').length} active, {connections.filter((c: { status: string }) => c.status === 'pending').length} pending)</p>
             </div>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2" strokeLinecap="round">
               <polyline points={showSharing ? "18 15 12 9 6 15" : "9 18 15 12 9 6"} />
@@ -557,6 +620,49 @@ function ProfilePageContent() {
               </AnimatePresence>
             </>
           )}
+        </div>
+
+        {/* FAQ / How Scoring Works */}
+        <div>
+          <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-3">
+            HELP & FAQ
+          </p>
+          <GlassCard
+            className="flex items-center gap-3 cursor-pointer"
+            delay={0.32}
+            onClick={() => setShowFaq(!showFaq)}
+          >
+            <div className="w-10 h-10 rounded-xl bg-dark-elevated flex items-center justify-center">
+              <span className="text-lg">❓</span>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-dark-text">How Scoring Works & FAQ</p>
+              <p className="text-[10px] text-dark-muted">Scoring tiers, streaks, milestones, and more</p>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2" strokeLinecap="round">
+              <polyline points={showFaq ? "18 15 12 9 6 15" : "9 18 15 12 9 6"} />
+            </svg>
+          </GlassCard>
+
+          <AnimatePresence>
+            {showFaq && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="pt-2 space-y-2">
+                  {SCORING_FAQ.map((faq, i) => (
+                    <div key={i} className="px-4 py-3 rounded-xl bg-dark-elevated/50">
+                      <p className="text-xs font-bold text-dark-text mb-1">{faq.question}</p>
+                      <p className="text-[11px] text-dark-muted leading-relaxed">{faq.answer}</p>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Data & Export */}

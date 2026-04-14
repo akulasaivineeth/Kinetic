@@ -20,6 +20,7 @@ import {
 } from 'recharts';
 import { format } from 'date-fns';
 import { Dumbbell, Timer, Route, Trophy } from 'lucide-react';
+import { calculateSessionScore } from '@/lib/scoring';
 
 type ArenaMetric = 'overall' | 'pushups' | 'plank' | 'run';
 
@@ -78,27 +79,6 @@ export default function ArenaPage() {
   const { data: sharedLogs = [] } = useSharedLogs(dateRange, customFrom, customTo);
   const { data: streak = 0 } = useStreak();
 
-  const handleExportCSV = () => {
-    if (!leaderboard.length) return;
-    const unit = profile?.unit_preference === 'imperial' ? 'MI' : 'KM';
-    const headers = ['Rank', 'Name', 'Push-ups', 'Plank (min)', `Run (${unit})`, 'Score'];
-    const rows = leaderboard.map((e, i) => [
-      i + 1,
-      e.full_name,
-      Math.round(e.pushup_value),
-      Math.round(e.plank_value / 60),
-      formatDistance(Number(e.run_value), profile?.unit_preference),
-      isOverall && fairMode ? `${e.total_score.toFixed(1)}%` : Math.round(getEntryValue(e, arenaMetric)),
-    ]);
-    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute("download", `kinetic_arena_${dateRange}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
 
   const top3 = leaderboard.slice(0, 3);
   const podiumOrder = top3.length >= 3
@@ -110,7 +90,14 @@ export default function ArenaPage() {
       case 'pushups': return log.pushup_reps || 0;
       case 'plank': return (log.plank_seconds || 0) / 60;
       case 'run': return Number(log.run_distance) || 0;
-      case 'overall': return (log.pushup_reps || 0) + (log.plank_seconds || 0) / 60 + (Number(log.run_distance) || 0) * 10;
+      case 'overall': {
+        const { totalPts } = calculateSessionScore(
+          log.pushup_reps || 0,
+          log.plank_seconds || 0,
+          Number(log.run_distance) || 0
+        );
+        return totalPts;
+      }
     }
   };
 
@@ -184,14 +171,6 @@ export default function ArenaPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              data-testid="uat-arena-export"
-              onClick={handleExportCSV}
-              className="px-3 py-1 rounded-full bg-dark-elevated border border-dark-border text-[9px] font-bold tracking-widest text-dark-muted hover:text-emerald-500 hover:border-emerald-500/30 transition-all uppercase"
-            >
-              EXPORT
-            </button>
             <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-dark-elevated border border-dark-border">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-emerald-500 text-[10px] font-bold tracking-wider">LIVE</span>
@@ -299,8 +278,8 @@ export default function ArenaPage() {
               {isOverall && (
                 <p className="text-[8px] text-dark-muted text-center mt-4 leading-relaxed">
                   {fairMode
-                    ? 'FAIR MODE: Ranked by avg % improvement vs prior period. A beginner who 5× their output outranks a veteran who doubles theirs.'
-                    : 'OVERALL score = push-ups + plank (min) + run (km) × 10. Switch to a single metric to compare raw values.'}
+                    ? 'FAIR MODE: Ranked by % improvement vs prior period. A beginner who doubles their output outranks a veteran who improves by 10%.'
+                    : 'OVERALL score = sum of session points. Each session earns tiered points per push-up rep, plank second, and run km — harder efforts earn more per unit. See FAQ in Profile.'}
                 </p>
               )}
             </>
