@@ -306,20 +306,7 @@ export default function DashboardPage() {
     <AppShell>
       {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
       <div className="max-w-md mx-auto px-6 space-y-6 pt-2 pb-32">
-        {/* System Status */}
-        <motion.div
-          data-testid="uat-dashboard-pulse"
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-        >
-          <p className="text-[10px] font-semibold tracking-[0.2em] text-emerald-500 uppercase">
-            SYSTEM STATUS
-          </p>
-          <h2 className="text-3xl font-black tracking-tight mt-1">
-            PULSE MODE
-          </h2>
-        </motion.div>
+
 
         {/* Section Header — All-Time Stats */}
         <div data-testid="uat-dashboard-arena-section">
@@ -464,25 +451,13 @@ export default function DashboardPage() {
         </div>
         )}
 
-        {/* Personal Trends Section */}
         <div className="pt-4" data-testid="uat-dashboard-trends">
-          <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-1">
-            DATA CLUSTER
-          </p>
-          <div className="flex items-end justify-between mb-4">
-            <h3 className="text-2xl font-black italic">
-              PERSONAL TRENDS
-            </h3>
-            <button
-              onClick={handleExportCSV}
-              className="px-3 py-1.5 rounded-xl bg-dark-elevated border border-dark-border text-[10px] font-bold tracking-wider text-dark-muted hover:text-emerald-500 hover:border-emerald-500/30 transition-all uppercase"
-            >
-              CSV EXPORT
-            </button>
-          </div>
+          <h3 className="text-2xl font-black italic mb-4">
+            PERSONAL TRENDS
+          </h3>
 
           {/* Date Range + Metric Toggles */}
-          <div className="space-y-2 mb-4">
+          <div className="space-y-4 mb-6">
             <DateRangeTabs
               motionScope="dash-trends-tabs"
               selected={trendDateRange}
@@ -492,20 +467,24 @@ export default function DashboardPage() {
                 setTrendCustomTo(to);
               }}
             />
-            <p className="text-[9px] font-semibold tracking-[0.15em] text-dark-muted uppercase">
-              Exercise
-            </p>
-            <TogglePills
-              motionScope="dash-trends-cat"
-              options={[
-                { value: 'pushups' as const, label: 'PUSH-UPS' },
-                { value: 'plank' as const, label: 'PLANK' },
-                { value: 'run' as const, label: 'RUN' },
-              ]}
-              selected={trendCategory}
-              onChange={setTrendCategory}
-              size="sm"
-            />
+            
+            <div>
+              <p className="text-[9px] font-semibold tracking-[0.15em] text-dark-muted uppercase mb-1">
+                Exercise
+              </p>
+              <TogglePills
+                motionScope="dash-trends-cat"
+                options={[
+                  { value: 'pushups' as const, label: 'PUSH-UPS' },
+                  { value: 'plank' as const, label: 'PLANK' },
+                  { value: 'run' as const, label: 'RUN' },
+                ]}
+                selected={trendCategory}
+                onChange={setTrendCategory}
+                size="sm"
+              />
+            </div>
+            
             <div className="flex flex-wrap gap-2">
               <TogglePills
                 motionScope="dash-trends-metric"

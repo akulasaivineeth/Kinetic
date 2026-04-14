@@ -488,29 +488,6 @@ function LogPage() {
           </div>
         )}
 
-        {/* Quick Log Presets */}
-        {!editLogId && pushupReps === 0 && plankSeconds === 0 && runDistance === 0 && (
-          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-            {[
-              { label: '50 push-ups', p: 50, pl: 0, r: 0 },
-              { label: '100 push-ups', p: 100, pl: 0, r: 0 },
-              { label: '2 min plank', p: 0, pl: 120, r: 0 },
-              { label: '5K run', p: 0, pl: 0, r: 5 },
-            ].map((preset) => (
-              <button
-                key={preset.label}
-                onClick={() => {
-                  if (preset.p) setPushupReps(preset.p);
-                  if (preset.pl) setPlankSeconds(preset.pl);
-                  if (preset.r) setRunDistance(preset.r);
-                }}
-                className="shrink-0 px-3 py-1.5 rounded-full bg-dark-elevated border border-dark-border text-[10px] font-bold tracking-wider text-dark-muted hover:text-emerald-500 hover:border-emerald-500/30 transition-all"
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-        )}
 
         {/* Whoop Import Fallback */}
         {profile?.whoop_access_token && (
@@ -530,14 +507,6 @@ function LogPage() {
           </div>
         )}
 
-        {/* Weekly Volume Progress Bar */}
-        <ProgressBar
-          value={totalPushups}
-          max={pushupGoal}
-          label={`${pushupGoal} reps goal`}
-          remaining={`${Math.max(pushupGoal - totalPushups, 0)} remaining`}
-        />
-
         {/* Push-up Reps Card */}
         <GlassCard className="relative" delay={0.1}>
           <div className="flex justify-end mb-1">
@@ -545,7 +514,7 @@ function LogPage() {
               {pushupGoal} GOAL • {Math.max(pushupGoal - totalPushups, 0)} LEFT
             </span>
           </div>
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-dark-muted text-center uppercase mb-3">
+          <p className="text-[11px] font-semibold tracking-[0.15em] text-dark-muted text-center uppercase mb-1">
             PUSH-UP REPS
           </p>
           <input
@@ -555,43 +524,39 @@ function LogPage() {
             onChange={(e) => setPushupReps(parseInt(e.target.value) || 0)}
             onWheel={(e) => (e.target as HTMLElement).blur()}
             placeholder="0"
-            className="w-full text-center text-6xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors duration-200 py-4"
+            className="w-full text-center text-5xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors duration-200 py-2"
           />
         </GlassCard>
 
-        {/* Plank Seconds Card */}
+        {/* Plank MM:SS Card */}
         <GlassCard className="relative" delay={0.2}>
           <div className="flex justify-end mb-1">
             <span className="text-[10px] font-bold tracking-wider text-emerald-500">
               {formatPlankTime(plankGoal)} GOAL • {formatPlankTime(Math.max(plankGoal - totalPlankSecs, 0))} LEFT
             </span>
           </div>
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-dark-muted text-center uppercase mb-3">
-            PLANK SECONDS
+          <p className="text-[11px] font-semibold tracking-[0.15em] text-dark-muted text-center uppercase mb-1">
+            PLANK TIME (MM:SS)
           </p>
-          <div className="flex items-center justify-center gap-1">
+          <div className="flex items-center justify-center relative">
             <input
-              type="number"
-              value={Math.floor(plankSeconds / 60) || ''}
+              type="text"
+              inputMode="numeric"
+              pattern="\d*"
+              value={plankSeconds ? `${Math.floor(plankSeconds / 60)}:${(plankSeconds % 60).toString().padStart(2, '0')}` : ''}
               onChange={(e) => {
-                const mins = parseInt(e.target.value) || 0;
-                setPlankSeconds(mins * 60 + (plankSeconds % 60));
+                const raw = e.target.value.replace(/\D/g, '');
+                if (!raw) {
+                  setPlankSeconds(0);
+                  return;
+                }
+                const numeric = parseInt(raw, 10);
+                const mins = Math.floor(numeric / 100);
+                const secs = numeric % 100;
+                setPlankSeconds(mins * 60 + secs);
               }}
-              onWheel={(e) => (e.target as HTMLElement).blur()}
-              placeholder="00"
-              className="w-24 text-center text-6xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors duration-200"
-            />
-            <span className="text-4xl font-black text-dark-text/20">:</span>
-            <input
-              type="number"
-              value={plankSeconds % 60 || ''}
-              onChange={(e) => {
-                const secs = Math.min(parseInt(e.target.value) || 0, 59);
-                setPlankSeconds(Math.floor(plankSeconds / 60) * 60 + secs);
-              }}
-              onWheel={(e) => (e.target as HTMLElement).blur()}
-              placeholder="00"
-              className="w-24 text-center text-6xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors duration-200"
+              placeholder="00:00"
+              className="w-full text-center text-5xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors duration-200 py-2"
             />
           </div>
         </GlassCard>
@@ -603,7 +568,7 @@ function LogPage() {
               {displayRunGoal.toFixed(1)}{unitLabel} GOAL • {Math.max(displayRunGoal - (profile?.unit_preference === 'imperial' ? totalRunDist * 0.621371 : totalRunDist), 0).toFixed(1)}{unitLabel} LEFT
             </span>
           </div>
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-dark-muted text-center uppercase mb-3">
+          <p className="text-[11px] font-semibold tracking-[0.15em] text-dark-muted text-center uppercase mb-1">
             RUN DISTANCE ({unitLabel})
           </p>
           <input
@@ -613,34 +578,54 @@ function LogPage() {
             onChange={(e) => setRunDistance(parseFloat(e.target.value) || 0)}
             onWheel={(e) => (e.target as HTMLElement).blur()}
             placeholder="0.0"
-            className="w-full text-center text-6xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors duration-200 py-4"
+            className="w-full text-center text-5xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors duration-200 py-2"
           />
         </GlassCard>
 
-        {/* Submit Button */}
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={handleSubmit}
-          disabled={isSubmitting || submitted}
-          className="w-full py-4 rounded-2xl emerald-gradient font-black text-sm tracking-wider text-white flex items-center justify-center gap-2 disabled:opacity-50 transition-all duration-200"
-        >
-          {submitted ? (
-            <>{submitLabel === 'update' ? 'UPDATED ✓' : 'SUBMITTED ✓'}</>
-          ) : isSubmitting ? (
-            <>{editLogId ? 'UPDATING...' : 'SUBMITTING...'}</>
-          ) : (
-            <>
-              {editLogId ? 'UPDATE LOG' : 'SUBMIT TO ARENA'}
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M22 2L11 13" />
-                <path d="M22 2L15 22L11 13L2 9L22 2Z" />
-              </svg>
-            </>
+        {/* Action Buttons */}
+        <div className="space-y-4">
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={handleSubmit}
+            disabled={isSubmitting || submitted}
+            className="w-full py-4 rounded-2xl emerald-gradient font-black text-sm tracking-wider text-white flex items-center justify-center gap-2 disabled:opacity-50 transition-all duration-200"
+          >
+            {submitted ? (
+              <>{submitLabel === 'update' ? 'UPDATED ✓' : 'SUBMITTED ✓'}</>
+            ) : isSubmitting ? (
+              <>{editLogId ? 'UPDATING...' : 'SUBMITTING...'}</>
+            ) : (
+              <>
+                {editLogId ? 'UPDATE LOG' : 'SUBMIT TO ARENA'}
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 2L11 13" />
+                  <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+                </svg>
+              </>
+            )}
+          </motion.button>
+
+          {(pushupReps > 0 || plankSeconds > 0 || runDistance > 0) && !isSubmitting && !submitted && (
+            <motion.button
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => {
+                setPushupReps(0);
+                setPlankSeconds(0);
+                setRunDistance(0);
+                setEditLogId(null);
+              }}
+              className="w-full py-3 rounded-xl bg-dark-elevated border border-dashed border-dark-border text-[10px] font-black tracking-widest text-dark-muted hover:text-red-400 hover:border-red-400/30 transition-all uppercase"
+            >
+              ERASE & RESET
+            </motion.button>
           )}
-        </motion.button>
-        {submitError && (
-          <p className="text-xs text-red-400 font-semibold text-center">{submitError}</p>
-        )}
+
+          {submitError && (
+            <p className="text-xs text-red-400 font-semibold text-center">{submitError}</p>
+          )}
+        </div>
       </div>
     </AppShell>
   );

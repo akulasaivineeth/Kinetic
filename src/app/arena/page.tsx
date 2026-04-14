@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { AppShell } from '@/components/layout/app-shell';
 import { GlassCard } from '@/components/ui/glass-card';
@@ -63,6 +63,28 @@ export default function ArenaPage() {
   const [fairMode, setFairMode] = useState(false);
   const [customFrom, setCustomFrom] = useState<Date | undefined>();
   const [customTo, setCustomTo] = useState<Date | undefined>();
+
+  // Peek functionality
+  const [peekUser, setPeekUser] = useState<any>(null);
+  const pressTimer = useRef<NodeJS.Timeout | null>(null);
+
+  const startPress = (entry: any) => {
+    if (pressTimer.current) clearTimeout(pressTimer.current);
+    pressTimer.current = setTimeout(() => {
+      setPeekUser(entry);
+    }, 400); // 400ms long press to peek //
+  };
+
+  const clearPress = () => {
+    if (pressTimer.current) clearTimeout(pressTimer.current);
+  };
+
+  useEffect(() => {
+    // block scrolling when peeking
+    if (peekUser) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = 'unset';
+    return () => { document.body.style.overflow = 'unset'; }
+  }, [peekUser]);
 
   const isOverall = arenaMetric === 'overall';
   const rpcMetric = 'volume';
@@ -414,6 +436,11 @@ export default function ArenaPage() {
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.1 * idx }}
+                  onPointerDown={() => startPress(entry)}
+                  onPointerUp={clearPress}
+                  onPointerLeave={clearPress}
+                  onPointerCancel={clearPress}
+                  className="touch-manipulation"
                 >
                   <GlassCard
                     className={`flex items-center gap-3 py-3 px-4 ${
@@ -476,6 +503,72 @@ export default function ArenaPage() {
           </div>
         </div>
       </div>
+
+      <AnimatePresence>
+        {peekUser && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm touch-none"
+            onClick={() => setPeekUser(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="w-full max-w-sm rounded-[32px] glass-card-elevated border border-dark-border p-6 shadow-2xl relative overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="absolute inset-0 bg-gradient-to-b from-emerald-900/10 to-transparent pointer-events-none" />
+              <div className="relative flex flex-col items-center">
+                <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-emerald-500 mb-4 shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+                  {peekUser.avatar_url ? (
+                    <Image src={peekUser.avatar_url} alt="" width={96} height={96} className="object-cover w-full h-full" />
+                  ) : (
+                    <div className="w-full h-full bg-dark-elevated flex items-center justify-center text-3xl font-black text-emerald-500">
+                      {getInitials(peekUser.full_name)}
+                    </div>
+                  )}
+                </div>
+                <h3 className="text-2xl font-black text-white px-2 text-center mb-1 drop-shadow-sm">
+                  {peekUser.full_name?.toUpperCase()}
+                </h3>
+                <p className="text-xs font-bold text-emerald-500 tracking-[0.2em] uppercase mb-6 drop-shadow-sm">
+                  {isOverall ? 'TOTAL SESSION POINTS' : `${mc.label} SCORE`} • {formatVal(getEntryValue(peekUser, arenaMetric), arenaMetric, profile?.unit_preference, fairMode)}
+                </p>
+
+                <div className="w-full grid grid-cols-3 gap-2">
+                  <div className="flex flex-col items-center justify-center py-4 px-2 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
+                    <Dumbbell size={18} className="text-emerald-400 mb-2" />
+                    <span className="text-lg font-black text-white">{Math.round(peekUser.pushup_value)}</span>
+                    <span className="text-[9px] font-bold tracking-wider text-dark-muted mt-1 uppercase">REPS</span>
+                  </div>
+                  <div className="flex flex-col items-center justify-center py-4 px-2 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
+                    <Timer size={18} className="text-emerald-400 mb-2" />
+                    <span className="text-lg font-black text-white">{Math.round(peekUser.plank_value / 60)}</span>
+                    <span className="text-[9px] font-bold tracking-wider text-dark-muted mt-1 uppercase">MINS</span>
+                  </div>
+                  <div className="flex flex-col items-center justify-center py-4 px-2 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
+                    <Route size={18} className="text-emerald-400 mb-2" />
+                    <span className="text-lg font-black text-white">{formatDistance(Number(peekUser.run_value), profile?.unit_preference)}</span>
+                    <span className="text-[9px] font-bold tracking-wider text-dark-muted mt-1 uppercase">{profile?.unit_preference === 'imperial' ? 'MI' : 'KM'}</span>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => setPeekUser(null)}
+                  className="mt-6 px-6 py-3 rounded-full bg-white/10 hover:bg-white/15 text-sm font-bold text-white transition-colors"
+                >
+                  CLOSE
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </AppShell>
   );
 }

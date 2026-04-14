@@ -25,17 +25,67 @@ export async function GET() {
       return NextResponse.json({ error: 'Whoop not connected' }, { status: 400 });
     }
 
+    let accessToken = profile.whoop_access_token;
+    
     // Fetch recent workouts from Whoop API
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const response = await fetch(
+    let response = await fetch(
       `https://api.prod.whoop.com/developer/v2/activity/workout?start=${encodeURIComponent(sevenDaysAgo)}&limit=25`,
       {
-        headers: { Authorization: `Bearer ${profile.whoop_access_token}` },
+        headers: { Authorization: `Bearer ${accessToken}` },
       }
     );
 
+    if (!response.ok && response.status === 401 && profile.whoop_refresh_token) {
+      // Auto-refresh token
+      const tokenResponse = await fetch('https://api.prod.whoop.com/oauth/oauth2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: profile.whoop_refresh_token,
+          client_id: process.env.WHOOP_CLIENT_ID || '',
+          client_secret: process.env.WHOOP_CLIENT_SECRET || '',
+        }),
+      });
+
+      if (tokenResponse.ok) {
+        const tokens = await tokenResponse.json();
+        accessToken = tokens.access_token;
+        
+        // Save new tokens
+        await supabase
+          .from('profiles')
+          .update({
+            whoop_access_token: tokens.access_token,
+            whoop_refresh_token: tokens.refresh_token || profile.whoop_refresh_token,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', user.id);
+
+        // Retry original fetch
+        response = await fetch(
+          `https://api.prod.whoop.com/developer/v2/activity/workout?start=${encodeURIComponent(sevenDaysAgo)}&limit=25`,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
+      } else {
+        console.error('Whoop Token Refresh failed:', await tokenResponse.text());
+        // Wipe credentials to force reconnect if refresh failed permanently
+        await supabase
+          .from('profiles')
+          .update({
+            whoop_access_token: null,
+            whoop_refresh_token: null,
+            whoop_user_id: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', user.id);
+      }
+    }
+
     if (!response.ok) {
-      // If 401, token may be expired — user needs to re-authorize
       if (response.status === 401) {
         return NextResponse.json({ error: 'Whoop token expired. Please reconnect.' }, { status: 401 });
       }
