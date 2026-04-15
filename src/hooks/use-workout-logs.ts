@@ -19,7 +19,7 @@ import { useEffect, useCallback } from 'react';
 function withTimeout<T>(promise: Promise<T>, ms = 12000): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<T>((_, reject) =>
+    new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('Request timed out. Check your connection and try again.')), ms)
     ),
   ]);
@@ -231,11 +231,13 @@ export function useSubmitLog() {
 
       // First, fetch the log to calculate the session score
       const { data: draftData } = await withTimeout(
-        supabase
-          .from('workout_logs')
-          .select('pushup_reps, plank_seconds, run_distance')
-          .eq('id', logId)
-          .single()
+        Promise.resolve(
+          supabase
+            .from('workout_logs')
+            .select('pushup_reps, plank_seconds, run_distance')
+            .eq('id', logId)
+            .single()
+        )
       );
 
       // Calculate difficulty-based session score
@@ -247,16 +249,18 @@ export function useSubmitLog() {
 
       // Submit the log (core fields only — guaranteed to work)
       const { data, error } = await withTimeout(
-        supabase
-          .from('workout_logs')
-          .update({
-            is_draft: false,
-            submitted_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', logId)
-          .select()
-          .single()
+        Promise.resolve(
+          supabase
+            .from('workout_logs')
+            .update({
+              is_draft: false,
+              submitted_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', logId)
+            .select()
+            .single()
+        )
       );
 
       if (error) throw error;

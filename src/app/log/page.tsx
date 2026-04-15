@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef, Suspense, useMemo } from 'rea
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppShell } from '@/components/layout/app-shell';
 import { GlassCard } from '@/components/ui/glass-card';
-import { ProgressBar } from '@/components/ui/progress-bar';
 import { useAuth } from '@/providers/auth-provider';
 import { useGoals } from '@/hooks/use-goals';
 import {
@@ -63,7 +62,6 @@ function LogPage() {
   const [importResult, setImportResult] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [editLogId, setEditLogId] = useState<string | null>(null);
-  const [submitLabel, setSubmitLabel] = useState<'submit' | 'update'>('submit');
   const [pbCelebration, setPbCelebration] = useState<string | null>(null);
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -629,7 +627,7 @@ function LogPage() {
             className="w-full py-4 rounded-2xl emerald-gradient font-black text-sm tracking-wider text-white flex items-center justify-center gap-2 disabled:opacity-50 transition-all duration-200"
           >
             {submitted ? (
-              <>{submitLabel === 'update' ? 'UPDATED ✓' : 'SUBMITTED ✓'}</>
+              <>{editLogId ? 'UPDATED ✓' : 'SUBMITTED ✓'}</>
             ) : isSessionRefreshing ? (
               <>RECONNECTING...</>
             ) : isSubmitting ? (
