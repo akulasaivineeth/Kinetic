@@ -37,7 +37,7 @@ export default function LogPageWrapper() {
 }
 
 function LogPage() {
-  const { user, profile } = useAuth();
+  const { user, profile, isSessionRefreshing } = useAuth();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { data: goals } = useGoals();
@@ -95,6 +95,19 @@ function LogPage() {
       setTimeout(() => setImportResult(null), 4000);
     }
   };
+
+  // If the app is backgrounded while a submission is in-flight, the fetch will hang forever.
+  // Reset the submitting state when the user returns so they can try again.
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && isSubmitting) {
+        setIsSubmitting(false);
+        setSubmitError('Submission was interrupted. Please try again.');
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [isSubmitting]);
 
   // Load draft initially
   useEffect(() => {
@@ -175,12 +188,29 @@ function LogPage() {
     );
   };
 
+  const withTimeout = <T,>(promise: Promise<T>, ms: number, label = 'Request'): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out — please try again`)), ms)
+      ),
+    ]);
+  };
+
+  const supabase = createClient();
+
   // Submit
   const handleSubmit = async () => {
     if (!user) return;
     setSubmitError(null);
     setIsSubmitting(true);
     try {
+      try {
+        await supabase.auth.getSession();
+      } catch {
+        // If offline or transient failure, proceed
+      }
+
       const finalRunDist = profile?.unit_preference === 'imperial'
         ? Number((runDistance * 1.60934).toFixed(3))
         : runDistance;
@@ -189,14 +219,18 @@ function LogPage() {
         const oldLog = monthLogs.find((r) => r.id === editLogId);
         if (!oldLog) throw new Error('Could not load log to update');
 
-        await updateSubmittedLog.mutateAsync({
-          logId: editLogId,
-          patch: {
-            pushup_reps: pushupReps,
-            plank_seconds: plankSeconds,
-            run_distance: finalRunDist,
-          },
-        });
+        await withTimeout(
+          updateSubmittedLog.mutateAsync({
+            logId: editLogId,
+            patch: {
+              pushup_reps: pushupReps,
+              plank_seconds: plankSeconds,
+              run_distance: finalRunDist,
+            },
+          }),
+          15000,
+          'Update'
+        );
 
         let crossed: Milestone[] = [];
         if (allTimeStats) {
@@ -224,20 +258,24 @@ function LogPage() {
 
       let logId = draftId;
       if (!logId) {
-        const saved = await saveDraft.mutateAsync({
-          pushup_reps: pushupReps,
-          plank_seconds: plankSeconds,
-          run_distance: finalRunDist,
-          logged_at: selectedDate.toISOString(),
-          whoop_activity_type: whoopActivity || undefined,
-          whoop_strain: whoopStrain ? parseFloat(whoopStrain) : undefined,
-          whoop_duration_seconds: whoopDuration ? parseInt(whoopDuration) * 60 : undefined,
-        });
+        const saved = await withTimeout(
+          saveDraft.mutateAsync({
+            pushup_reps: pushupReps,
+            plank_seconds: plankSeconds,
+            run_distance: finalRunDist,
+            logged_at: selectedDate.toISOString(),
+            whoop_activity_type: whoopActivity || undefined,
+            whoop_strain: whoopStrain ? parseFloat(whoopStrain) : undefined,
+            whoop_duration_seconds: whoopDuration ? parseInt(whoopDuration) * 60 : undefined,
+          }),
+          15000,
+          'Save draft'
+        );
         logId = saved?.id;
         if (!logId) throw new Error('Failed to save draft');
       }
 
-      await submitLog.mutateAsync(logId);
+      await withTimeout(submitLog.mutateAsync(logId), 15000, 'Submit');
 
       let crossedNew: Milestone[] = [];
       if (allTimeStats) {
@@ -587,11 +625,13 @@ function LogPage() {
           <motion.button
             whileTap={{ scale: 0.97 }}
             onClick={handleSubmit}
-            disabled={isSubmitting || submitted}
+            disabled={isSubmitting || submitted || isSessionRefreshing}
             className="w-full py-4 rounded-2xl emerald-gradient font-black text-sm tracking-wider text-white flex items-center justify-center gap-2 disabled:opacity-50 transition-all duration-200"
           >
             {submitted ? (
               <>{submitLabel === 'update' ? 'UPDATED ✓' : 'SUBMITTED ✓'}</>
+            ) : isSessionRefreshing ? (
+              <>RECONNECTING...</>
             ) : isSubmitting ? (
               <>{editLogId ? 'UPDATING...' : 'SUBMITTING...'}</>
             ) : (

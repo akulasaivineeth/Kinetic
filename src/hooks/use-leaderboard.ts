@@ -23,57 +23,53 @@ export function useLeaderboard(
   useEffect(() => {
     if (!user) return;
 
-    const channelId = `arena-realtime-${user.id}-${Math.random().toString(36).slice(2, 9)}`;
-    const channel = supabase
-      .channel(channelId)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'workout_logs',
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'workout_logs',
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'sharing_connections',
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'sharing_connections',
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
-        }
-      )
-      .subscribe();
+    let channel: any;
+
+    const createChannel = () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+      
+      const channelId = `arena-realtime-${user.id}-${Date.now()}`;
+      channel = supabase
+        .channel(channelId)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'workout_logs' },
+          () => queryClient.invalidateQueries({ queryKey: ['leaderboard'] })
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'workout_logs' },
+          () => queryClient.invalidateQueries({ queryKey: ['leaderboard'] })
+        )
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'sharing_connections' },
+          () => queryClient.invalidateQueries({ queryKey: ['leaderboard'] })
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'sharing_connections' },
+          () => queryClient.invalidateQueries({ queryKey: ['leaderboard'] })
+        )
+        .subscribe();
+    };
+
+    createChannel();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        createChannel();
+        queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      supabase.removeChannel(channel);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (channel) supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, queryClient]);

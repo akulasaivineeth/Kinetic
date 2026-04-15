@@ -14,6 +14,17 @@ import { useEffect, useCallback } from 'react';
  * Precise implementation of offline sync, auto-save drafts, and weekly volume calculation.
  */
 
+// Rejects if the promise doesn't settle within `ms` milliseconds.
+// Prevents Supabase fetches from hanging forever after PWA wake-from-background.
+function withTimeout<T>(promise: Promise<T>, ms = 12000): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error('Request timed out. Check your connection and try again.')), ms)
+    ),
+  ]);
+}
+
 export type DateRange = 'week' | 'month' | '3mo' | '6mo' | 'year' | 'custom';
 
 export function getDateRange(range: DateRange, customFrom?: Date, customTo?: Date) {
@@ -214,12 +225,18 @@ export function useSubmitLog() {
       if (!logId) throw new Error('No log id provided for submission');
       if (!user) throw new Error('Not authenticated');
 
+      // Force a session refresh before any DB call. This handles the PWA wake-from-background
+      // race condition where the user taps Submit before the visibility-change refresh finishes.
+      await supabase.auth.getSession();
+
       // First, fetch the log to calculate the session score
-      const { data: draftData } = await supabase
-        .from('workout_logs')
-        .select('pushup_reps, plank_seconds, run_distance')
-        .eq('id', logId)
-        .single();
+      const { data: draftData } = await withTimeout(
+        supabase
+          .from('workout_logs')
+          .select('pushup_reps, plank_seconds, run_distance')
+          .eq('id', logId)
+          .single()
+      );
 
       // Calculate difficulty-based session score
       const { totalPts } = calculateSessionScore(
@@ -229,16 +246,18 @@ export function useSubmitLog() {
       );
 
       // Submit the log (core fields only — guaranteed to work)
-      const { data, error } = await supabase
-        .from('workout_logs')
-        .update({
-          is_draft: false,
-          submitted_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', logId)
-        .select()
-        .single();
+      const { data, error } = await withTimeout(
+        supabase
+          .from('workout_logs')
+          .update({
+            is_draft: false,
+            submitted_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', logId)
+          .select()
+          .single()
+      );
 
       if (error) throw error;
 
@@ -378,24 +397,44 @@ export function useSharedLogs(dateRange: DateRange, customFrom?: Date, customTo?
   useEffect(() => {
     if (!user) return;
 
-    const channelId = `shared-logs-realtime-${user.id}-${Math.random().toString(36).slice(2, 9)}`;
-    const channel = supabase
-      .channel(channelId)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'workout_logs',
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['shared-workout-logs'] });
-        }
-      )
-      .subscribe();
+    let channel: any;
+
+    const createChannel = () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+
+      const channelId = `shared-logs-realtime-${user.id}-${Date.now()}`;
+      channel = supabase
+        .channel(channelId)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'workout_logs',
+          },
+          () => {
+            queryClient.invalidateQueries({ queryKey: ['shared-workout-logs'] });
+          }
+        )
+        .subscribe();
+    };
+
+    createChannel();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        createChannel();
+        queryClient.invalidateQueries({ queryKey: ['shared-workout-logs'] });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      supabase.removeChannel(channel);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [user, queryClient, supabase]);
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kinetic-v1';
+const CACHE_NAME = 'kinetic-v2';
 const STATIC_ASSETS = [
   '/',
   '/dashboard',
@@ -28,24 +28,49 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch — network first, fallback to cache
+// Fetch — network first with timeout, fallback to cache
 self.addEventListener('fetch', (event) => {
-  // Skip non-GET and API requests
-  if (event.request.method !== 'GET' || event.request.url.includes('/api/')) {
+  const url = event.request.url;
+  
+  // Skip non-GET requests entirely
+  if (event.request.method !== 'GET') return;
+
+  // Skip all Supabase and internal API URLs entirely
+  if (
+    url.includes('/api/') || 
+    url.includes('/rest/') || 
+    url.includes('/realtime/') || 
+    url.includes('/auth/') || 
+    url.includes('supabase.co')
+  ) {
     return;
   }
 
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Cache successful responses
-        if (response.status === 200) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        }
-        return response;
-      })
-      .catch(() => caches.match(event.request))
+    new Promise((resolve, reject) => {
+      // 5-second timeout for the network request
+      const timeoutId = setTimeout(() => {
+        reject(new Error('Network timeout'));
+      }, 5000);
+
+      fetch(event.request)
+        .then((response) => {
+          clearTimeout(timeoutId);
+          // Cache successful responses
+          if (response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          resolve(response);
+        })
+        .catch((err) => {
+          clearTimeout(timeoutId);
+          reject(err);
+        });
+    }).catch(() => {
+      // Fallback to cache if network fails or times out
+      return caches.match(event.request);
+    })
   );
 });
 

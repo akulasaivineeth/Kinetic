@@ -9,6 +9,7 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  isSessionRefreshing: boolean;
   signInWithGoogle: (inviteCode?: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -18,6 +19,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   profile: null,
   loading: true,
+  isSessionRefreshing: false,
   signInWithGoogle: async () => {},
   signOut: async () => {},
   refreshProfile: async () => {},
@@ -29,6 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSessionRefreshing, setIsSessionRefreshing] = useState(false);
   const supabase = createClient();
 
   const fetchProfile = async (userId: string) => {
@@ -67,17 +70,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // PWA Lifecycle Fix: When waking from background after >1 hour, the session token naturally expires
     // because OS suspends the background JS timer. We must manually prod Supabase to refresh it.
+    // isSessionRefreshing gates the submit button so the user can't fire a mutation mid-refresh.
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
+        setIsSessionRefreshing(true);
         try {
           // getSession() automatically triggers a silent refresh if the token is expired
           await supabase.auth.getSession();
         } catch {
           // Silent catch to handle if phone wakes up momentarily without network
+        } finally {
+          setIsSessionRefreshing(false);
         }
       }
     };
-    
+
     // Add both visibility change and classic focus (for iOS PWA quirks)
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleVisibilityChange);
@@ -127,7 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signInWithGoogle, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, isSessionRefreshing, signInWithGoogle, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
