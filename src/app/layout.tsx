@@ -3,6 +3,9 @@ import { AuthProvider } from '@/providers/auth-provider';
 import { QueryProvider } from '@/providers/query-provider';
 import { ThemeProvider } from '@/providers/theme-provider';
 import { PWAInit } from '@/components/layout/pwa-init';
+import { ErrorBoundary } from '@/components/error-boundary';
+import { ConnectionGuard } from '@/components/connection-guard';
+import { WorkoutDataRealtimeSync } from '@/components/workout-data-realtime-sync';
 import '@/styles/globals.css';
 
 export const metadata: Metadata = {
@@ -38,12 +41,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="bg-dark-bg text-dark-text antialiased min-h-dvh">
         <ThemeProvider>
-          <QueryProvider>
-            <AuthProvider>
-              <PWAInit />
-              {children}
-            </AuthProvider>
-          </QueryProvider>
+          <ErrorBoundary>
+            <QueryProvider>
+              <AuthProvider>
+                <ConnectionGuard />
+                <WorkoutDataRealtimeSync />
+                <PWAInit />
+                {children}
+              </AuthProvider>
+            </QueryProvider>
+          </ErrorBoundary>
         </ThemeProvider>
       </body>
     </html>

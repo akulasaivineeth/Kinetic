@@ -20,7 +20,7 @@ import {
 } from 'recharts';
 import { format } from 'date-fns';
 import { Dumbbell, Timer, Route, Trophy } from 'lucide-react';
-import { calculateSessionScore } from '@/lib/scoring';
+import { calculateSessionScore, calculatePushupScore, calculatePlankScore, calculateRunScore } from '@/lib/scoring';
 
 type ArenaMetric = 'overall' | 'pushups' | 'plank' | 'run';
 
@@ -39,6 +39,16 @@ function getEntryValue(entry: LeaderboardEntry, metric: ArenaMetric): number {
     case 'pushups': return entry.pushup_value;
     case 'plank': return entry.plank_value / 60;
     case 'run': return Number(entry.run_value);
+    case 'overall': return entry.total_score;
+  }
+}
+
+/** Get the category score (pts) for a specific metric from raw values */
+function getCategoryScore(entry: LeaderboardEntry, metric: ArenaMetric): number {
+  switch (metric) {
+    case 'pushups': return calculatePushupScore(entry.pushup_value);
+    case 'plank': return calculatePlankScore(entry.plank_value);
+    case 'run': return calculateRunScore(Number(entry.run_value));
     case 'overall': return entry.total_score;
   }
 }
@@ -184,19 +194,13 @@ export default function ArenaPage() {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-start justify-between"
+          className="flex items-start justify-start"
         >
           <div>
             <h2 className="text-4xl font-black tracking-tight">ARENA</h2>
             <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase">
-              LIVE RANKINGS
+              RANKINGS
             </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-dark-elevated border border-dark-border">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-emerald-500 text-[10px] font-bold tracking-wider">LIVE</span>
-            </div>
           </div>
         </motion.div>
 
@@ -293,6 +297,11 @@ export default function ArenaPage() {
                       <p className="text-emerald-500 font-bold text-xs">
                         {formatVal(val, arenaMetric, profile?.unit_preference, fairMode)}
                       </p>
+                      {!isOverall && (
+                        <p className="text-[10px] font-semibold text-dark-muted">
+                          {Math.round(getCategoryScore(entry, arenaMetric))} pts
+                        </p>
+                      )}
                     </motion.div>
                   );
                 })}
@@ -483,7 +492,7 @@ export default function ArenaPage() {
                         {formatVal(val, arenaMetric, profile?.unit_preference, fairMode)}
                       </p>
                       <p className="text-[9px] text-dark-muted uppercase">
-                        {isOverall && fairMode ? '% imp.' : mc.unit}
+                        {isOverall && fairMode ? '% imp.' : !isOverall ? `${Math.round(getCategoryScore(entry, arenaMetric))} pts` : mc.unit}
                       </p>
                     </div>
                   </GlassCard>
@@ -535,25 +544,34 @@ export default function ArenaPage() {
                 <h3 className="text-2xl font-black text-white px-2 text-center mb-1 drop-shadow-sm">
                   {peekUser.full_name?.toUpperCase()}
                 </h3>
-                <p className="text-xs font-bold text-emerald-500 tracking-[0.2em] uppercase mb-6 drop-shadow-sm">
-                  {isOverall ? 'TOTAL SESSION POINTS' : `${mc.label} SCORE`} • {formatVal(getEntryValue(peekUser, arenaMetric), arenaMetric, profile?.unit_preference, fairMode)}
+                <p className="text-xs font-bold text-emerald-500 tracking-[0.2em] uppercase mb-1 drop-shadow-sm">
+                  {isOverall ? 'TOTAL SESSION POINTS' : `${mc.label}`} • {formatVal(getEntryValue(peekUser, arenaMetric), arenaMetric, profile?.unit_preference, fairMode)}
                 </p>
+                {!isOverall && (
+                  <p className="text-[10px] font-semibold text-dark-muted mb-5">
+                    {Math.round(getCategoryScore(peekUser, arenaMetric))} pts earned
+                  </p>
+                )}
+                {isOverall && <div className="mb-6" />}
 
                 <div className="w-full grid grid-cols-3 gap-2">
-                  <div className="flex flex-col items-center justify-center py-4 px-2 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
+                  <div className={`flex flex-col items-center justify-center py-4 px-2 rounded-2xl backdrop-blur-md ${arenaMetric === 'pushups' ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-white/5 border border-white/10'}`}>
                     <Dumbbell size={18} className="text-emerald-400 mb-2" />
                     <span className="text-lg font-black text-white">{Math.round(peekUser.pushup_value)}</span>
                     <span className="text-[9px] font-bold tracking-wider text-dark-muted mt-1 uppercase">REPS</span>
+                    <span className="text-[9px] font-semibold text-emerald-500/70 mt-0.5">{Math.round(calculatePushupScore(peekUser.pushup_value))} pts</span>
                   </div>
-                  <div className="flex flex-col items-center justify-center py-4 px-2 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
+                  <div className={`flex flex-col items-center justify-center py-4 px-2 rounded-2xl backdrop-blur-md ${arenaMetric === 'plank' ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-white/5 border border-white/10'}`}>
                     <Timer size={18} className="text-emerald-400 mb-2" />
                     <span className="text-lg font-black text-white">{Math.round(peekUser.plank_value / 60)}</span>
                     <span className="text-[9px] font-bold tracking-wider text-dark-muted mt-1 uppercase">MINS</span>
+                    <span className="text-[9px] font-semibold text-emerald-500/70 mt-0.5">{Math.round(calculatePlankScore(peekUser.plank_value))} pts</span>
                   </div>
-                  <div className="flex flex-col items-center justify-center py-4 px-2 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
+                  <div className={`flex flex-col items-center justify-center py-4 px-2 rounded-2xl backdrop-blur-md ${arenaMetric === 'run' ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-white/5 border border-white/10'}`}>
                     <Route size={18} className="text-emerald-400 mb-2" />
                     <span className="text-lg font-black text-white">{formatDistance(Number(peekUser.run_value), profile?.unit_preference)}</span>
                     <span className="text-[9px] font-bold tracking-wider text-dark-muted mt-1 uppercase">{profile?.unit_preference === 'imperial' ? 'MI' : 'KM'}</span>
+                    <span className="text-[9px] font-semibold text-emerald-500/70 mt-0.5">{Math.round(calculateRunScore(Number(peekUser.run_value)))} pts</span>
                   </div>
                 </div>
 

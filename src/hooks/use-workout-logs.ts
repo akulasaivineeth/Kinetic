@@ -215,13 +215,33 @@ export function useSaveDraft() {
   });
 }
 
+/** Pass metrics so submit writes the same numbers as the form (avoids debounced autosave races). */
+export type SubmitLogInput =
+  | string
+  | {
+      logId: string;
+      pushup_reps: number;
+      plank_seconds: number;
+      run_distance: number;
+    };
+
 export function useSubmitLog() {
   const queryClient = useQueryClient();
   const { user, waitForSession } = useAuth();
   const supabase = createClient();
 
   return useMutation({
-    mutationFn: async (logId: string) => {
+    mutationFn: async (input: SubmitLogInput) => {
+      const logId = typeof input === 'string' ? input : input.logId;
+      const metrics =
+        typeof input === 'object'
+          ? {
+              pushup_reps: input.pushup_reps,
+              plank_seconds: input.plank_seconds,
+              run_distance: input.run_distance,
+            }
+          : null;
+
       if (!logId) throw new Error('No log id provided for submission');
       if (!user) throw new Error('Not authenticated');
 
@@ -229,28 +249,34 @@ export function useSubmitLog() {
       // This prevents the race condition where Submit fires before visibility-change refresh finishes.
       await waitForSession();
 
-      // First, fetch the log to calculate the session score
-      // new Promise() converts the Supabase thenable into a real Promise so withTimeout can race against it.
-      // Without this, the thenable resolves lazily and the timeout never fires.
-      const { data: draftData } = await withTimeout(
-        new Promise<any>((resolve, reject) => {
-          supabase
-            .from('workout_logs')
-            .select('pushup_reps, plank_seconds, run_distance')
-            .eq('id', logId)
-            .single()
-            .then(resolve, reject);
-        })
-      );
+      let pushup_reps = 0;
+      let plank_seconds = 0;
+      let run_distance = 0;
 
-      // Calculate difficulty-based session score
-      const { totalPts } = calculateSessionScore(
-        draftData?.pushup_reps || 0,
-        draftData?.plank_seconds || 0,
-        Number(draftData?.run_distance || 0)
-      );
+      if (metrics) {
+        pushup_reps = metrics.pushup_reps;
+        plank_seconds = metrics.plank_seconds;
+        run_distance = metrics.run_distance;
+      } else {
+        // new Promise() converts the Supabase thenable into a real Promise so withTimeout can race against it.
+        const { data: draftData } = await withTimeout(
+          new Promise<any>((resolve, reject) => {
+            supabase
+              .from('workout_logs')
+              .select('pushup_reps, plank_seconds, run_distance')
+              .eq('id', logId)
+              .single()
+              .then(resolve, reject);
+          })
+        );
+        pushup_reps = draftData?.pushup_reps || 0;
+        plank_seconds = draftData?.plank_seconds || 0;
+        run_distance = Number(draftData?.run_distance || 0);
+      }
 
-      // Submit the log (core fields only — guaranteed to work)
+      const { totalPts } = calculateSessionScore(pushup_reps, plank_seconds, run_distance);
+
+      // Submit: always persist metrics on this row when provided so we never submit stale debounced draft data.
       const { data, error } = await withTimeout(
         new Promise<any>((resolve, reject) => {
           supabase
@@ -259,6 +285,13 @@ export function useSubmitLog() {
               is_draft: false,
               submitted_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
+              ...(metrics
+                ? {
+                    pushup_reps: metrics.pushup_reps,
+                    plank_seconds: metrics.plank_seconds,
+                    run_distance: metrics.run_distance,
+                  }
+                : {}),
             })
             .eq('id', logId)
             .select()
@@ -448,12 +481,13 @@ export function useSharedLogs(dateRange: DateRange, customFrom?: Date, customTo?
 
     let channel: any;
 
-    const createChannel = () => {
+    const createChannel = async () => {
       if (channel) {
-        supabase.removeChannel(channel);
+        await supabase.removeChannel(channel);
+        channel = undefined;
       }
 
-      const channelId = `shared-logs-realtime-${user.id}-${Date.now()}`;
+      const channelId = `shared-logs-realtime-${user.id}-${crypto.randomUUID()}`;
       channel = supabase
         .channel(channelId)
         .on(
@@ -470,11 +504,11 @@ export function useSharedLogs(dateRange: DateRange, customFrom?: Date, customTo?
         .subscribe();
     };
 
-    createChannel();
+    void createChannel();
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        createChannel();
+        void createChannel();
         queryClient.invalidateQueries({ queryKey: ['shared-workout-logs'] });
       }
     };

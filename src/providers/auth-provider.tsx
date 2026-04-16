@@ -78,53 +78,80 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // PWA Lifecycle Fix: When waking from background after >1 hour, the session token naturally expires
-    // because OS suspends the background JS timer. We must manually prod Supabase to refresh it.
-    // isSessionRefreshing gates the submit button so the user can't fire a mutation mid-refresh.
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible') {
-        let resolveGate: () => void = () => {};
-        const gatePromise = new Promise<void>((r) => { resolveGate = r; });
-        sessionGateRef.current = { promise: gatePromise, resolve: resolveGate };
+    // PWA: refresh JWT after a *real* background transition (tab hidden → visible).
+    // Do NOT run on every window `focus` — that fires on clicks, OAuth return, DevTools, etc. and
+    // left ConnectionGuard stuck on "Reconnecting / Tap to reload" while getSession() ran.
+    const wasHiddenRef = { current: document.visibilityState === 'hidden' };
+    const wakeInFlightRef = { current: false };
 
-        setIsSessionRefreshing(true);
-        try {
-          // getSession() reads local session & auto-refreshes expired JWT via refresh token.
-          const { data: { session } } = await supabase.auth.getSession();
+    const performWakeSessionRefresh = async () => {
+      if (wakeInFlightRef.current) return;
+      wakeInFlightRef.current = true;
 
-          if (session?.user) {
-            // Session is alive — update React state immediately (don't wait for onAuthStateChange race).
-            setUser(session.user);
-            await fetchProfile(session.user.id);
+      let resolveGate: () => void = () => {};
+      const gatePromise = new Promise<void>((r) => {
+        resolveGate = r;
+      });
+      sessionGateRef.current = { promise: gatePromise, resolve: resolveGate };
+
+      setIsSessionRefreshing(true);
+      const refresh = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setUser(session.user);
+          await fetchProfile(session.user.id);
+        } else {
+          const { data: { user: freshUser } } = await supabase.auth.getUser();
+          if (freshUser) {
+            setUser(freshUser);
+            await fetchProfile(freshUser.id);
           } else {
-            // getSession() returned null — session may be gone. Validate with server as fallback.
-            const { data: { user: freshUser } } = await supabase.auth.getUser();
-            if (freshUser) {
-              setUser(freshUser);
-              await fetchProfile(freshUser.id);
-            } else {
-              // Truly logged out (refresh token expired or revoked).
-              setUser(null);
-              setProfile(null);
-            }
+            setUser(null);
+            setProfile(null);
           }
-        } catch {
-          // Silent catch — phone may wake momentarily without network
-        } finally {
-          setIsSessionRefreshing(false);
-          resolveGate();
-          sessionGateRef.current = null;
         }
+      };
+
+      try {
+        await Promise.race([
+          refresh(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('wake-session-timeout')), 10000)
+          ),
+        ]);
+      } catch {
+        // Timeout or offline — clear blocking UI; next user action can retry.
+      } finally {
+        setIsSessionRefreshing(false);
+        resolveGate();
+        sessionGateRef.current = null;
+        wakeInFlightRef.current = false;
       }
     };
 
-    // Add both visibility change and classic focus (for iOS PWA quirks)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        wasHiddenRef.current = true;
+        return;
+      }
+      if (document.visibilityState === 'visible' && wasHiddenRef.current) {
+        wasHiddenRef.current = false;
+        void performWakeSessionRefresh();
+      }
+    };
+
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        void performWakeSessionRefresh();
+      }
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleVisibilityChange);
+    window.addEventListener('pageshow', handlePageShow);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleVisibilityChange);
+      window.removeEventListener('pageshow', handlePageShow);
       subscription.unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

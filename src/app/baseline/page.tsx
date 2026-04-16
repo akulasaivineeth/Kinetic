@@ -38,7 +38,12 @@ export default function BaselinePage() {
       });
 
       if (saved?.id) {
-        await submitLog.mutateAsync(saved.id);
+        await submitLog.mutateAsync({
+          logId: saved.id,
+          pushup_reps: pushupMax,
+          plank_seconds: plankMax,
+          run_distance: finalRun,
+        });
       }
 
       localStorage.setItem('kinetic-baseline-done', 'true');

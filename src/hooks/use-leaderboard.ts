@@ -25,12 +25,19 @@ export function useLeaderboard(
 
     let channel: any;
 
-    const createChannel = () => {
+    const createChannel = async () => {
+      // removeChannel must complete before reusing the same topic string; otherwise the client
+      // can still hold the old topic and collide with dedup logic.
       if (channel) {
-        supabase.removeChannel(channel);
+        await supabase.removeChannel(channel);
+        channel = undefined;
       }
-      
-      const channelId = `arena-realtime-${user.id}-${Date.now()}`;
+
+      // Supabase reuses channels by topic string. Date.now() collides when multiple hooks
+      // (e.g. header + arena both call useLeaderboard) mount in the same millisecond — then
+      // .channel() returns an already-subscribed channel and .on() throws:
+      // "cannot add postgres_changes callbacks ... after subscribe()".
+      const channelId = `arena-realtime-${user.id}-${crypto.randomUUID()}`;
       channel = supabase
         .channel(channelId)
         .on(
@@ -56,11 +63,11 @@ export function useLeaderboard(
         .subscribe();
     };
 
-    createChannel();
+    void createChannel();
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        createChannel();
+        void createChannel();
         queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
       }
     };

@@ -21,7 +21,7 @@ export function useUserMilestoneUnlocks(limit = 40) {
 
   useEffect(() => {
     if (!user) return;
-    const channelId = `user-milestones-${user.id}-${Math.random().toString(36).slice(2, 9)}`;
+    const channelId = `user-milestones-${user.id}-${crypto.randomUUID()}`;
     const channel = supabase
       .channel(channelId)
       .on(

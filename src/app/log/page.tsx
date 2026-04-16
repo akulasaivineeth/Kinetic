@@ -15,7 +15,7 @@ import {
   useMonthLogs,
   dateToLogsMap,
 } from '@/hooks/use-workout-logs';
-import { formatPlankTime } from '@/lib/utils';
+import { formatPlankTime, parsePlankMmSsDigitInput } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
@@ -196,6 +196,18 @@ function LogPage() {
     ]);
   };
 
+  /** Ensure dashboard reads fresh RPC rows before client navigation (invalidation alone can race). */
+  const refetchDashboardAfterLogChange = async () => {
+    await queryClient.refetchQueries({ queryKey: ['weekly-volume'] });
+    await queryClient.refetchQueries({ queryKey: ['workout-logs'] });
+    await queryClient.refetchQueries({ queryKey: ['month-logs'] });
+    await queryClient.refetchQueries({ queryKey: ['recent-workout-logs'] });
+    await queryClient.refetchQueries({ queryKey: ['alltime-stats'] });
+    await queryClient.refetchQueries({ queryKey: ['recent-weeks'] });
+    await queryClient.refetchQueries({ queryKey: ['stamina'] });
+    await queryClient.refetchQueries({ queryKey: ['leaderboard'] });
+  };
+
   // Submit
   const handleSubmit = async () => {
     if (!user) return;
@@ -244,32 +256,44 @@ function LogPage() {
         }
 
         setSubmitted(true);
-        // router.push preserves the React Query cache so the dashboard sees
-        // fresh invalidated data immediately (window.location would wipe it).
+        await refetchDashboardAfterLogChange();
         router.push('/dashboard');
         return;
       } // end edit flow
 
-      let logId = draftId;
-      if (!logId) {
-        const saved = await withTimeout(
-          saveDraft.mutateAsync({
-            pushup_reps: pushupReps,
-            plank_seconds: plankSeconds,
-            run_distance: finalRunDist,
-            logged_at: selectedDate.toISOString(),
-            whoop_activity_type: whoopActivity || undefined,
-            whoop_strain: whoopStrain ? parseFloat(whoopStrain) : undefined,
-            whoop_duration_seconds: whoopDuration ? parseInt(whoopDuration) * 60 : undefined,
-          }),
-          15000,
-          'Save draft'
-        );
-        logId = saved?.id;
-        if (!logId) throw new Error('Failed to save draft');
+      // Cancel pending debounced autosave so it cannot overwrite this row after we flush.
+      if (autoSaveTimer.current) {
+        clearTimeout(autoSaveTimer.current);
+        autoSaveTimer.current = null;
       }
 
-      await withTimeout(submitLog.mutateAsync(logId), 15000, 'Submit');
+      // Always flush draft first (logged_at / whoop / id). Previously, when draftId existed we skipped
+      // save and submitted whatever the last 2s autosave wrote — classic stale dashboard / wrong totals.
+      const flushPayload = {
+        id: draftId || undefined,
+        pushup_reps: pushupReps,
+        plank_seconds: plankSeconds,
+        run_distance: finalRunDist,
+        logged_at: selectedDate.toISOString(),
+        whoop_activity_type: whoopActivity || undefined,
+        whoop_strain: whoopStrain ? parseFloat(whoopStrain) : undefined,
+        whoop_duration_seconds: whoopDuration ? parseInt(whoopDuration) * 60 : undefined,
+      };
+      const flushed = await withTimeout(saveDraft.mutateAsync(flushPayload), 15000, 'Save draft');
+      const logId = flushed?.id;
+      if (!logId) throw new Error('Failed to save draft');
+      if (!draftId && flushed.id) setDraftId(flushed.id);
+
+      await withTimeout(
+        submitLog.mutateAsync({
+          logId,
+          pushup_reps: pushupReps,
+          plank_seconds: plankSeconds,
+          run_distance: finalRunDist,
+        }),
+        15000,
+        'Submit'
+      );
 
       let crossedNew: Milestone[] = [];
       if (allTimeStats) {
@@ -324,10 +348,12 @@ function LogPage() {
       if (delayTime > 0) await new Promise((r) => setTimeout(r, delayTime));
 
       setSubmitted(true);
+      await refetchDashboardAfterLogChange();
       router.push('/dashboard');
     } catch (err) {
       console.error('Submit failed:', err);
       setSubmitError(err instanceof Error ? err.message : 'Failed to save log');
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -577,15 +603,12 @@ function LogPage() {
               pattern="\d*"
               value={plankSeconds ? `${Math.floor(plankSeconds / 60)}:${(plankSeconds % 60).toString().padStart(2, '0')}` : ''}
               onChange={(e) => {
-                const raw = e.target.value.replace(/\D/g, '');
-                if (!raw) {
+                const raw = e.target.value;
+                if (!raw.replace(/\D/g, '')) {
                   setPlankSeconds(0);
                   return;
                 }
-                const numeric = parseInt(raw, 10);
-                const mins = Math.floor(numeric / 100);
-                const secs = numeric % 100;
-                setPlankSeconds(mins * 60 + secs);
+                setPlankSeconds(parsePlankMmSsDigitInput(raw));
               }}
               placeholder="00:00"
               className="w-full text-center text-5xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors duration-200 py-2"

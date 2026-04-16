@@ -16,12 +16,13 @@ export function useNotifications() {
 
     let channel: any;
 
-    const createChannel = () => {
+    const createChannel = async () => {
       if (channel) {
-        supabase.removeChannel(channel);
+        await supabase.removeChannel(channel);
+        channel = undefined;
       }
 
-      const channelId = `notifications-${user.id}-${Date.now()}`;
+      const channelId = `notifications-${user.id}-${crypto.randomUUID()}`;
       channel = supabase
         .channel(channelId)
         .on(
@@ -39,11 +40,11 @@ export function useNotifications() {
         .subscribe();
     };
 
-    createChannel();
+    void createChannel();
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        createChannel();
+        void createChannel();
         queryClient.invalidateQueries({ queryKey: ['notifications'] });
       }
     };
