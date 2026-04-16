@@ -21,14 +21,24 @@ function ensureVapid() {
 export async function POST(request: NextRequest) {
   ensureVapid();
   try {
-    const body = await request.json();
-    const webhookSecret = request.headers.get('x-whoop-signature');
+    const rawBody = await request.text();
+    const signature = request.headers.get('x-whoop-signature');
 
-    // Verify webhook signature (simplified — production should use HMAC)
-    if (process.env.WHOOP_WEBHOOK_SECRET && webhookSecret !== process.env.WHOOP_WEBHOOK_SECRET) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (process.env.WHOOP_WEBHOOK_SECRET && signature) {
+      const crypto = await import('crypto');
+      const expectedSig = crypto
+        .createHmac('sha256', process.env.WHOOP_WEBHOOK_SECRET)
+        .update(rawBody)
+        .digest('hex');
+      const sigBuffer = Buffer.from(signature);
+      const expectedBuffer = Buffer.from(expectedSig);
+      if (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
+        console.error('Whoop webhook: invalid signature');
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
     }
 
+    const body = JSON.parse(rawBody);
     const supabase = await createServiceClient();
 
     // Log the event

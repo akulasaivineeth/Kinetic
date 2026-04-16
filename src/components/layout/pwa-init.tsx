@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { registerServiceWorker } from '@/lib/offline';
 import { subscribeToPush } from '@/lib/push';
 import { useAuth } from '@/providers/auth-provider';
@@ -12,13 +12,39 @@ export function PWAInit() {
     registerServiceWorker();
   }, []);
 
-  useEffect(() => {
-    // Avoid prompting on mount; browser requires user gesture.
-    // If already granted, we can safely sync subscription silently.
-    if (user && 'Notification' in window && Notification.permission === 'granted') {
-      subscribeToPush();
-    }
+  // Ensure push subscription is registered (and re-registered after SW updates).
+  const ensurePushSubscription = useCallback(async () => {
+    if (!user) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    // subscribeToPush is idempotent — checks existing subscription first.
+    await subscribeToPush();
   }, [user]);
+
+  // On mount + whenever user changes
+  useEffect(() => {
+    ensurePushSubscription();
+  }, [ensurePushSubscription]);
+
+  // Re-subscribe on visibility change (handles SW updates, token expiry, re-registration).
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        ensurePushSubscription();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [ensurePushSubscription]);
+
+  // Re-subscribe when a new SW takes over (cache bump, deploy, etc.)
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const handleControllerChange = () => {
+      ensurePushSubscription();
+    };
+    navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
+    return () => navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
+  }, [ensurePushSubscription]);
 
   return null;
 }

@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
         client_id: process.env.WHOOP_CLIENT_ID || '',
         client_secret: process.env.WHOOP_CLIENT_SECRET || '',
         redirect_uri: redirectUri,
+        scope: 'offline read:profile read:workout read:recovery read:body_measurement',
       }),
     });
 

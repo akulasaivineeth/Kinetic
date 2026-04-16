@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   }
 
   // read:profile required for GET /v2/user/profile/basic (Whoop OAuth docs)
-  const scopes = 'read:profile read:workout read:recovery read:body_measurement';
+  const scopes = 'offline read:profile read:workout read:recovery read:body_measurement';
   const whoopAuthUrl = new URL('https://api.prod.whoop.com/oauth/oauth2/auth');
   whoopAuthUrl.searchParams.set('client_id', clientId);
   whoopAuthUrl.searchParams.set('redirect_uri', redirectUri);

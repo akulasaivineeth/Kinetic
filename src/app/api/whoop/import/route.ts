@@ -36,7 +36,26 @@ export async function GET() {
       }
     );
 
-    if (!response.ok && response.status === 401 && profile.whoop_refresh_token) {
+    if (!response.ok && response.status === 401) {
+      if (!profile.whoop_refresh_token) {
+        // No refresh token — the original OAuth was done without the 'offline' scope.
+        // Wipe stale credentials and tell user to reconnect.
+        console.error('Whoop: no refresh token stored — user must reconnect with offline scope');
+        await supabase
+          .from('profiles')
+          .update({
+            whoop_access_token: null,
+            whoop_refresh_token: null,
+            whoop_user_id: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', user.id);
+        return NextResponse.json(
+          { error: 'Whoop session expired. No refresh token available — please disconnect and reconnect Whoop from your Profile.' },
+          { status: 401 }
+        );
+      }
+
       // Auto-refresh token
       const tokenResponse = await fetch('https://api.prod.whoop.com/oauth/oauth2/token', {
         method: 'POST',
@@ -46,14 +65,15 @@ export async function GET() {
           refresh_token: profile.whoop_refresh_token,
           client_id: process.env.WHOOP_CLIENT_ID || '',
           client_secret: process.env.WHOOP_CLIENT_SECRET || '',
+          scope: 'offline read:profile read:workout read:recovery read:body_measurement',
         }),
       });
 
       if (tokenResponse.ok) {
         const tokens = await tokenResponse.json();
         accessToken = tokens.access_token;
-        
-        // Save new tokens
+
+        // Save new tokens (MUST store new refresh_token — old one is invalidated)
         await supabase
           .from('profiles')
           .update({
@@ -71,7 +91,8 @@ export async function GET() {
           }
         );
       } else {
-        console.error('Whoop Token Refresh failed:', await tokenResponse.text());
+        const errBody = await tokenResponse.text();
+        console.error('Whoop Token Refresh failed:', errBody);
         // Wipe credentials to force reconnect if refresh failed permanently
         await supabase
           .from('profiles')
@@ -82,12 +103,16 @@ export async function GET() {
             updated_at: new Date().toISOString(),
           })
           .eq('id', user.id);
+        return NextResponse.json(
+          { error: 'Whoop token refresh failed. Please disconnect and reconnect Whoop from your Profile.' },
+          { status: 401 }
+        );
       }
     }
 
     if (!response.ok) {
       if (response.status === 401) {
-        return NextResponse.json({ error: 'Whoop token expired. Please reconnect.' }, { status: 401 });
+        return NextResponse.json({ error: 'Whoop token expired. Please reconnect from Profile.' }, { status: 401 });
       }
       return NextResponse.json({ error: 'Failed to fetch from Whoop' }, { status: 502 });
     }

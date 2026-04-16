@@ -10,29 +10,49 @@ export function useNotifications() {
   const queryClient = useQueryClient();
   const supabase = createClient();
 
-  // Real-time subscription
+  // Real-time subscription — visibility-aware to survive PWA backgrounding
   useEffect(() => {
     if (!user) return;
 
-    const channelId = `notifications-${user.id}-${Math.random().toString(36).slice(2, 9)}`;
-    const channel = supabase
-      .channel(channelId)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['notifications'] });
-        }
-      )
-      .subscribe();
+    let channel: any;
+
+    const createChannel = () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+
+      const channelId = `notifications-${user.id}-${Date.now()}`;
+      channel = supabase
+        .channel(channelId)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => {
+            queryClient.invalidateQueries({ queryKey: ['notifications'] });
+          }
+        )
+        .subscribe();
+    };
+
+    createChannel();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        createChannel();
+        queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      supabase.removeChannel(channel);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [user, queryClient]);
 

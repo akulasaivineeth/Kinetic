@@ -76,14 +76,25 @@ async function subscribeToPushInternal(): Promise<boolean> {
       return false;
     }
 
-    // Send subscription to our API
+    // Validate subscription object before sending
+    const subJson = subscription.toJSON();
+    if (!subJson.endpoint || !subJson.keys?.p256dh || !subJson.keys?.auth) {
+      console.error('Push subscription missing required fields:', JSON.stringify(subJson).slice(0, 100));
+      return false;
+    }
+
+    // Send subscription to our API to persist in profile
     const response = await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(subscription),
     });
-    if (!response.ok) return false;
+    if (!response.ok) {
+      console.error('Push subscribe API failed:', response.status, await response.text().catch(() => ''));
+      return false;
+    }
 
+    console.log('Push subscription registered successfully');
     return true;
   } catch (error) {
     if (

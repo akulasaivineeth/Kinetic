@@ -17,7 +17,7 @@ import {
 } from '@/hooks/use-workout-logs';
 import { formatPlankTime } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { format, isSameDay, startOfDay } from 'date-fns';
 import { useAllTimeStats } from '@/hooks/use-alltime-stats';
@@ -36,8 +36,9 @@ export default function LogPageWrapper() {
 }
 
 function LogPage() {
-  const { user, profile, isSessionRefreshing } = useAuth();
+  const { user, profile, isSessionRefreshing, waitForSession } = useAuth();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { data: goals } = useGoals();
   const { data: weeklyVolume } = useWeeklyVolume();
@@ -195,19 +196,13 @@ function LogPage() {
     ]);
   };
 
-  const supabase = createClient();
-
   // Submit
   const handleSubmit = async () => {
     if (!user) return;
     setSubmitError(null);
     setIsSubmitting(true);
     try {
-      try {
-        await supabase.auth.getSession();
-      } catch {
-        // If offline or transient failure, proceed
-      }
+      await waitForSession();
 
       const finalRunDist = profile?.unit_preference === 'imperial'
         ? Number((runDistance * 1.60934).toFixed(3))
@@ -249,8 +244,9 @@ function LogPage() {
         }
 
         setSubmitted(true);
-        // Using window.location.href to guarantee redirect since state changes might be swallowed.
-        window.location.href = '/dashboard';
+        // router.push preserves the React Query cache so the dashboard sees
+        // fresh invalidated data immediately (window.location would wipe it).
+        router.push('/dashboard');
         return;
       } // end edit flow
 
@@ -328,7 +324,7 @@ function LogPage() {
       if (delayTime > 0) await new Promise((r) => setTimeout(r, delayTime));
 
       setSubmitted(true);
-      window.location.href = '/dashboard';
+      router.push('/dashboard');
     } catch (err) {
       console.error('Submit failed:', err);
       setSubmitError(err instanceof Error ? err.message : 'Failed to save log');

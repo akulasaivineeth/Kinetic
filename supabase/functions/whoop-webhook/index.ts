@@ -31,15 +31,23 @@ serve(async (req) => {
     const body = JSON.parse(rawBody);
     const signature = req.headers.get('x-whoop-signature');
 
-    // 1. Signature Verification (Precision Requirement)
+    // 1. Signature Verification — HMAC-SHA256
     if (WHOOP_WEBHOOK_SECRET && signature) {
-      // In a real production setup, we would use HMAC SHA256 here.
-      // For now, we perform a strict equality check if the secret is set as the signature (simplified for this environment).
-      // If the secret is a real HMAC key, we would use Deno.subtle.importKey / sign.
-      if (signature !== WHOOP_WEBHOOK_SECRET) {
-        console.error('Invalid signature');
-        // In full production, return 401. For now, we log and proceed if it's a test.
-        // return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(WHOOP_WEBHOOK_SECRET),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(rawBody));
+      const expectedHex = Array.from(new Uint8Array(sig))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+      if (signature !== expectedHex) {
+        console.error('Invalid webhook signature');
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
       }
     }
 

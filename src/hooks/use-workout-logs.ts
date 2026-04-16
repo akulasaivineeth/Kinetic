@@ -217,7 +217,7 @@ export function useSaveDraft() {
 
 export function useSubmitLog() {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, waitForSession } = useAuth();
   const supabase = createClient();
 
   return useMutation({
@@ -225,19 +225,22 @@ export function useSubmitLog() {
       if (!logId) throw new Error('No log id provided for submission');
       if (!user) throw new Error('Not authenticated');
 
-      // Force a session refresh before any DB call. This handles the PWA wake-from-background
-      // race condition where the user taps Submit before the visibility-change refresh finishes.
-      await supabase.auth.getSession();
+      // Wait for any in-flight session refresh to complete before making DB calls.
+      // This prevents the race condition where Submit fires before visibility-change refresh finishes.
+      await waitForSession();
 
       // First, fetch the log to calculate the session score
+      // new Promise() converts the Supabase thenable into a real Promise so withTimeout can race against it.
+      // Without this, the thenable resolves lazily and the timeout never fires.
       const { data: draftData } = await withTimeout(
-        Promise.resolve(
+        new Promise<any>((resolve, reject) => {
           supabase
             .from('workout_logs')
             .select('pushup_reps, plank_seconds, run_distance')
             .eq('id', logId)
             .single()
-        )
+            .then(resolve, reject);
+        })
       );
 
       // Calculate difficulty-based session score
@@ -249,7 +252,7 @@ export function useSubmitLog() {
 
       // Submit the log (core fields only — guaranteed to work)
       const { data, error } = await withTimeout(
-        Promise.resolve(
+        new Promise<any>((resolve, reject) => {
           supabase
             .from('workout_logs')
             .update({
@@ -260,7 +263,8 @@ export function useSubmitLog() {
             .eq('id', logId)
             .select()
             .single()
-        )
+            .then(resolve, reject);
+        })
       );
 
       if (error) throw error;
@@ -290,6 +294,47 @@ export function useSubmitLog() {
       queryClient.invalidateQueries({ queryKey: ['recent-weeks'] });
       queryClient.invalidateQueries({ queryKey: ['user-milestone-unlocks'] });
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
+
+      // Push-notify shared friends that you logged a workout (best-effort, non-blocking)
+      if (user) {
+        (async () => {
+          try {
+            const { data: connections } = await supabase
+              .from('sharing_connections')
+              .select('requester_id, recipient_id, is_mutual')
+              .eq('status', 'accepted')
+              .or(`requester_id.eq.${user.id},recipient_id.eq.${user.id}`);
+
+            if (!connections?.length) return;
+
+            const friendIds = connections
+              .filter(c => {
+                // Friends who should see my data (they requested me, OR it's mutual)
+                if (c.requester_id === user.id) return true; // I requested → they see me
+                if (c.recipient_id === user.id && c.is_mutual) return true;
+                return false;
+              })
+              .map(c => c.requester_id === user.id ? c.recipient_id : c.requester_id);
+
+            const userName = user.user_metadata?.full_name || user.email || 'A friend';
+
+            for (const friendId of friendIds) {
+              fetch('/api/push/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  userId: friendId,
+                  title: `${userName} just logged a workout 💪`,
+                  body: 'Check the Arena to see how you compare!',
+                  data: { url: '/arena' },
+                }),
+              }).catch(() => {}); // fire-and-forget
+            }
+          } catch {
+            // Push to friends is best-effort
+          }
+        })();
+      }
     },
   });
 }

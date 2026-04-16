@@ -1,10 +1,6 @@
-const CACHE_NAME = 'kinetic-v2';
+const CACHE_NAME = 'kinetic-v3';
 const STATIC_ASSETS = [
   '/',
-  '/dashboard',
-  '/log',
-  '/arena',
-  '/profile',
   '/manifest.json',
 ];
 

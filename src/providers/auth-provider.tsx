@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, useCallback, type ReactNode } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import type { Profile } from '@/types/database';
@@ -10,6 +10,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   isSessionRefreshing: boolean;
+  waitForSession: () => Promise<void>;
   signInWithGoogle: (inviteCode?: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -20,6 +21,7 @@ const AuthContext = createContext<AuthContextType>({
   profile: null,
   loading: true,
   isSessionRefreshing: false,
+  waitForSession: async () => {},
   signInWithGoogle: async () => {},
   signOut: async () => {},
   refreshProfile: async () => {},
@@ -33,6 +35,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isSessionRefreshing, setIsSessionRefreshing] = useState(false);
   const supabase = createClient();
+
+  const sessionGateRef = useRef<{ promise: Promise<void>; resolve: () => void } | null>(null);
+
+  const waitForSession = useCallback(async () => {
+    if (sessionGateRef.current) {
+      await sessionGateRef.current.promise;
+    }
+  }, []);
 
   const fetchProfile = async (userId: string) => {
     const { data } = await supabase
@@ -73,14 +83,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // isSessionRefreshing gates the submit button so the user can't fire a mutation mid-refresh.
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
+        let resolveGate: () => void = () => {};
+        const gatePromise = new Promise<void>((r) => { resolveGate = r; });
+        sessionGateRef.current = { promise: gatePromise, resolve: resolveGate };
+
         setIsSessionRefreshing(true);
         try {
-          // getSession() automatically triggers a silent refresh if the token is expired
-          await supabase.auth.getSession();
+          // getSession() reads local session & auto-refreshes expired JWT via refresh token.
+          const { data: { session } } = await supabase.auth.getSession();
+
+          if (session?.user) {
+            // Session is alive — update React state immediately (don't wait for onAuthStateChange race).
+            setUser(session.user);
+            await fetchProfile(session.user.id);
+          } else {
+            // getSession() returned null — session may be gone. Validate with server as fallback.
+            const { data: { user: freshUser } } = await supabase.auth.getUser();
+            if (freshUser) {
+              setUser(freshUser);
+              await fetchProfile(freshUser.id);
+            } else {
+              // Truly logged out (refresh token expired or revoked).
+              setUser(null);
+              setProfile(null);
+            }
+          }
         } catch {
-          // Silent catch to handle if phone wakes up momentarily without network
+          // Silent catch — phone may wake momentarily without network
         } finally {
           setIsSessionRefreshing(false);
+          resolveGate();
+          sessionGateRef.current = null;
         }
       }
     };
@@ -134,7 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, isSessionRefreshing, signInWithGoogle, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, isSessionRefreshing, waitForSession, signInWithGoogle, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
