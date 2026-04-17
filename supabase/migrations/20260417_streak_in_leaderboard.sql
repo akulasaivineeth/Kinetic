@@ -1,90 +1,6 @@
--- ============================================================
--- KINETIC: Add Squats + Update Scoring Base Rates
--- Push-ups: 2.6 + 0.052n², Plank: 0.8 + 0.003n²
--- Run: 36 + 7.2n², Squats: 2.6 + 0.052n²
--- ============================================================
+-- Add streak calculation to leaderboard (server-side, for all visible users)
 
--- 1. Add squat_reps column to workout_logs
-ALTER TABLE public.workout_logs
-  ADD COLUMN IF NOT EXISTS squat_reps INTEGER DEFAULT 0;
-
--- 2. Add squat goals to performance_goals
-ALTER TABLE public.performance_goals
-  ADD COLUMN IF NOT EXISTS squat_weekly_goal INTEGER DEFAULT 300,
-  ADD COLUMN IF NOT EXISTS squat_peak_goal INTEGER DEFAULT 50;
-
--- 3. Update calc_session_score with new base rates + squats
-CREATE OR REPLACE FUNCTION public.calc_session_score(
-  p_pushup_reps INTEGER,
-  p_plank_seconds INTEGER,
-  p_run_distance NUMERIC,
-  p_squat_reps INTEGER DEFAULT 0
-) RETURNS NUMERIC AS $$
-DECLARE
-  score NUMERIC := 0;
-  n NUMERIC;
-BEGIN
-  -- Push-up score: 2.6 × reps + 0.052 × reps²
-  n := GREATEST(COALESCE(p_pushup_reps, 0), 0);
-  IF n > 0 THEN
-    score := score + 2.6 * n + 0.052 * (n * n);
-  END IF;
-
-  -- Plank score: 0.8 × seconds + 0.003 × seconds²
-  n := GREATEST(COALESCE(p_plank_seconds, 0), 0);
-  IF n > 0 THEN
-    score := score + 0.8 * n + 0.003 * (n * n);
-  END IF;
-
-  -- Run score: 36 × km + 7.2 × km²
-  n := GREATEST(COALESCE(p_run_distance, 0), 0);
-  IF n > 0 THEN
-    score := score + 36.0 * n + 7.2 * (n * n);
-  END IF;
-
-  -- Squat score: 2.6 × reps + 0.052 × reps²
-  n := GREATEST(COALESCE(p_squat_reps, 0), 0);
-  IF n > 0 THEN
-    score := score + 2.6 * n + 0.052 * (n * n);
-  END IF;
-
-  RETURN ROUND(score, 1);
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
-
--- 4. Backfill ALL existing submitted logs with new scoring formula
-UPDATE public.workout_logs
-SET session_score = public.calc_session_score(pushup_reps, plank_seconds, run_distance, squat_reps)
-WHERE submitted_at IS NOT NULL;
-
--- 5. Update get_weekly_volume to include squats (must drop first — return type changed)
-DROP FUNCTION IF EXISTS public.get_weekly_volume(UUID, TIMESTAMPTZ);
-CREATE OR REPLACE FUNCTION public.get_weekly_volume(
-  p_user_id UUID,
-  p_week_start TIMESTAMPTZ DEFAULT date_trunc('week', NOW())
-)
-RETURNS TABLE(
-  total_pushups BIGINT,
-  total_plank_seconds BIGINT,
-  total_run_distance NUMERIC,
-  total_squats BIGINT
-) AS $$
-BEGIN
-  RETURN QUERY
-  SELECT
-    COALESCE(SUM(pushup_reps), 0)::BIGINT,
-    COALESCE(SUM(plank_seconds), 0)::BIGINT,
-    COALESCE(SUM(run_distance), 0)::NUMERIC,
-    COALESCE(SUM(squat_reps), 0)::BIGINT
-  FROM public.workout_logs
-  WHERE user_id = p_user_id
-    AND submitted_at IS NOT NULL
-    AND logged_at >= p_week_start
-    AND logged_at < p_week_start + INTERVAL '7 days';
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- 6. Helper: calculate streak for any user
+-- Helper: calculate streak for any user
 CREATE OR REPLACE FUNCTION public.calc_user_streak(p_user_id UUID)
 RETURNS INTEGER AS $$
 DECLARE
@@ -92,7 +8,8 @@ DECLARE
   wk_count INTEGER;
   streak INTEGER := 0;
 BEGIN
-  wk_start := date_trunc('week', CURRENT_DATE)::DATE;
+  wk_start := date_trunc('week', CURRENT_DATE)::DATE;  -- Monday of current week
+
   LOOP
     SELECT COUNT(*) INTO wk_count
     FROM public.workout_logs
@@ -100,6 +17,7 @@ BEGIN
       AND submitted_at IS NOT NULL
       AND logged_at >= wk_start
       AND logged_at < wk_start + 7;
+
     IF wk_count >= 4 THEN
       streak := streak + 1;
       wk_start := wk_start - 7;
@@ -107,12 +25,14 @@ BEGIN
       EXIT;
     END IF;
   END LOOP;
+
   RETURN streak;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 7. Update get_leaderboard to include squat_value + streak (must drop first — return type changed)
+-- Recreate get_leaderboard with streak column
 DROP FUNCTION IF EXISTS public.get_leaderboard(UUID, TIMESTAMP WITH TIME ZONE, TIMESTAMP WITH TIME ZONE, TEXT, TEXT);
+
 CREATE OR REPLACE FUNCTION public.get_leaderboard(
   p_user_id UUID,
   p_date_from TIMESTAMP WITH TIME ZONE,
@@ -195,7 +115,6 @@ BEGIN
     ORDER BY total_score DESC;
 
   ELSE
-    -- Percent mode: compare session score totals between periods
     RETURN QUERY
     WITH visible_users AS (
       SELECT p_user_id AS uid

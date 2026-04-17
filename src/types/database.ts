@@ -115,6 +115,7 @@ export interface LeaderboardEntry {
   run_value: number;
   squat_value: number;
   total_score: number;
+  streak: number;
 }
 
 export interface WeeklyVolume {

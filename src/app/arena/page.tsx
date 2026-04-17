@@ -5,13 +5,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { AppShell } from '@/components/layout/app-shell';
 import { GlassCard } from '@/components/ui/glass-card';
-import { TogglePills } from '@/components/ui/toggle-pills';
+
 import { ExerciseSelect } from '@/components/ui/exercise-select';
 import { DateRangeTabs } from '@/components/ui/date-range-tabs';
 import { useLeaderboard } from '@/hooks/use-leaderboard';
 import { useWorkoutLogs, useSharedLogs, type DateRange } from '@/hooks/use-workout-logs';
 import { useAuth } from '@/providers/auth-provider';
-import { useStreak } from '@/hooks/use-streak';
+
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { StandingsSkeleton } from '@/components/ui/skeleton';
 import { getInitials, formatDistance } from '@/lib/utils';
@@ -139,8 +139,6 @@ export default function ArenaPage() {
 
   const { data: myLogs = [] } = useWorkoutLogs(dateRange, customFrom, customTo);
   const { data: sharedLogs = [] } = useSharedLogs(dateRange, customFrom, customTo);
-  const { data: streak = 0 } = useStreak();
-
 
   const top3 = leaderboard.slice(0, 3);
   const podiumOrder = top3.length >= 3
@@ -509,8 +507,8 @@ export default function ArenaPage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-sm text-dark-text truncate">
                         {isYou ? `YOU (${entry.full_name?.split(' ')[0]})` : entry.full_name?.toUpperCase()}
-                        {isYou && streak >= 1 && (
-                          <span className="ml-1.5 text-[10px] text-amber-400 font-bold" title={`${streak}-week streak`}>🔥{streak}</span>
+                        {entry.streak >= 1 && (
+                          <span className="ml-1.5 text-[10px] text-amber-400 font-bold" title={`${entry.streak}-week streak`}>🔥{entry.streak}</span>
                         )}
                       </p>
                       <div className="flex items-center gap-2 text-[10px] text-dark-muted mt-0.5">
