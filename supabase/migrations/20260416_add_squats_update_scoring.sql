@@ -1,7 +1,7 @@
 -- ============================================================
 -- KINETIC: Add Squats + Update Scoring Base Rates
--- Push-ups: 2.0 + 0.04n², Plank: 0.8 + 0.003n²
--- Run: 36 + 7.2n², Squats: 2.0 + 0.04n²
+-- Push-ups: 2.6 + 0.052n², Plank: 0.8 + 0.003n²
+-- Run: 36 + 7.2n², Squats: 2.6 + 0.052n²
 -- ============================================================
 
 -- 1. Add squat_reps column to workout_logs
@@ -24,10 +24,10 @@ DECLARE
   score NUMERIC := 0;
   n NUMERIC;
 BEGIN
-  -- Push-up score: 2.0 × reps + 0.04 × reps²
+  -- Push-up score: 2.6 × reps + 0.052 × reps²
   n := GREATEST(COALESCE(p_pushup_reps, 0), 0);
   IF n > 0 THEN
-    score := score + 2.0 * n + 0.04 * (n * n);
+    score := score + 2.6 * n + 0.052 * (n * n);
   END IF;
 
   -- Plank score: 0.8 × seconds + 0.003 × seconds²
@@ -42,10 +42,10 @@ BEGIN
     score := score + 36.0 * n + 7.2 * (n * n);
   END IF;
 
-  -- Squat score: 2.0 × reps + 0.04 × reps²
+  -- Squat score: 2.6 × reps + 0.052 × reps²
   n := GREATEST(COALESCE(p_squat_reps, 0), 0);
   IF n > 0 THEN
-    score := score + 2.0 * n + 0.04 * (n * n);
+    score := score + 2.6 * n + 0.052 * (n * n);
   END IF;
 
   RETURN ROUND(score, 1);

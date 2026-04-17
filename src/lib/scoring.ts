@@ -10,9 +10,9 @@
  *     This means the marginal value of each rep/sec/km INCREASES as you push harder
  *
  * Example (push-ups, base=2.0, accel=0.04):
- *   10 reps → 10×2.0 + 0.04×(10²) = 20 + 4 = 24 pts
- *   20 reps → 20×2.0 + 0.04×(20²) = 40 + 16 = 56 pts  (not 2× but 2.3×!)
- *   50 reps → 50×2.0 + 0.04×(50²) = 100 + 100 = 200 pts
+ *   10 reps → 10×2.6 + 0.052×(10²) = 26 + 5.2 = 31.2 pts
+ *   20 reps → 20×2.6 + 0.052×(20²) = 52 + 20.8 = 72.8 pts  (not 2× but 2.3×!)
+ *   50 reps → 50×2.6 + 0.052×(50²) = 130 + 130 = 260 pts
  *
  * This creates the "push for that extra rep" incentive the user wants.
  */
@@ -33,8 +33,8 @@ export interface ScoringConfig {
 }
 
 export const PUSHUP_CONFIG: ScoringConfig = {
-  baseRate: 2.0,
-  acceleration: 0.04,
+  baseRate: 2.6,
+  acceleration: 0.052,
   name: 'Push-ups',
   unit: 'reps',
   emoji: '💪',
@@ -57,8 +57,8 @@ export const RUN_CONFIG: ScoringConfig = {
 };
 
 export const SQUAT_CONFIG: ScoringConfig = {
-  baseRate: 2.0,
-  acceleration: 0.04,
+  baseRate: 2.6,
+  acceleration: 0.052,
   name: 'Squats',
   unit: 'reps',
   emoji: '🦵',
