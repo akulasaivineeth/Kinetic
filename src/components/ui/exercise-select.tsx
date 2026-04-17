@@ -35,7 +35,7 @@ export function ExerciseSelect<T extends string>({
   const selectedLabel = options.find((o) => o.value === selected)?.label ?? '';
 
   return (
-    <div ref={ref} className="relative inline-block">
+    <div ref={ref} className="relative inline-block shrink-0">
       <button
         onClick={() => setOpen((p) => !p)}
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold tracking-wide bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 transition-all hover:bg-emerald-500/20"

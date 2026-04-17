@@ -39,8 +39,8 @@ interface DateRangeTabsProps {
 }
 
 const tabs: { value: DateRangeType; label: string }[] = [
-  { value: 'week', label: 'WEEK' },
-  { value: 'month', label: 'MONTH' },
+  { value: 'week', label: 'WK' },
+  { value: 'month', label: 'MO' },
   { value: 'custom', label: 'CUSTOM' },
 ];
 
@@ -62,7 +62,7 @@ export function DateRangeTabs({ selected, onChange, onCustomDates, motionScope }
   return (
     <div className="relative">
       <style>{calendarStyles}</style>
-      <div className="flex gap-1 overflow-x-auto no-scrollbar pb-1">
+      <div className="flex gap-1 justify-end overflow-x-auto no-scrollbar pb-1">
         {tabs.map((tab) => (
           <button
             key={tab.value}

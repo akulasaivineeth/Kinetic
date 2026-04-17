@@ -41,7 +41,7 @@ export function AppShell({ children }: AppShellProps) {
   };
 
   return (
-    <div className="min-h-dvh bg-dark-bg flex flex-col max-w-lg mx-auto relative overflow-hidden">
+    <div className="min-h-dvh bg-dark-bg flex flex-col max-w-lg mx-auto relative overflow-x-hidden">
       <Header />
       <PullToRefresh onRefresh={handleRefresh} className="flex-1 px-5 pb-24 overflow-y-auto overflow-x-hidden">
         {children}

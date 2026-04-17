@@ -1,6 +1,6 @@
 -- ============================================================
 -- KINETIC: Add Squats + Update Scoring Base Rates
--- Push-ups: 2.0 + 0.04n², Plank: 0.55 + 0.0025n²
+-- Push-ups: 2.0 + 0.04n², Plank: 0.8 + 0.003n²
 -- Run: 36 + 7.2n², Squats: 2.0 + 0.04n²
 -- ============================================================
 
@@ -30,10 +30,10 @@ BEGIN
     score := score + 2.0 * n + 0.04 * (n * n);
   END IF;
 
-  -- Plank score: 0.55 × seconds + 0.0025 × seconds²
+  -- Plank score: 0.8 × seconds + 0.003 × seconds²
   n := GREATEST(COALESCE(p_plank_seconds, 0), 0);
   IF n > 0 THEN
-    score := score + 0.55 * n + 0.0025 * (n * n);
+    score := score + 0.8 * n + 0.003 * (n * n);
   END IF;
 
   -- Run score: 36 × km + 7.2 × km²

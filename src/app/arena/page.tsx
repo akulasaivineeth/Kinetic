@@ -22,6 +22,16 @@ import {
 import { format } from 'date-fns';
 import { Dumbbell, Timer, Route, Trophy, Zap } from 'lucide-react';
 import { calculateSessionScore, calculatePushupScore, calculatePlankScore, calculateRunScore, calculateSquatScore } from '@/lib/scoring';
+import { createClient } from '@/lib/supabase/client';
+
+interface DailyStats {
+  day_date: string;
+  pushup_total: number;
+  squat_total: number;
+  plank_total: number;
+  run_total: number;
+  day_score: number;
+}
 
 type ArenaMetric = 'overall' | 'pushups' | 'squats' | 'plank' | 'run';
 
@@ -80,13 +90,30 @@ export default function ArenaPage() {
 
   // Peek functionality
   const [peekUser, setPeekUser] = useState<any>(null);
+  const [peekStats, setPeekStats] = useState<DailyStats[] | null>(null);
+  const [peekLoading, setPeekLoading] = useState(false);
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
 
   const startPress = (entry: any) => {
     if (pressTimer.current) clearTimeout(pressTimer.current);
     pressTimer.current = setTimeout(() => {
       setPeekUser(entry);
-    }, 400); // 400ms long press to peek //
+      setPeekStats(null);
+      setPeekLoading(true);
+      const supabase = createClient();
+      Promise.resolve(
+        supabase.rpc('get_user_7day_daily', {
+          p_viewer_id: profile?.id,
+          p_target_user_id: entry.user_id,
+        })
+      )
+        .then(({ data }) => {
+          if (data && data.length > 0) setPeekStats(data as DailyStats[]);
+          else setPeekStats([]);
+        })
+        .catch(() => setPeekStats(null))
+        .finally(() => setPeekLoading(false));
+    }, 400);
   };
 
   const clearPress = () => {
@@ -94,7 +121,6 @@ export default function ArenaPage() {
   };
 
   useEffect(() => {
-    // block scrolling when peeking
     if (peekUser) document.body.style.overflow = 'hidden';
     else document.body.style.overflow = 'unset';
     return () => { document.body.style.overflow = 'unset'; }
@@ -212,7 +238,7 @@ export default function ArenaPage() {
 
         {/* Metric Filter + Date Range */}
         <div className="space-y-2" data-testid="uat-arena-filters">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <ExerciseSelect
               options={[
                 { value: 'overall' as const, label: 'Overall' },
@@ -540,58 +566,92 @@ export default function ArenaPage() {
             >
               <div className="absolute inset-0 bg-gradient-to-b from-emerald-900/10 to-transparent pointer-events-none" />
               <div className="relative flex flex-col items-center">
-                <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-emerald-500 mb-4 shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+                <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-emerald-500 mb-3 shadow-[0_0_20px_rgba(16,185,129,0.3)]">
                   {peekUser.avatar_url ? (
-                    <Image src={peekUser.avatar_url} alt="" width={96} height={96} className="object-cover w-full h-full" />
+                    <Image src={peekUser.avatar_url} alt="" width={80} height={80} className="object-cover w-full h-full" />
                   ) : (
-                    <div className="w-full h-full bg-dark-elevated flex items-center justify-center text-3xl font-black text-emerald-500">
+                    <div className="w-full h-full bg-dark-elevated flex items-center justify-center text-2xl font-black text-emerald-500">
                       {getInitials(peekUser.full_name)}
                     </div>
                   )}
                 </div>
-                <h3 className="text-2xl font-black text-white px-2 text-center mb-1 drop-shadow-sm">
+                <h3 className="text-xl font-black text-white px-2 text-center mb-0.5 drop-shadow-sm">
                   {peekUser.full_name?.toUpperCase()}
                 </h3>
-                <p className="text-xs font-bold text-emerald-500 tracking-[0.2em] uppercase mb-1 drop-shadow-sm">
-                  {isOverall ? 'TOTAL SESSION POINTS' : `${mc.label}`} • {formatVal(getEntryValue(peekUser, arenaMetric), arenaMetric, profile?.unit_preference, fairMode)}
+                <p className="text-[10px] font-semibold tracking-[0.15em] text-dark-muted uppercase mb-4">
+                  ROLLING 7 DAYS
                 </p>
-                {!isOverall && (
-                  <p className="text-[10px] font-semibold text-dark-muted mb-5">
-                    {Math.round(getCategoryScore(peekUser, arenaMetric))} pts earned
-                  </p>
+
+                {peekLoading ? (
+                  <div className="w-full py-8 flex justify-center">
+                    <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : peekStats && peekStats.length > 0 ? (
+                  <div className="w-full space-y-1">
+                    {peekStats.map((day) => {
+                      const d = new Date(day.day_date + 'T00:00:00');
+                      const dayLabel = format(d, 'dd EEE').toUpperCase();
+                      const hasActivity = Number(day.day_score) > 0;
+                      const score = Math.round(Number(day.day_score));
+
+                      const chips: { Icon: typeof Dumbbell; val: string; pts: number }[] = [];
+                      if (day.pushup_total > 0) chips.push({ Icon: Dumbbell, val: `${day.pushup_total}`, pts: Math.round(calculatePushupScore(day.pushup_total)) });
+                      if (day.squat_total > 0) chips.push({ Icon: Zap, val: `${day.squat_total}`, pts: Math.round(calculateSquatScore(day.squat_total)) });
+                      if (day.plank_total > 0) {
+                        const mins = Number(day.plank_total) / 60;
+                        chips.push({ Icon: Timer, val: mins >= 1 ? `${Math.round(mins)}m` : `${day.plank_total}s`, pts: Math.round(calculatePlankScore(Number(day.plank_total))) });
+                      }
+                      if (Number(day.run_total) > 0) {
+                        const km = Number(day.run_total);
+                        chips.push({ Icon: Route, val: `${km.toFixed(1)}k`, pts: Math.round(calculateRunScore(km)) });
+                      }
+
+                      return (
+                        <div
+                          key={day.day_date}
+                          className={`px-3 py-2 rounded-xl ${hasActivity ? 'bg-white/5 border border-white/[0.06]' : 'opacity-35'}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black text-dark-muted">{dayLabel}</span>
+                            {hasActivity ? (
+                              <span className="text-[11px] font-black text-emerald-400">{score} pts</span>
+                            ) : (
+                              <span className="text-[9px] font-semibold text-dark-muted">Rest</span>
+                            )}
+                          </div>
+                          {hasActivity && (
+                            <div className="flex items-center gap-2 mt-1">
+                              {chips.map(({ Icon, val, pts }, i) => (
+                                <div key={i} className="flex items-center gap-1">
+                                  <Icon size={10} className="text-emerald-500/60" />
+                                  <span className="text-[10px] font-bold text-dark-text">{val}</span>
+                                  <span className="text-[9px] text-dark-muted">({pts})</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 mt-1">
+                      <span className="text-[10px] font-bold tracking-wider text-dark-muted uppercase">
+                        {peekStats.filter(d => Number(d.day_score) > 0).length} ACTIVE DAYS
+                      </span>
+                      <div className="text-right">
+                        <span className="text-base font-black text-emerald-400">
+                          {Math.round(peekStats.reduce((s, d) => s + Number(d.day_score), 0)).toLocaleString()}
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-500/70 ml-1">pts</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-dark-muted py-4">No data available</p>
                 )}
-                {isOverall && <div className="mb-6" />}
 
-                <div className="w-full grid grid-cols-2 gap-2">
-                  <div className={`flex flex-col items-center justify-center py-4 px-2 rounded-2xl backdrop-blur-md ${arenaMetric === 'pushups' ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-white/5 border border-white/10'}`}>
-                    <Dumbbell size={18} className="text-emerald-400 mb-2" />
-                    <span className="text-lg font-black text-white">{Math.round(peekUser.pushup_value)}</span>
-                    <span className="text-[9px] font-bold tracking-wider text-dark-muted mt-1 uppercase">PUSH-UPS</span>
-                    <span className="text-[9px] font-semibold text-emerald-500/70 mt-0.5">{Math.round(calculatePushupScore(peekUser.pushup_value))} pts</span>
-                  </div>
-                  <div className={`flex flex-col items-center justify-center py-4 px-2 rounded-2xl backdrop-blur-md ${arenaMetric === 'squats' ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-white/5 border border-white/10'}`}>
-                    <Zap size={18} className="text-emerald-400 mb-2" />
-                    <span className="text-lg font-black text-white">{Math.round(peekUser.squat_value)}</span>
-                    <span className="text-[9px] font-bold tracking-wider text-dark-muted mt-1 uppercase">SQUATS</span>
-                    <span className="text-[9px] font-semibold text-emerald-500/70 mt-0.5">{Math.round(calculateSquatScore(peekUser.squat_value))} pts</span>
-                  </div>
-                  <div className={`flex flex-col items-center justify-center py-4 px-2 rounded-2xl backdrop-blur-md ${arenaMetric === 'plank' ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-white/5 border border-white/10'}`}>
-                    <Timer size={18} className="text-emerald-400 mb-2" />
-                    <span className="text-lg font-black text-white">{Math.round(peekUser.plank_value / 60)}</span>
-                    <span className="text-[9px] font-bold tracking-wider text-dark-muted mt-1 uppercase">PLANK MIN</span>
-                    <span className="text-[9px] font-semibold text-emerald-500/70 mt-0.5">{Math.round(calculatePlankScore(peekUser.plank_value))} pts</span>
-                  </div>
-                  <div className={`flex flex-col items-center justify-center py-4 px-2 rounded-2xl backdrop-blur-md ${arenaMetric === 'run' ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-white/5 border border-white/10'}`}>
-                    <Route size={18} className="text-emerald-400 mb-2" />
-                    <span className="text-lg font-black text-white">{formatDistance(Number(peekUser.run_value), profile?.unit_preference)}</span>
-                    <span className="text-[9px] font-bold tracking-wider text-dark-muted mt-1 uppercase">{profile?.unit_preference === 'imperial' ? 'MI' : 'KM'}</span>
-                    <span className="text-[9px] font-semibold text-emerald-500/70 mt-0.5">{Math.round(calculateRunScore(Number(peekUser.run_value)))} pts</span>
-                  </div>
-                </div>
-
-                <button 
+                <button
                   onClick={() => setPeekUser(null)}
-                  className="mt-6 px-6 py-3 rounded-full bg-white/10 hover:bg-white/15 text-sm font-bold text-white transition-colors"
+                  className="mt-5 px-6 py-2.5 rounded-full bg-white/10 hover:bg-white/15 text-[11px] font-bold text-white transition-colors"
                 >
                   CLOSE
                 </button>

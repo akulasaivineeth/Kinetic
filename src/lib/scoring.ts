@@ -41,8 +41,8 @@ export const PUSHUP_CONFIG: ScoringConfig = {
 };
 
 export const PLANK_CONFIG: ScoringConfig = {
-  baseRate: 0.55,
-  acceleration: 0.0025,
+  baseRate: 0.8,
+  acceleration: 0.003,
   name: 'Plank',
   unit: 'sec',
   emoji: '🧘',

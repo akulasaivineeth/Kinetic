@@ -503,7 +503,7 @@ export default function DashboardPage() {
 
           {/* Date Range + Metric Toggles */}
           <div className="space-y-4 mb-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <ExerciseSelect
                 options={[
                   { value: 'pushups' as const, label: 'Push-ups' },
