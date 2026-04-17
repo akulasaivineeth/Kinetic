@@ -66,7 +66,7 @@ function LandingPage() {
           transition={{ delay: 0.3 }}
           className="text-dark-muted text-base mb-10 max-w-xs mx-auto leading-relaxed"
         >
-          Track your push-ups, planks, and runs.
+          Track your push-ups, squats, planks, and runs.
           Compete with friends in the Arena.
         </motion.p>
 

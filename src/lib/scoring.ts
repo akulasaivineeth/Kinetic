@@ -9,10 +9,10 @@
  *   - The formula: score = base_rate × count + acceleration × count²/scale
  *     This means the marginal value of each rep/sec/km INCREASES as you push harder
  *
- * Example (push-ups):
- *   10 reps → 10×1.5 + 0.08×(10²) = 15 + 8 = 23 pts
- *   20 reps → 20×1.5 + 0.08×(20²) = 30 + 32 = 62 pts  (not 2× but 2.7×!)
- *   30 reps → 30×1.5 + 0.08×(30²) = 45 + 72 = 117 pts (extra 10 reps = +55 pts!)
+ * Example (push-ups, base=2.0, accel=0.04):
+ *   10 reps → 10×2.0 + 0.04×(10²) = 20 + 4 = 24 pts
+ *   20 reps → 20×2.0 + 0.04×(20²) = 40 + 16 = 56 pts  (not 2× but 2.3×!)
+ *   50 reps → 50×2.0 + 0.04×(50²) = 100 + 100 = 200 pts
  *
  * This creates the "push for that extra rep" incentive the user wants.
  */

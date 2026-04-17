@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlassCard } from './glass-card';
-import { Dumbbell, Timer, Route, ArrowRight, Check } from 'lucide-react';
+import { Dumbbell, Timer, Route, Zap, ArrowRight, Check } from 'lucide-react';
 import { useUpdateGoals } from '@/hooks/use-goals';
 
 interface OnboardingProps {
@@ -30,12 +30,16 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const steps = [
     {
       title: 'WELCOME TO THE ARENA',
-      subtitle: 'Track push-ups, plank, and running with friends in a year-long fitness challenge.',
+      subtitle: 'Track push-ups, squats, plank, and running with friends in a year-long fitness challenge.',
       content: (
-        <div className="flex justify-center gap-6 py-6">
+        <div className="flex justify-center gap-5 py-6">
           <div className="text-center">
             <Dumbbell size={28} className="text-emerald-500 mx-auto" />
             <p className="text-[10px] text-dark-muted mt-1">PUSH-UPS</p>
+          </div>
+          <div className="text-center">
+            <Zap size={28} className="text-emerald-500 mx-auto" />
+            <p className="text-[10px] text-dark-muted mt-1">SQUATS</p>
           </div>
           <div className="text-center">
             <Timer size={28} className="text-emerald-500 mx-auto" />
