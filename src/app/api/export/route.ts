@@ -27,6 +27,7 @@ export async function GET() {
     const headers = [
       'Date',
       'Push-up Reps',
+      'Squat Reps',
       'Plank Seconds',
       'Run Distance (km)',
       'Run Duration (min)',
@@ -40,6 +41,7 @@ export async function GET() {
     const rows = ((logs || []) as LogRow[]).map((log) => [
       new Date(log.logged_at as string).toLocaleDateString(),
       log.pushup_reps,
+      log.squat_reps || 0,
       log.plank_seconds,
       log.run_distance,
       Math.round(((log.run_duration as number) || 0) / 60),

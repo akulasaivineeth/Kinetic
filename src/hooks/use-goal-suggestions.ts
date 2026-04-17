@@ -49,6 +49,7 @@ export function useGoalSuggestions(): GoalSuggestion[] {
     check('Push-ups', vol.total_pushups, goals.pushup_weekly_goal);
     check('Plank', vol.total_plank_seconds, goals.plank_weekly_goal);
     check('Run', Number(vol.total_run_distance), goals.run_weekly_goal);
+    check('Squats', vol.total_squats, goals.squat_weekly_goal);
 
     return suggestions;
   }, [goals, vol]);

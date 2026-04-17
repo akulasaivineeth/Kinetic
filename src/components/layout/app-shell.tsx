@@ -1,15 +1,25 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { Header } from './header';
 import { BottomNav } from './bottom-nav';
+import { PullToRefresh } from '@/components/pull-to-refresh';
 import { motion, AnimatePresence } from 'framer-motion';
 import { subscribeToPush } from '@/lib/push';
+import { useAuth } from '@/providers/auth-provider';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface AppShellProps {
   children: ReactNode;
 }
 
 export function AppShell({ children }: AppShellProps) {
+  const { softReconnect } = useAuth();
+  const queryClient = useQueryClient();
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    const success = await softReconnect();
+    if (!success) queryClient.invalidateQueries();
+  }, [softReconnect, queryClient]);
 
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
@@ -33,9 +43,9 @@ export function AppShell({ children }: AppShellProps) {
   return (
     <div className="min-h-dvh bg-dark-bg flex flex-col max-w-lg mx-auto relative overflow-hidden">
       <Header />
-      <main className="flex-1 px-5 pb-24 overflow-y-auto overflow-x-hidden">
+      <PullToRefresh onRefresh={handleRefresh} className="flex-1 px-5 pb-24 overflow-y-auto overflow-x-hidden">
         {children}
-      </main>
+      </PullToRefresh>
       <BottomNav />
 
       {/* Notification Prompt */}

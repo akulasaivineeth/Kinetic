@@ -10,6 +10,7 @@ export interface WeekBucket {
   pushups: number;
   plankMin: number;
   runKm: number;
+  squats: number;
 }
 
 export function useRecentWeeks(count = 4) {
@@ -26,7 +27,7 @@ export function useRecentWeeks(count = 4) {
 
       const { data: logs, error } = await supabase
         .from('workout_logs')
-        .select('pushup_reps, plank_seconds, run_distance, logged_at')
+        .select('pushup_reps, plank_seconds, run_distance, squat_reps, logged_at')
         .eq('user_id', user.id)
         .not('submitted_at', 'is', null)
         .gte('logged_at', from.toISOString())
@@ -40,7 +41,7 @@ export function useRecentWeeks(count = 4) {
       for (let i = 0; i < count; i++) {
         const wk = startOfWeek(subWeeks(now, count - 1 - i), { weekStartsOn: 1 });
         const key = format(wk, 'MM/dd');
-        buckets.set(key, { week: key, pushups: 0, plankMin: 0, runKm: 0 });
+        buckets.set(key, { week: key, pushups: 0, plankMin: 0, runKm: 0, squats: 0 });
       }
 
       for (const log of logs) {
@@ -51,6 +52,7 @@ export function useRecentWeeks(count = 4) {
           bucket.pushups += log.pushup_reps || 0;
           bucket.plankMin += (log.plank_seconds || 0) / 60;
           bucket.runKm += Number(log.run_distance) || 0;
+          bucket.squats += log.squat_reps || 0;
         }
       }
 

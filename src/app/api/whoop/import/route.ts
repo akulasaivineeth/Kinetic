@@ -121,7 +121,7 @@ export async function GET() {
     const workouts = data.records || [];
 
     // Store each workout as a whoop_event (if not already stored)
-    const imported: Array<{ activity: string; duration: number; strain: string }> = [];
+    const imported: Array<{ activity: string; duration: number; strain: string; distance_km: number | null }> = [];
 
     for (const workout of workouts) {
       const activityType =
@@ -130,6 +130,8 @@ export async function GET() {
         (new Date(workout.end).getTime() - new Date(workout.start).getTime()) / 60000
       );
       const strain = workout.score?.strain?.toFixed(1) || '0.0';
+      const distanceMeters: number | null = workout.score?.distance_meter ?? null;
+      const distanceKm = distanceMeters ? Math.round((distanceMeters / 1000) * 100) / 100 : null;
       const workoutId = workout.id != null ? String(workout.id) : '';
 
       // Check if we already have this workout
@@ -149,16 +151,17 @@ export async function GET() {
           processed: true,
         });
 
+        const distanceLabel = distanceKm ? ` • ${distanceKm} km` : '';
         const { error: notifErr } = await supabase.from('notifications').insert({
           user_id: user.id,
           type: 'whoop_workout',
           title: 'Imported Workout',
-          body: `${activityType} • ${durationMins} min • Strain ${strain}`,
-          data: { activity: activityType, duration: durationMins, strain },
+          body: `${activityType} • ${durationMins} min${distanceLabel} • Strain ${strain}`,
+          data: { activity: activityType, duration: durationMins, strain, distance_km: distanceKm },
         });
         if (notifErr) console.error('Whoop import notification insert:', notifErr);
 
-        imported.push({ activity: activityType, duration: durationMins, strain });
+        imported.push({ activity: activityType, duration: durationMins, strain, distance_km: distanceKm });
       }
     }
 

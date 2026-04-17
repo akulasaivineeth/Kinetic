@@ -33,6 +33,7 @@ body {
   color: var(--dark-text);
   min-height: 100dvh;
   overflow-x: hidden;
+  overscroll-behavior-y: contain;
   transition: background-color 0.35s ease, color 0.35s ease;
 }
 

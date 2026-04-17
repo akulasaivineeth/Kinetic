@@ -52,10 +52,17 @@ function LogPage() {
   const whoopActivity = searchParams.get('activity') || '';
   const whoopDuration = searchParams.get('duration') || '';
   const whoopStrain = searchParams.get('strain') || '';
+  const whoopDistanceKm = searchParams.get('distance_km') || '';
 
   const [pushupReps, setPushupReps] = useState(0);
   const [plankSeconds, setPlankSeconds] = useState(0);
-  const [runDistance, setRunDistance] = useState(0);
+  const [runDistance, setRunDistance] = useState(() => {
+    if (!whoopDistanceKm) return 0;
+    const km = parseFloat(whoopDistanceKm);
+    if (isNaN(km)) return 0;
+    return km;
+  });
+  const [squatReps, setSquatReps] = useState(0);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -84,6 +91,17 @@ function LogPage() {
       if (res.ok) {
         setImportResult(`Imported ${data.imported} workout${data.imported !== 1 ? 's' : ''}`);
         queryClient.invalidateQueries({ queryKey: ['notifications'] });
+        // Pre-fill run distance from the most recent imported workout with distance data
+        if (data.workouts?.length) {
+          const withDistance = data.workouts.find((w: { distance_km: number | null }) => w.distance_km);
+          if (withDistance?.distance_km) {
+            const km = withDistance.distance_km;
+            const display = profile?.unit_preference === 'imperial'
+              ? Math.round(km * 0.621371 * 100) / 100
+              : km;
+            setRunDistance(display);
+          }
+        }
       } else {
         setImportResult(data.error || 'Import failed');
       }
@@ -115,6 +133,7 @@ function LogPage() {
       setDraftId(draft.id);
       setPushupReps(draft.pushup_reps || 0);
       setPlankSeconds(draft.plank_seconds || 0);
+      setSquatReps(draft.squat_reps || 0);
 
       const km = Number(draft.run_distance) || 0;
       if (profile?.unit_preference === 'imperial') {
@@ -138,6 +157,7 @@ function LogPage() {
       pushup_reps: pushupReps,
       plank_seconds: plankSeconds,
       run_distance: finalRunDist,
+      squat_reps: squatReps,
       logged_at: selectedDate.toISOString(),
       whoop_activity_type: whoopActivity || undefined,
       whoop_strain: whoopStrain ? parseFloat(whoopStrain) : undefined,
@@ -147,7 +167,7 @@ function LogPage() {
         if (data && !draftId) setDraftId(data.id);
       },
     });
-  }, [user, editLogId, profile?.unit_preference, draftId, pushupReps, plankSeconds, runDistance, selectedDate, whoopActivity, whoopStrain, whoopDuration, saveDraft]);
+  }, [user, editLogId, profile?.unit_preference, draftId, pushupReps, plankSeconds, runDistance, squatReps, selectedDate, whoopActivity, whoopStrain, whoopDuration, saveDraft]);
 
   useEffect(() => {
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
@@ -155,7 +175,7 @@ function LogPage() {
     return () => {
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     };
-  }, [pushupReps, plankSeconds, runDistance, autoSave]);
+  }, [pushupReps, plankSeconds, runDistance, squatReps, autoSave]);
 
   const handleDaySelect = (day: Date | undefined) => {
     if (!day) return;
@@ -168,6 +188,7 @@ function LogPage() {
     setPushupReps(0);
     setPlankSeconds(0);
     setRunDistance(0);
+    setSquatReps(0);
   };
 
   const handleEditLog = (logId: string) => {
@@ -179,6 +200,7 @@ function LogPage() {
     setSubmitError(null);
     setPushupReps(target.pushup_reps || 0);
     setPlankSeconds(target.plank_seconds || 0);
+    setSquatReps(target.squat_reps || 0);
     const km = Number(target.run_distance) || 0;
     setRunDistance(
       profile?.unit_preference === 'imperial'
@@ -231,6 +253,7 @@ function LogPage() {
               pushup_reps: pushupReps,
               plank_seconds: plankSeconds,
               run_distance: finalRunDist,
+              squat_reps: squatReps,
             },
           }),
           15000,
@@ -242,13 +265,16 @@ function LogPage() {
           const oldPush = oldLog.pushup_reps || 0;
           const oldPlank = oldLog.plank_seconds || 0;
           const oldRun = Number(oldLog.run_distance) || 0;
+          const oldSquat = oldLog.squat_reps || 0;
           crossed = checkNewMilestones(
             allTimeStats.totalPushups,
             allTimeStats.totalPlankSeconds,
             allTimeStats.totalRunDistance,
             allTimeStats.totalPushups - oldPush + pushupReps,
             allTimeStats.totalPlankSeconds - oldPlank + plankSeconds,
-            allTimeStats.totalRunDistance - oldRun + finalRunDist
+            allTimeStats.totalRunDistance - oldRun + finalRunDist,
+            allTimeStats.totalSquats,
+            allTimeStats.totalSquats - oldSquat + squatReps
           );
           if (crossed.length > 0) {
             await persistNewMilestoneUnlocks(createClient(), user.id, crossed);
@@ -274,6 +300,7 @@ function LogPage() {
         pushup_reps: pushupReps,
         plank_seconds: plankSeconds,
         run_distance: finalRunDist,
+        squat_reps: squatReps,
         logged_at: selectedDate.toISOString(),
         whoop_activity_type: whoopActivity || undefined,
         whoop_strain: whoopStrain ? parseFloat(whoopStrain) : undefined,
@@ -290,6 +317,7 @@ function LogPage() {
           pushup_reps: pushupReps,
           plank_seconds: plankSeconds,
           run_distance: finalRunDist,
+          squat_reps: squatReps,
         }),
         15000,
         'Submit'
@@ -303,7 +331,9 @@ function LogPage() {
           allTimeStats.totalRunDistance,
           allTimeStats.totalPushups + pushupReps,
           allTimeStats.totalPlankSeconds + plankSeconds,
-          allTimeStats.totalRunDistance + finalRunDist
+          allTimeStats.totalRunDistance + finalRunDist,
+          allTimeStats.totalSquats,
+          allTimeStats.totalSquats + squatReps
         );
         if (crossedNew.length > 0) {
           await persistNewMilestoneUnlocks(createClient(), user.id, crossedNew);
@@ -318,7 +348,8 @@ function LogPage() {
       const isPB =
         (allTimeStats && pushupReps > allTimeStats.peakPushups) ||
         (allTimeStats && plankSeconds > allTimeStats.peakPlankSeconds) ||
-        (allTimeStats && finalRunDist > allTimeStats.peakRunDistance);
+        (allTimeStats && finalRunDist > allTimeStats.peakRunDistance) ||
+        (allTimeStats && squatReps > allTimeStats.peakSquats);
 
       let delayTime = 0;
       if (isPB) {
@@ -334,12 +365,13 @@ function LogPage() {
         delayTime = 1200;
       }
 
-      const { totalPts, pushupPts, plankPts, runPts } = calculateSessionScore(pushupReps, plankSeconds, finalRunDist);
+      const { totalPts, pushupPts, plankPts, runPts, squatPts } = calculateSessionScore(pushupReps, plankSeconds, finalRunDist, squatReps);
       if (totalPts > 0 && delayTime === 0) {
         const parts = [
           pushupPts > 0 ? `💪${Math.round(pushupPts)}` : '',
           plankPts > 0 ? `🧘${Math.round(plankPts)}` : '',
           runPts > 0 ? `🏃${Math.round(runPts)}` : '',
+          squatPts > 0 ? `🦵${Math.round(squatPts)}` : '',
         ].filter(Boolean).join(' + ');
         setPbCelebration(`⚡ ${Math.round(totalPts)} PTS (${parts})`);
         delayTime = 1200;
@@ -361,9 +393,11 @@ function LogPage() {
   const totalPushups = (weeklyVolume?.total_pushups || 0) + pushupReps;
   const totalPlankSecs = (weeklyVolume?.total_plank_seconds || 0) + plankSeconds;
   const totalRunDist = Number(weeklyVolume?.total_run_distance || 0) + runDistance;
+  const totalSquats = (weeklyVolume?.total_squats || 0) + squatReps;
   const pushupGoal = goals?.pushup_weekly_goal || 500;
   const plankGoal = goals?.plank_weekly_goal || 600;
   const runGoal = goals?.run_weekly_goal || 20;
+  const squatGoal = goals?.squat_weekly_goal || 300;
 
   const displayRunGoal = profile?.unit_preference === 'imperial' ? runGoal * 0.621371 : runGoal;
   const unitLabel = profile?.unit_preference === 'imperial' ? 'MI' : 'KM';
@@ -501,6 +535,7 @@ function LogPage() {
                     >
                       <div className="flex gap-4 font-bold text-sm tracking-wide">
                         {log.pushup_reps > 0 && <span>💪 {log.pushup_reps}</span>}
+                        {log.squat_reps > 0 && <span>🦵 {log.squat_reps}</span>}
                         {log.plank_seconds > 0 && <span>🧘 {formatPlankTime(log.plank_seconds)}</span>}
                         {Number(log.run_distance) > 0 && <span>🏃 {Number(log.run_distance)}km</span>}
                       </div>
@@ -516,6 +551,7 @@ function LogPage() {
                       setPushupReps(0);
                       setPlankSeconds(0);
                       setRunDistance(0);
+                      setSquatReps(0);
                     }}
                     className={`w-full p-2.5 rounded-xl border border-dashed text-xs font-bold tracking-wider transition-colors ${
                       !editLogId ? 'border-emerald-500/50 text-emerald-500' : 'border-dark-border/60 text-dark-muted hover:text-emerald-500'
@@ -538,6 +574,7 @@ function LogPage() {
                 setPushupReps(0);
                 setPlankSeconds(0);
                 setRunDistance(0);
+                setSquatReps(0);
               }}
               className="text-[10px] font-black text-red-400 hover:text-red-300 transition-colors uppercase tracking-widest"
             >
@@ -580,6 +617,26 @@ function LogPage() {
             data-testid="uat-log-pushup-reps"
             value={pushupReps || ''}
             onChange={(e) => setPushupReps(parseInt(e.target.value) || 0)}
+            onWheel={(e) => (e.target as HTMLElement).blur()}
+            placeholder="0"
+            className="w-full text-center text-5xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors duration-200 py-2"
+          />
+        </GlassCard>
+
+        {/* Squat Reps Card */}
+        <GlassCard className="relative" delay={0.15}>
+          <div className="flex justify-end mb-1">
+            <span className="text-[10px] font-bold tracking-wider text-emerald-500">
+              {squatGoal} GOAL • {Math.max(squatGoal - totalSquats, 0)} LEFT
+            </span>
+          </div>
+          <p className="text-[11px] font-semibold tracking-[0.15em] text-dark-muted text-center uppercase mb-1">
+            SQUAT REPS
+          </p>
+          <input
+            type="number"
+            value={squatReps || ''}
+            onChange={(e) => setSquatReps(parseInt(e.target.value) || 0)}
             onWheel={(e) => (e.target as HTMLElement).blur()}
             placeholder="0"
             className="w-full text-center text-5xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors duration-200 py-2"
@@ -662,7 +719,7 @@ function LogPage() {
             )}
           </motion.button>
 
-          {(pushupReps > 0 || plankSeconds > 0 || runDistance > 0) && !isSubmitting && !submitted && (
+          {(pushupReps > 0 || plankSeconds > 0 || runDistance > 0 || squatReps > 0) && !isSubmitting && !submitted && (
             <motion.button
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -671,6 +728,7 @@ function LogPage() {
                 setPushupReps(0);
                 setPlankSeconds(0);
                 setRunDistance(0);
+                setSquatReps(0);
                 setEditLogId(null);
               }}
               className="w-full py-3 rounded-xl bg-dark-elevated border border-dashed border-dark-border text-[10px] font-black tracking-widest text-dark-muted hover:text-red-400 hover:border-red-400/30 transition-all uppercase"

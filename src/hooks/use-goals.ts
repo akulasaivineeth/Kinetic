@@ -9,9 +9,11 @@ const DEFAULT_GOALS: Omit<PerformanceGoals, 'id' | 'user_id' | 'created_at' | 'u
   pushup_weekly_goal: 500,
   plank_weekly_goal: 600,
   run_weekly_goal: 15,
+  squat_weekly_goal: 300,
   pushup_peak_goal: 75,
   plank_peak_goal: 180,
   run_peak_goal: 3,
+  squat_peak_goal: 50,
 };
 
 export function useGoals() {

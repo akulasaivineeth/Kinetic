@@ -43,6 +43,7 @@ export default function BaselinePage() {
           pushup_reps: pushupMax,
           plank_seconds: plankMax,
           run_distance: finalRun,
+          squat_reps: 0,
         });
       }
 

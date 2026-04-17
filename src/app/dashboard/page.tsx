@@ -6,6 +6,7 @@ import { AppShell } from '@/components/layout/app-shell';
 import { GlassCard } from '@/components/ui/glass-card';
 import { ScoreRing } from '@/components/ui/score-ring';
 import { TogglePills } from '@/components/ui/toggle-pills';
+import { ExerciseSelect } from '@/components/ui/exercise-select';
 import { DateRangeTabs } from '@/components/ui/date-range-tabs';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { DashboardCardSkeleton, ChartSkeleton } from '@/components/ui/skeleton';
@@ -92,7 +93,7 @@ function PersonalTrendTooltip({
     return `${Math.round(n)}`;
   };
   const catLabel =
-    category === 'pushups' ? 'Push-ups' : category === 'plank' ? 'Plank' : 'Run';
+    category === 'pushups' ? 'Push-ups' : category === 'plank' ? 'Plank' : category === 'squats' ? 'Squats' : 'Run';
   const subtitle = `${metric === 'volume' ? 'Volume' : 'Peak'} · ${mode === 'raw' ? 'Raw' : '% impr.'}`;
   return (
     <div
@@ -211,10 +212,12 @@ export default function DashboardPage() {
     const pushGoal = goals?.pushup_weekly_goal || 500;
     const plankGoal = goals?.plank_weekly_goal || 600;
     const runGoal = goals?.run_weekly_goal || 15;
+    const squatGoal = goals?.squat_weekly_goal || 300;
     const pushProg = Math.min((weeklyVolume?.total_pushups || 0) / pushGoal, 1);
     const plankProg = Math.min((weeklyVolume?.total_plank_seconds || 0) / plankGoal, 1);
     const runProg = Math.min(Number(weeklyVolume?.total_run_distance || 0) / runGoal, 1);
-    return Math.round(((pushProg + plankProg + runProg) / 3) * 100);
+    const squatProg = Math.min((weeklyVolume?.total_squats || 0) / squatGoal, 1);
+    return Math.round(((pushProg + plankProg + runProg + squatProg) / 4) * 100);
   }, [weeklyVolume, goals]);
 
   const weekLinePoints = useMemo(() => {
@@ -270,10 +273,11 @@ export default function DashboardPage() {
   // CSV Export for Dashboard (matches Personal Trends range)
   const handleExportCSV = () => {
     if (!trendLogs.length) return;
-    const headers = ['Date', 'Push-ups', 'Plank (sec)', `Run (${profile?.unit_preference === 'imperial' ? 'MI' : 'KM'})`, 'Notes'];
+    const headers = ['Date', 'Push-ups', 'Squats', 'Plank (sec)', `Run (${profile?.unit_preference === 'imperial' ? 'MI' : 'KM'})`, 'Notes'];
     const rows = trendLogs.map(l => [
       format(new Date(l.logged_at), 'yyyy-MM-dd'),
       l.pushup_reps,
+      l.squat_reps,
       l.plank_seconds,
       formatDistance(Number(l.run_distance), profile?.unit_preference),
       (l.notes || '').replace(/,/g, ';')
@@ -362,6 +366,47 @@ export default function DashboardPage() {
                       </linearGradient>
                     </defs>
                     <Area type="monotone" dataKey="pushups" stroke="#10B981" strokeWidth={2} fill="url(#pushupGrad)" dot={{ r: 3, fill: '#10B981' }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </GlassCard>
+
+          {/* Squats Card */}
+          <GlassCard className="relative overflow-hidden" delay={0.15}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-lg">🦵</span>
+              <span className="text-[11px] font-semibold tracking-wider text-dark-muted uppercase">
+                SQUATS
+              </span>
+            </div>
+            <div className="flex items-end justify-between">
+              <div>
+                <p className="text-[9px] font-semibold tracking-wider text-dark-muted uppercase">TOTAL</p>
+                <span className="text-4xl font-black text-dark-text">
+                  {allTimeStats ? Math.round(allTimeStats.totalSquats).toLocaleString() : '0'}
+                </span>
+                <span className="text-sm text-dark-muted ml-1">reps</span>
+              </div>
+              <div className="text-right">
+                <p className="text-[9px] font-semibold tracking-wider text-dark-muted uppercase">PEAK</p>
+                <span className="text-2xl font-black text-emerald-500">
+                  {allTimeStats ? Math.round(allTimeStats.peakSquats) : 0}
+                </span>
+                <span className="text-xs text-dark-muted ml-1">reps</span>
+              </div>
+            </div>
+            {recentWeeks.length > 0 && (
+              <div className="h-10 mt-3 -mx-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={recentWeeks}>
+                    <defs>
+                      <linearGradient id="squatGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#10B981" stopOpacity={0.3} />
+                        <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <Area type="monotone" dataKey="squats" stroke="#10B981" strokeWidth={2} fill="url(#squatGrad)" dot={{ r: 3, fill: '#10B981' }} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -458,33 +503,28 @@ export default function DashboardPage() {
 
           {/* Date Range + Metric Toggles */}
           <div className="space-y-4 mb-6">
-            <DateRangeTabs
-              motionScope="dash-trends-tabs"
-              selected={trendDateRange}
-              onChange={setTrendDateRange}
-              onCustomDates={(from, to) => {
-                setTrendCustomFrom(from);
-                setTrendCustomTo(to);
-              }}
-            />
-            
-            <div>
-              <p className="text-[9px] font-semibold tracking-[0.15em] text-dark-muted uppercase mb-1">
-                Exercise
-              </p>
-              <TogglePills
-                motionScope="dash-trends-cat"
+            <div className="flex items-center justify-between">
+              <ExerciseSelect
                 options={[
-                  { value: 'pushups' as const, label: 'PUSH-UPS' },
-                  { value: 'plank' as const, label: 'PLANK' },
-                  { value: 'run' as const, label: 'RUN' },
+                  { value: 'pushups' as const, label: 'Push-ups' },
+                  { value: 'squats' as const, label: 'Squats' },
+                  { value: 'plank' as const, label: 'Plank' },
+                  { value: 'run' as const, label: 'Run' },
                 ]}
                 selected={trendCategory}
                 onChange={setTrendCategory}
-                size="sm"
+              />
+              <DateRangeTabs
+                motionScope="dash-trends-tabs"
+                selected={trendDateRange}
+                onChange={setTrendDateRange}
+                onCustomDates={(from, to) => {
+                  setTrendCustomFrom(from);
+                  setTrendCustomTo(to);
+                }}
               />
             </div>
-            
+
             <div className="flex flex-wrap gap-2">
               <TogglePills
                 motionScope="dash-trends-metric"

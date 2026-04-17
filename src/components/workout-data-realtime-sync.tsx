@@ -66,7 +66,11 @@ export function WorkoutDataRealtimeSync() {
           },
           invalidateWorkoutDerived
         )
-        .subscribe();
+        .subscribe((status) => {
+          if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
+            void setup();
+          }
+        });
     };
 
     void setup();
@@ -75,10 +79,13 @@ export function WorkoutDataRealtimeSync() {
       if (document.visibilityState === 'visible') void setup();
     };
     document.addEventListener('visibilitychange', onVisibility);
+    const onReconnect = () => void setup();
+    window.addEventListener('kinetic-reconnect', onReconnect);
 
     return () => {
       if (debounceTimer) clearTimeout(debounceTimer);
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('kinetic-reconnect', onReconnect);
       if (channel) void supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

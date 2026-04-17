@@ -73,31 +73,34 @@ export async function POST(request: NextRequest) {
       const activityType = workout.sport?.name || 'Strength Trainer';
       const durationMins = Math.round((workout.end - workout.start) / 60000);
       const strain = workout.score?.strain?.toFixed(1) || '0.0';
+      const distanceMeters: number | null = workout.score?.distance_meter ?? null;
+      const distanceKm = distanceMeters ? Math.round((distanceMeters / 1000) * 100) / 100 : null;
+      const distanceLabel = distanceKm ? ` • ${distanceKm} km` : '';
 
-      // Create notification
       await supabase.from('notifications').insert({
         user_id: profile.id,
         type: 'whoop_workout',
         title: 'Workout Detected',
-        body: `${activityType} • ${durationMins} min • Strain ${strain}`,
+        body: `${activityType} • ${durationMins} min${distanceLabel} • Strain ${strain}`,
         data: {
           activity: activityType,
           duration: durationMins,
           strain,
+          distance_km: distanceKm,
           whoop_workout_id: workout.id,
         },
       });
 
-      // Send push notification
       if (profile.push_subscription) {
         try {
+          const distParam = distanceKm ? `&distance_km=${distanceKm}` : '';
           await webpush.sendNotification(
             profile.push_subscription as webpush.PushSubscription,
             JSON.stringify({
-              title: 'Workout Detected 💪',
-              body: `${activityType} • ${durationMins} min • Strain ${strain}`,
+              title: 'Workout Detected',
+              body: `${activityType} • ${durationMins} min${distanceLabel} • Strain ${strain}`,
               data: {
-                url: `/log?activity=${encodeURIComponent(activityType)}&duration=${durationMins}&strain=${strain}`,
+                url: `/log?activity=${encodeURIComponent(activityType)}&duration=${durationMins}&strain=${strain}${distParam}`,
               },
             })
           );

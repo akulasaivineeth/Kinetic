@@ -34,9 +34,11 @@ export function useStamina(): { data: StaminaData; isLoading: boolean } {
       goals?.pushup_weekly_goal ?? 500,
       goals?.plank_weekly_goal ?? 600,
       goals?.run_weekly_goal ?? 15,
+      goals?.squat_weekly_goal ?? 300,
       weeklyVolume?.total_pushups ?? 0,
       weeklyVolume?.total_plank_seconds ?? 0,
       Number(weeklyVolume?.total_run_distance ?? 0),
+      weeklyVolume?.total_squats ?? 0,
     ],
     queryFn: async (): Promise<StaminaData> => {
       if (!user) return defaultStamina();
@@ -45,16 +47,18 @@ export function useStamina(): { data: StaminaData; isLoading: boolean } {
       const pushupGoal = goals?.pushup_weekly_goal || 500;
       const plankGoal = goals?.plank_weekly_goal || 600;
       const runGoal = goals?.run_weekly_goal || 15;
+      const squatGoal = goals?.squat_weekly_goal || 300;
 
       const currentPushups = weeklyVolume?.total_pushups || 0;
       const currentPlank = weeklyVolume?.total_plank_seconds || 0;
       const currentRun = Number(weeklyVolume?.total_run_distance || 0);
+      const currentSquats = weeklyVolume?.total_squats || 0;
 
-      // Scale 0-100: partial credit for progress toward each goal
       const pushupProgress = Math.min(currentPushups / pushupGoal, 1);
       const plankProgress = Math.min(currentPlank / plankGoal, 1);
       const runProgress = Math.min(currentRun / runGoal, 1);
-      const goalConsistency = Math.round(((pushupProgress + plankProgress + runProgress) / 3) * 100);
+      const squatProgress = Math.min(currentSquats / squatGoal, 1);
+      const goalConsistency = Math.round(((pushupProgress + plankProgress + runProgress + squatProgress) / 4) * 100);
 
       // --- 2. Whoop Recovery (40%) ---
       let whoopRecovery = 70; // Default fallback
@@ -187,19 +191,17 @@ async function calculatePeakGain(supabase: any, userId: string, leanMassKg: numb
   const fourWeeksAgo = subWeeks(now, 4);
   const eightWeeksAgo = subWeeks(now, 8);
 
-  // Current period: last 4 weeks
   const { data: currentLogs } = await supabase
     .from('workout_logs')
-    .select('pushup_reps, plank_seconds, run_distance')
+    .select('pushup_reps, plank_seconds, run_distance, squat_reps')
     .eq('user_id', userId)
     .not('submitted_at', 'is', null)
     .gte('logged_at', fourWeeksAgo.toISOString())
     .lte('logged_at', now.toISOString());
 
-  // Baseline period: 4-8 weeks ago
   const { data: baselineLogs } = await supabase
     .from('workout_logs')
-    .select('pushup_reps, plank_seconds, run_distance')
+    .select('pushup_reps, plank_seconds, run_distance, squat_reps')
     .eq('user_id', userId)
     .not('submitted_at', 'is', null)
     .gte('logged_at', eightWeeksAgo.toISOString())
@@ -214,33 +216,34 @@ async function calculatePeakGain(supabase: any, userId: string, leanMassKg: numb
   const normalize = (val: number, isBodyweight: boolean) =>
     isBodyweight ? val / bwFactor : val;
 
-  // Volume: sum of all
   const curVolPush = normalize(currentLogs.reduce((s: number, l: { pushup_reps: number }) => s + (l.pushup_reps || 0), 0), true);
   const curVolPlank = normalize(currentLogs.reduce((s: number, l: { plank_seconds: number }) => s + (l.plank_seconds || 0), 0), true);
   const curVolRun = currentLogs.reduce((s: number, l: { run_distance: number }) => s + Number(l.run_distance || 0), 0);
+  const curVolSquat = normalize(currentLogs.reduce((s: number, l: { squat_reps: number }) => s + (l.squat_reps || 0), 0), true);
 
   const baseVolPush = normalize(baselineLogs.reduce((s: number, l: { pushup_reps: number }) => s + (l.pushup_reps || 0), 0), true);
   const baseVolPlank = normalize(baselineLogs.reduce((s: number, l: { plank_seconds: number }) => s + (l.plank_seconds || 0), 0), true);
   const baseVolRun = baselineLogs.reduce((s: number, l: { run_distance: number }) => s + Number(l.run_distance || 0), 0);
+  const baseVolSquat = normalize(baselineLogs.reduce((s: number, l: { squat_reps: number }) => s + (l.squat_reps || 0), 0), true);
 
-  // Peak: max of each
   const curPeakPush = normalize(Math.max(...currentLogs.map((l: { pushup_reps: number }) => l.pushup_reps || 0)), true);
   const curPeakPlank = normalize(Math.max(...currentLogs.map((l: { plank_seconds: number }) => l.plank_seconds || 0)), true);
   const curPeakRun = Math.max(...currentLogs.map((l: { run_distance: number }) => Number(l.run_distance || 0)));
+  const curPeakSquat = normalize(Math.max(...currentLogs.map((l: { squat_reps: number }) => l.squat_reps || 0)), true);
 
   const basePeakPush = normalize(Math.max(...baselineLogs.map((l: { pushup_reps: number }) => l.pushup_reps || 0)), true);
   const basePeakPlank = normalize(Math.max(...baselineLogs.map((l: { plank_seconds: number }) => l.plank_seconds || 0)), true);
   const basePeakRun = Math.max(...baselineLogs.map((l: { run_distance: number }) => Number(l.run_distance || 0)));
+  const basePeakSquat = normalize(Math.max(...baselineLogs.map((l: { squat_reps: number }) => l.squat_reps || 0)), true);
 
-  // % improvements
   const pct = (cur: number, base: number) => {
     if (base === 0) return cur > 0 ? 100 : 0;
     return ((cur - base) / base) * 100;
   };
 
   const improvements = [
-    pct(curVolPush, baseVolPush), pct(curVolPlank, baseVolPlank), pct(curVolRun, baseVolRun),
-    pct(curPeakPush, basePeakPush), pct(curPeakPlank, basePeakPlank), pct(curPeakRun, basePeakRun),
+    pct(curVolPush, baseVolPush), pct(curVolPlank, baseVolPlank), pct(curVolRun, baseVolRun), pct(curVolSquat, baseVolSquat),
+    pct(curPeakPush, basePeakPush), pct(curPeakPlank, basePeakPlank), pct(curPeakRun, basePeakRun), pct(curPeakSquat, basePeakSquat),
   ];
 
   const avg = improvements.reduce((s, v) => s + v, 0) / improvements.length;

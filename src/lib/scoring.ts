@@ -33,27 +33,35 @@ export interface ScoringConfig {
 }
 
 export const PUSHUP_CONFIG: ScoringConfig = {
-  baseRate: 1.2,
-  acceleration: 0.08,
+  baseRate: 2.0,
+  acceleration: 0.04,
   name: 'Push-ups',
   unit: 'reps',
   emoji: '💪',
 };
 
 export const PLANK_CONFIG: ScoringConfig = {
-  baseRate: 0.3,       // per second (not per 10 seconds)
-  acceleration: 0.002, // gentle curve — holding longer is rewarded
+  baseRate: 0.55,
+  acceleration: 0.0025,
   name: 'Plank',
   unit: 'sec',
   emoji: '🧘',
 };
 
 export const RUN_CONFIG: ScoringConfig = {
-  baseRate: 12,       // per km
-  acceleration: 2.5,  // strong quadratic — long runs are very rewarding
+  baseRate: 36,
+  acceleration: 7.2,
   name: 'Run',
   unit: 'km',
   emoji: '🏃',
+};
+
+export const SQUAT_CONFIG: ScoringConfig = {
+  baseRate: 2.0,
+  acceleration: 0.04,
+  name: 'Squats',
+  unit: 'reps',
+  emoji: '🦵',
 };
 
 // ─── Core Scoring Function ───────────────────────────────────────────────────
@@ -84,12 +92,18 @@ export function calculateRunScore(distanceKm: number): number {
   return continuousScore(distanceKm, RUN_CONFIG);
 }
 
+/** Squat score: every rep counts */
+export function calculateSquatScore(reps: number): number {
+  return continuousScore(reps, SQUAT_CONFIG);
+}
+
 // ─── Session Score ───────────────────────────────────────────────────────────
 
 export interface SessionScoreBreakdown {
   pushupPts: number;
   plankPts: number;
   runPts: number;
+  squatPts: number;
   totalPts: number;
 }
 
@@ -99,17 +113,20 @@ export interface SessionScoreBreakdown {
 export function calculateSessionScore(
   pushupReps: number,
   plankSeconds: number,
-  runDistanceKm: number
+  runDistanceKm: number,
+  squatReps: number = 0
 ): SessionScoreBreakdown {
   const pushupPts = calculatePushupScore(pushupReps);
   const plankPts = calculatePlankScore(plankSeconds);
   const runPts = calculateRunScore(runDistanceKm);
+  const squatPts = calculateSquatScore(squatReps);
 
   return {
     pushupPts,
     plankPts,
     runPts,
-    totalPts: Math.round((pushupPts + plankPts + runPts) * 10) / 10,
+    squatPts,
+    totalPts: Math.round((pushupPts + plankPts + runPts + squatPts) * 10) / 10,
   };
 }
 
@@ -143,6 +160,9 @@ const examples = {
   run3: calculateRunScore(3),
   run5: calculateRunScore(5),
   run7: calculateRunScore(7),
+  squat20: calculateSquatScore(20),
+  squat50: calculateSquatScore(50),
+  squat100: calculateSquatScore(100),
 };
 
 export const SCORING_FAQ: FaqItem[] = [
@@ -178,6 +198,14 @@ export const SCORING_FAQ: FaqItem[] = [
       `3 km = ${examples.run3} pts, 5 km = ${examples.run5} pts, ` +
       `7 km = ${examples.run7} pts. ` +
       `Longer runs get a significant bonus — that extra kilometer is always worth pushing for.`,
+  },
+  {
+    question: 'How do squat points work?',
+    answer:
+      `Every rep counts and each one is worth more than the last. ` +
+      `20 reps = ${examples.squat20} pts, 50 reps = ${examples.squat50} pts, ` +
+      `100 reps = ${examples.squat100} pts. ` +
+      `Big sets get rewarded — push for higher counts to maximize your score.`,
   },
   {
     question: 'Why does each additional rep/second/km earn more?',

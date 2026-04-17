@@ -17,7 +17,7 @@ import {
   subWeeks,
 } from 'date-fns';
 
-export type PersonalTrendCategory = 'pushups' | 'plank' | 'run';
+export type PersonalTrendCategory = 'pushups' | 'plank' | 'run' | 'squats';
 export type TrendAgg = 'volume' | 'peak';
 export type TrendMode = 'raw' | 'percent';
 
@@ -94,6 +94,10 @@ export function buildDayMap(
     } else if (category === 'plank') {
       cur.vol += log.plank_seconds;
       cur.peak = Math.max(cur.peak, log.plank_seconds);
+    } else if (category === 'squats') {
+      const reps = log.squat_reps || 0;
+      cur.vol += reps;
+      cur.peak = Math.max(cur.peak, reps);
     } else {
       const km = Number(log.run_distance) || 0;
       cur.vol += km;

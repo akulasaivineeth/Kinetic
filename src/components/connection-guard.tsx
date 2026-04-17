@@ -1,35 +1,30 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/providers/auth-provider';
 
-/**
- * ConnectionGuard — shows a translucent "Reconnecting…" overlay when the
- * session refresh is in progress after waking from background.  If it takes
- * longer than 5 seconds, a "Tap to reload" fallback appears.
- */
 export function ConnectionGuard() {
-  const { isSessionRefreshing } = useAuth();
-  const [showReload, setShowReload] = useState(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const { isSessionRefreshing, isStale, softReconnect } = useAuth();
+  const [reconnecting, setReconnecting] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
-    if (isSessionRefreshing) {
-      setShowReload(false);
-      timerRef.current = setTimeout(() => setShowReload(true), 5000);
-    } else {
-      setShowReload(false);
-      if (timerRef.current) clearTimeout(timerRef.current);
-    }
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [isSessionRefreshing]);
+    if (!isStale) setRetryCount(0);
+  }, [isStale]);
+
+  const handleReconnect = async () => {
+    setReconnecting(true);
+    const success = await softReconnect();
+    setReconnecting(false);
+    if (!success) setRetryCount((c) => c + 1);
+  };
+
+  const showOverlay = isSessionRefreshing || isStale;
 
   return (
     <AnimatePresence>
-      {isSessionRefreshing && (
+      {showOverlay && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -37,7 +32,7 @@ export function ConnectionGuard() {
           transition={{ duration: 0.2 }}
           className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-dark-bg/80 backdrop-blur-sm"
         >
-          {!showReload ? (
+          {isSessionRefreshing ? (
             <motion.div
               initial={{ scale: 0.9 }}
               animate={{ scale: 1 }}
@@ -58,14 +53,34 @@ export function ConnectionGuard() {
                 Connection lost
               </p>
               <p className="text-dark-muted text-sm text-center max-w-[240px]">
-                The app couldn't reconnect after waking up.
+                The app lost sync while in the background.
               </p>
-              <button
-                onClick={() => window.location.reload()}
-                className="px-6 py-3 rounded-2xl bg-emerald-500 text-black text-xs font-black tracking-widest uppercase"
-              >
-                TAP TO RELOAD
-              </button>
+
+              {reconnecting ? (
+                <div className="flex flex-col items-center gap-3 py-1">
+                  <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-xs text-dark-muted">Reconnecting…</p>
+                </div>
+              ) : retryCount >= 2 ? (
+                <div className="flex flex-col items-center gap-3">
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="px-6 py-3 rounded-2xl bg-emerald-500 text-black text-xs font-black tracking-widest uppercase"
+                  >
+                    TAP TO RELOAD
+                  </button>
+                  <p className="text-[10px] text-dark-muted">
+                    Could not reconnect. A full reload is needed.
+                  </p>
+                </div>
+              ) : (
+                <button
+                  onClick={handleReconnect}
+                  className="px-6 py-3 rounded-2xl bg-emerald-500 text-black text-xs font-black tracking-widest uppercase"
+                >
+                  TAP TO RECONNECT
+                </button>
+              )}
             </motion.div>
           )}
         </motion.div>

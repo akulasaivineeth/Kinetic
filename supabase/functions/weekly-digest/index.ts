@@ -44,7 +44,7 @@ serve(async (req) => {
   for (const profile of profiles) {
     const { data: weekLogs } = await supabase
       .from('workout_logs')
-      .select('pushup_reps, plank_seconds, run_distance')
+      .select('pushup_reps, plank_seconds, run_distance, squat_reps')
       .eq('user_id', profile.id)
       .not('submitted_at', 'is', null)
       .gte('logged_at', lastMonday.toISOString())
@@ -53,10 +53,11 @@ serve(async (req) => {
     if (!weekLogs || weekLogs.length === 0) continue;
 
     const pushups = weekLogs.reduce((s, l) => s + (l.pushup_reps || 0), 0);
+    const squats = weekLogs.reduce((s, l) => s + (l.squat_reps || 0), 0);
     const plankMin = Math.round(weekLogs.reduce((s, l) => s + (l.plank_seconds || 0), 0) / 60);
     const runKm = weekLogs.reduce((s, l) => s + (Number(l.run_distance) || 0), 0).toFixed(1);
 
-    const body = `Last week: ${pushups} push-ups, ${plankMin}min plank, ${runKm}km run across ${weekLogs.length} sessions.`;
+    const body = `Last week: ${pushups} push-ups, ${squats} squats, ${plankMin}min plank, ${runKm}km run across ${weekLogs.length} sessions.`;
 
     if (profile.push_subscription && VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
       try {
@@ -79,7 +80,7 @@ serve(async (req) => {
       type: 'weekly_digest',
       title: 'Weekly Recap',
       body,
-      data: { pushups, plank_min: plankMin, run_km: runKm, sessions: weekLogs.length },
+      data: { pushups, squats, plank_min: plankMin, run_km: runKm, sessions: weekLogs.length },
     });
   }
 

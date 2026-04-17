@@ -34,9 +34,11 @@ export interface PerformanceGoals {
   pushup_weekly_goal: number;
   plank_weekly_goal: number;
   run_weekly_goal: number;
+  squat_weekly_goal: number;
   pushup_peak_goal: number;
   plank_peak_goal: number;
   run_peak_goal: number;
+  squat_peak_goal: number;
   created_at: string;
   updated_at: string;
 }
@@ -49,6 +51,7 @@ export interface WorkoutLog {
   plank_seconds: number;
   run_distance: number;
   run_duration: number;
+  squat_reps: number;
   whoop_workout_id: string | null;
   whoop_strain: number | null;
   whoop_activity_type: string | null;
@@ -110,6 +113,7 @@ export interface LeaderboardEntry {
   pushup_value: number;
   plank_value: number;
   run_value: number;
+  squat_value: number;
   total_score: number;
 }
 
@@ -117,6 +121,7 @@ export interface WeeklyVolume {
   total_pushups: number;
   total_plank_seconds: number;
   total_run_distance: number;
+  total_squats: number;
 }
 
 // ---------- Database type for Supabase client ----------

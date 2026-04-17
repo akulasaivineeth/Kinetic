@@ -60,7 +60,11 @@ export function useLeaderboard(
           { event: 'UPDATE', schema: 'public', table: 'sharing_connections' },
           () => queryClient.invalidateQueries({ queryKey: ['leaderboard'] })
         )
-        .subscribe();
+        .subscribe((status) => {
+          if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
+            void createChannel();
+          }
+        });
     };
 
     void createChannel();
@@ -73,9 +77,15 @@ export function useLeaderboard(
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    const handleReconnect = () => {
+      void createChannel();
+      queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+    };
+    window.addEventListener('kinetic-reconnect', handleReconnect);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('kinetic-reconnect', handleReconnect);
       if (channel) supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

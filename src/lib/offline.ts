@@ -9,6 +9,7 @@ export interface OfflineDraft {
   pushup_reps: number;
   plank_seconds: number;
   run_distance: number;
+  squat_reps: number;
   notes: string;
   photo_url: string | null;
   saved_at: number;

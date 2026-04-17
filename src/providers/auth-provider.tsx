@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, useRef, useCallback, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import type { Profile } from '@/types/database';
@@ -10,7 +11,9 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   isSessionRefreshing: boolean;
+  isStale: boolean;
   waitForSession: () => Promise<void>;
+  softReconnect: () => Promise<boolean>;
   signInWithGoogle: (inviteCode?: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -21,7 +24,9 @@ const AuthContext = createContext<AuthContextType>({
   profile: null,
   loading: true,
   isSessionRefreshing: false,
+  isStale: false,
   waitForSession: async () => {},
+  softReconnect: async () => false,
   signInWithGoogle: async () => {},
   signOut: async () => {},
   refreshProfile: async () => {},
@@ -34,7 +39,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSessionRefreshing, setIsSessionRefreshing] = useState(false);
+  const [isStale, setIsStale] = useState(false);
   const supabase = createClient();
+  const queryClient = useQueryClient();
 
   const sessionGateRef = useRef<{ promise: Promise<void>; resolve: () => void } | null>(null);
 
@@ -100,11 +107,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (session?.user) {
           setUser(session.user);
           await fetchProfile(session.user.id);
+          supabase.realtime.setAuth(session.access_token);
         } else {
           const { data: { user: freshUser } } = await supabase.auth.getUser();
           if (freshUser) {
             setUser(freshUser);
             await fetchProfile(freshUser.id);
+            const { data: { session: freshSession } } = await supabase.auth.getSession();
+            if (freshSession) supabase.realtime.setAuth(freshSession.access_token);
           } else {
             setUser(null);
             setProfile(null);
@@ -119,8 +129,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setTimeout(() => reject(new Error('wake-session-timeout')), 10000)
           ),
         ]);
+        setIsStale(false);
+        window.dispatchEvent(new CustomEvent('kinetic-reconnect'));
       } catch {
-        // Timeout or offline — clear blocking UI; next user action can retry.
+        setIsStale(true);
       } finally {
         setIsSessionRefreshing(false);
         resolveGate();
@@ -179,6 +191,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const softReconnect = useCallback(async (): Promise<boolean> => {
+    try {
+      const { data: { user: freshUser }, error: authError } = await Promise.race([
+        supabase.auth.getUser(),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000)),
+      ]);
+      if (authError || !freshUser) return false;
+      setUser(freshUser);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        supabase.realtime.setAuth(session.access_token);
+      }
+
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', freshUser.id)
+        .single();
+      if (profileData) setProfile(profileData);
+
+      setIsStale(false);
+      queryClient.invalidateQueries();
+      window.dispatchEvent(new CustomEvent('kinetic-reconnect'));
+      return true;
+    } catch {
+      return false;
+    }
+  }, [supabase, queryClient]);
+
   const signOut = async () => {
     try {
       await fetch(`${window.location.origin}/auth/sign-out`, {
@@ -194,7 +236,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, isSessionRefreshing, waitForSession, signInWithGoogle, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, isSessionRefreshing, isStale, waitForSession, softReconnect, signInWithGoogle, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

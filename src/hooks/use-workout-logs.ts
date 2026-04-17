@@ -61,7 +61,7 @@ export function useWeeklyVolume() {
       } as any);
       if (error) throw error;
       const rows = data as WeeklyVolume[] | null;
-      return rows?.[0] ?? { total_pushups: 0, total_plank_seconds: 0, total_run_distance: 0 };
+      return rows?.[0] ?? { total_pushups: 0, total_plank_seconds: 0, total_run_distance: 0, total_squats: 0 };
     },
     enabled: !!user,
   });
@@ -223,6 +223,7 @@ export type SubmitLogInput =
       pushup_reps: number;
       plank_seconds: number;
       run_distance: number;
+      squat_reps: number;
     };
 
 export function useSubmitLog() {
@@ -239,6 +240,7 @@ export function useSubmitLog() {
               pushup_reps: input.pushup_reps,
               plank_seconds: input.plank_seconds,
               run_distance: input.run_distance,
+              squat_reps: input.squat_reps,
             }
           : null;
 
@@ -252,18 +254,19 @@ export function useSubmitLog() {
       let pushup_reps = 0;
       let plank_seconds = 0;
       let run_distance = 0;
+      let squat_reps = 0;
 
       if (metrics) {
         pushup_reps = metrics.pushup_reps;
         plank_seconds = metrics.plank_seconds;
         run_distance = metrics.run_distance;
+        squat_reps = metrics.squat_reps;
       } else {
-        // new Promise() converts the Supabase thenable into a real Promise so withTimeout can race against it.
         const { data: draftData } = await withTimeout(
           new Promise<any>((resolve, reject) => {
             supabase
               .from('workout_logs')
-              .select('pushup_reps, plank_seconds, run_distance')
+              .select('pushup_reps, plank_seconds, run_distance, squat_reps')
               .eq('id', logId)
               .single()
               .then(resolve, reject);
@@ -272,9 +275,10 @@ export function useSubmitLog() {
         pushup_reps = draftData?.pushup_reps || 0;
         plank_seconds = draftData?.plank_seconds || 0;
         run_distance = Number(draftData?.run_distance || 0);
+        squat_reps = draftData?.squat_reps || 0;
       }
 
-      const { totalPts } = calculateSessionScore(pushup_reps, plank_seconds, run_distance);
+      const { totalPts } = calculateSessionScore(pushup_reps, plank_seconds, run_distance, squat_reps);
 
       // Submit: always persist metrics on this row when provided so we never submit stale debounced draft data.
       const { data, error } = await withTimeout(
@@ -290,6 +294,7 @@ export function useSubmitLog() {
                     pushup_reps: metrics.pushup_reps,
                     plank_seconds: metrics.plank_seconds,
                     run_distance: metrics.run_distance,
+                    squat_reps: metrics.squat_reps,
                   }
                 : {}),
             })
@@ -405,17 +410,16 @@ export function useUpdateSubmittedLog() {
       patch,
     }: {
       logId: string;
-      patch: Partial<Pick<WorkoutLog, 'pushup_reps' | 'plank_seconds' | 'run_distance' | 'notes' | 'photo_url'>>;
+      patch: Partial<Pick<WorkoutLog, 'pushup_reps' | 'plank_seconds' | 'run_distance' | 'squat_reps' | 'notes' | 'photo_url'>>;
     }) => {
       if (!user) throw new Error('Not authenticated');
 
       // Recalculate session score if any metric field changed
       let sessionScore: number | undefined;
-      if ('pushup_reps' in patch || 'plank_seconds' in patch || 'run_distance' in patch) {
-        // Fetch current log to merge with patch
+      if ('pushup_reps' in patch || 'plank_seconds' in patch || 'run_distance' in patch || 'squat_reps' in patch) {
         const { data: currentLog } = await supabase
           .from('workout_logs')
-          .select('pushup_reps, plank_seconds, run_distance')
+          .select('pushup_reps, plank_seconds, run_distance, squat_reps')
           .eq('id', logId)
           .single();
         if (currentLog) {
@@ -423,7 +427,8 @@ export function useUpdateSubmittedLog() {
           const { totalPts } = calculateSessionScore(
             merged.pushup_reps || 0,
             merged.plank_seconds || 0,
-            Number(merged.run_distance || 0)
+            Number(merged.run_distance || 0),
+            merged.squat_reps || 0
           );
           sessionScore = totalPts;
         }
@@ -501,7 +506,11 @@ export function useSharedLogs(dateRange: DateRange, customFrom?: Date, customTo?
             queryClient.invalidateQueries({ queryKey: ['shared-workout-logs'] });
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
+            void createChannel();
+          }
+        });
     };
 
     void createChannel();
@@ -514,9 +523,15 @@ export function useSharedLogs(dateRange: DateRange, customFrom?: Date, customTo?
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    const handleReconnect = () => {
+      void createChannel();
+      queryClient.invalidateQueries({ queryKey: ['shared-workout-logs'] });
+    };
+    window.addEventListener('kinetic-reconnect', handleReconnect);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('kinetic-reconnect', handleReconnect);
       if (channel) supabase.removeChannel(channel);
     };
   }, [user, queryClient, supabase]);

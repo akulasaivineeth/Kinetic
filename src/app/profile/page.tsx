@@ -56,9 +56,11 @@ function ProfilePageContent() {
         pushup_weekly_goal: goals.pushup_weekly_goal,
         plank_weekly_goal: goals.plank_weekly_goal,
         run_weekly_goal: goals.run_weekly_goal,
+        squat_weekly_goal: goals.squat_weekly_goal,
         pushup_peak_goal: goals.pushup_peak_goal,
         plank_peak_goal: goals.plank_peak_goal,
         run_peak_goal: goals.run_peak_goal,
+        squat_peak_goal: goals.squat_peak_goal,
       });
     }
   }, [goals, goalDraft]);
@@ -363,6 +365,7 @@ function ProfilePageContent() {
                 <div className="pt-2 space-y-2">
                   {[
                     { label: 'Push-up Weekly Goal', key: 'pushup_weekly_goal' as const, suffix: 'reps' },
+                    { label: 'Squat Weekly Goal', key: 'squat_weekly_goal' as const, suffix: 'reps' },
                     { label: 'Plank Weekly Goal', key: 'plank_weekly_goal' as const, suffix: 'sec' },
                     { label: 'Run Weekly Goal', key: 'run_weekly_goal' as const, suffix: 'km' },
                     { label: 'Push-up Peak Goal', key: 'pushup_peak_goal' as const, suffix: 'reps' },

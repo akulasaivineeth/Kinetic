@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { AppShell } from '@/components/layout/app-shell';
 import { GlassCard } from '@/components/ui/glass-card';
 import { TogglePills } from '@/components/ui/toggle-pills';
+import { ExerciseSelect } from '@/components/ui/exercise-select';
 import { DateRangeTabs } from '@/components/ui/date-range-tabs';
 import { useLeaderboard } from '@/hooks/use-leaderboard';
 import { useWorkoutLogs, useSharedLogs, type DateRange } from '@/hooks/use-workout-logs';
@@ -19,10 +20,10 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceDot,
 } from 'recharts';
 import { format } from 'date-fns';
-import { Dumbbell, Timer, Route, Trophy } from 'lucide-react';
-import { calculateSessionScore, calculatePushupScore, calculatePlankScore, calculateRunScore } from '@/lib/scoring';
+import { Dumbbell, Timer, Route, Trophy, Zap } from 'lucide-react';
+import { calculateSessionScore, calculatePushupScore, calculatePlankScore, calculateRunScore, calculateSquatScore } from '@/lib/scoring';
 
-type ArenaMetric = 'overall' | 'pushups' | 'plank' | 'run';
+type ArenaMetric = 'overall' | 'pushups' | 'squats' | 'plank' | 'run';
 
 const FRIEND_LINE_COLORS = ['#38BDF8', '#FBBF24', '#A78BFA', '#FB7185'] as const;
 const MAX_CHART_FRIENDS = 4;
@@ -30,6 +31,7 @@ const MAX_CHART_FRIENDS = 4;
 const METRIC_CONFIG: Record<ArenaMetric, { label: string; unit: string; icon: typeof Trophy }> = {
   overall: { label: 'OVERALL', unit: 'score', icon: Trophy },
   pushups: { label: 'PUSH-UPS', unit: 'reps', icon: Dumbbell },
+  squats: { label: 'SQUATS', unit: 'reps', icon: Zap },
   plank: { label: 'PLANK', unit: 'min', icon: Timer },
   run: { label: 'RUN', unit: 'km', icon: Route },
 };
@@ -37,16 +39,17 @@ const METRIC_CONFIG: Record<ArenaMetric, { label: string; unit: string; icon: ty
 function getEntryValue(entry: LeaderboardEntry, metric: ArenaMetric): number {
   switch (metric) {
     case 'pushups': return entry.pushup_value;
+    case 'squats': return entry.squat_value;
     case 'plank': return entry.plank_value / 60;
     case 'run': return Number(entry.run_value);
     case 'overall': return entry.total_score;
   }
 }
 
-/** Get the category score (pts) for a specific metric from raw values */
 function getCategoryScore(entry: LeaderboardEntry, metric: ArenaMetric): number {
   switch (metric) {
     case 'pushups': return calculatePushupScore(entry.pushup_value);
+    case 'squats': return calculateSquatScore(entry.squat_value);
     case 'plank': return calculatePlankScore(entry.plank_value);
     case 'run': return calculateRunScore(Number(entry.run_value));
     case 'overall': return entry.total_score;
@@ -58,6 +61,7 @@ function formatVal(v: number, metric: ArenaMetric, unitPref?: string, isFair?: b
     if (isFair) return `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
     return Math.round(v).toLocaleString();
   }
+  if (metric === 'squats') return `${Math.round(v)}`;
   if (metric === 'plank') return `${v.toFixed(1)}m`;
   if (metric === 'run') {
     const d = unitPref === 'imperial' ? v * 0.621371 : v;
@@ -117,16 +121,18 @@ export default function ArenaPage() {
     ? [top3[1], top3[0], top3[2]]
     : top3;
 
-  const logMetricVal = (log: { pushup_reps: number; plank_seconds: number; run_distance: number | string | null }, m: ArenaMetric) => {
+  const logMetricVal = (log: { pushup_reps: number; plank_seconds: number; run_distance: number | string | null; squat_reps?: number }, m: ArenaMetric) => {
     switch (m) {
       case 'pushups': return log.pushup_reps || 0;
+      case 'squats': return log.squat_reps || 0;
       case 'plank': return (log.plank_seconds || 0) / 60;
       case 'run': return Number(log.run_distance) || 0;
       case 'overall': {
         const { totalPts } = calculateSessionScore(
           log.pushup_reps || 0,
           log.plank_seconds || 0,
-          Number(log.run_distance) || 0
+          Number(log.run_distance) || 0,
+          log.squat_reps || 0
         );
         return totalPts;
       }
@@ -206,18 +212,25 @@ export default function ArenaPage() {
 
         {/* Metric Filter + Date Range */}
         <div className="space-y-2" data-testid="uat-arena-filters">
-          <TogglePills
-            motionScope="arena-metric-filter"
-            options={[
-              { value: 'overall' as const, label: 'OVERALL' },
-              { value: 'pushups' as const, label: 'PUSH-UPS' },
-              { value: 'plank' as const, label: 'PLANK' },
-              { value: 'run' as const, label: 'RUN' },
-            ]}
-            selected={arenaMetric}
-            onChange={setArenaMetric}
-            size="sm"
-          />
+          <div className="flex items-center justify-between">
+            <ExerciseSelect
+              options={[
+                { value: 'overall' as const, label: 'Overall' },
+                { value: 'pushups' as const, label: 'Push-ups' },
+                { value: 'squats' as const, label: 'Squats' },
+                { value: 'plank' as const, label: 'Plank' },
+                { value: 'run' as const, label: 'Run' },
+              ]}
+              selected={arenaMetric}
+              onChange={setArenaMetric}
+            />
+            <DateRangeTabs
+              motionScope="arena-date-tabs"
+              selected={dateRange}
+              onChange={setDateRange}
+              onCustomDates={(from, to) => { setCustomFrom(from); setCustomTo(to); }}
+            />
+          </div>
           {isOverall && (
             <button
               onClick={() => setFairMode((p) => !p)}
@@ -230,12 +243,6 @@ export default function ArenaPage() {
               {fairMode ? '⚖ FAIR MODE ON' : '⚖ FAIR MODE'}
             </button>
           )}
-          <DateRangeTabs
-            motionScope="arena-date-tabs"
-            selected={dateRange}
-            onChange={setDateRange}
-            onCustomDates={(from, to) => { setCustomFrom(from); setCustomTo(to); }}
-          />
         </div>
 
         {/* Podium */}
@@ -310,7 +317,7 @@ export default function ArenaPage() {
                 <p className="text-[8px] text-dark-muted text-center mt-4 leading-relaxed">
                   {fairMode
                     ? 'FAIR MODE: Ranked by % improvement vs prior period. A beginner who doubles their output outranks a veteran who improves by 10%.'
-                    : 'OVERALL score = sum of session points. Each session earns tiered points per push-up rep, plank second, and run km — harder efforts earn more per unit. See FAQ in Profile.'}
+                    : 'OVERALL score = sum of session points. Each session earns tiered points per push-up rep, squat rep, plank second, and run km — harder efforts earn more per unit. See FAQ in Profile.'}
                 </p>
               )}
             </>
@@ -482,6 +489,7 @@ export default function ArenaPage() {
                       </p>
                       <div className="flex items-center gap-2 text-[10px] text-dark-muted mt-0.5">
                         <span className="flex items-center gap-0.5"><Dumbbell size={10} className="text-emerald-500/50" /> {Math.round(entry.pushup_value)}</span>
+                        <span className="flex items-center gap-0.5"><Zap size={10} className="text-emerald-500/50" /> {Math.round(entry.squat_value)}</span>
                         <span className="flex items-center gap-0.5"><Timer size={10} className="text-emerald-500/50" /> {Math.round(entry.plank_value / 60)}m</span>
                         <span className="flex items-center gap-0.5"><Route size={10} className="text-emerald-500/50" /> {formatDistance(Number(entry.run_value), unitPref)}{unitPref === 'imperial' ? 'mi' : 'km'}</span>
                       </div>
@@ -554,17 +562,23 @@ export default function ArenaPage() {
                 )}
                 {isOverall && <div className="mb-6" />}
 
-                <div className="w-full grid grid-cols-3 gap-2">
+                <div className="w-full grid grid-cols-2 gap-2">
                   <div className={`flex flex-col items-center justify-center py-4 px-2 rounded-2xl backdrop-blur-md ${arenaMetric === 'pushups' ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-white/5 border border-white/10'}`}>
                     <Dumbbell size={18} className="text-emerald-400 mb-2" />
                     <span className="text-lg font-black text-white">{Math.round(peekUser.pushup_value)}</span>
-                    <span className="text-[9px] font-bold tracking-wider text-dark-muted mt-1 uppercase">REPS</span>
+                    <span className="text-[9px] font-bold tracking-wider text-dark-muted mt-1 uppercase">PUSH-UPS</span>
                     <span className="text-[9px] font-semibold text-emerald-500/70 mt-0.5">{Math.round(calculatePushupScore(peekUser.pushup_value))} pts</span>
+                  </div>
+                  <div className={`flex flex-col items-center justify-center py-4 px-2 rounded-2xl backdrop-blur-md ${arenaMetric === 'squats' ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-white/5 border border-white/10'}`}>
+                    <Zap size={18} className="text-emerald-400 mb-2" />
+                    <span className="text-lg font-black text-white">{Math.round(peekUser.squat_value)}</span>
+                    <span className="text-[9px] font-bold tracking-wider text-dark-muted mt-1 uppercase">SQUATS</span>
+                    <span className="text-[9px] font-semibold text-emerald-500/70 mt-0.5">{Math.round(calculateSquatScore(peekUser.squat_value))} pts</span>
                   </div>
                   <div className={`flex flex-col items-center justify-center py-4 px-2 rounded-2xl backdrop-blur-md ${arenaMetric === 'plank' ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-white/5 border border-white/10'}`}>
                     <Timer size={18} className="text-emerald-400 mb-2" />
                     <span className="text-lg font-black text-white">{Math.round(peekUser.plank_value / 60)}</span>
-                    <span className="text-[9px] font-bold tracking-wider text-dark-muted mt-1 uppercase">MINS</span>
+                    <span className="text-[9px] font-bold tracking-wider text-dark-muted mt-1 uppercase">PLANK MIN</span>
                     <span className="text-[9px] font-semibold text-emerald-500/70 mt-0.5">{Math.round(calculatePlankScore(peekUser.plank_value))} pts</span>
                   </div>
                   <div className={`flex flex-col items-center justify-center py-4 px-2 rounded-2xl backdrop-blur-md ${arenaMetric === 'run' ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-white/5 border border-white/10'}`}>

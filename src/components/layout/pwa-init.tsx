@@ -1,16 +1,32 @@
 'use client';
 
 import { useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { registerServiceWorker } from '@/lib/offline';
 import { subscribeToPush } from '@/lib/push';
 import { useAuth } from '@/providers/auth-provider';
 
 export function PWAInit() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     registerServiceWorker();
   }, []);
+
+  // Listen for push data updates from Service Worker — the "Instagram fix"
+  // When a push arrives while the app is open, SW postMessages us so we refetch immediately
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const handleSWMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'PUSH_DATA_UPDATE') {
+        queryClient.invalidateQueries();
+        window.dispatchEvent(new CustomEvent('kinetic-reconnect'));
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', handleSWMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', handleSWMessage);
+  }, [queryClient]);
 
   // Ensure push subscription is registered (and re-registered after SW updates).
   const ensurePushSubscription = useCallback(async () => {

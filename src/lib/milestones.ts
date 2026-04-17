@@ -1,5 +1,5 @@
 export interface Milestone {
-  metric: 'pushups' | 'plank' | 'run';
+  metric: 'pushups' | 'plank' | 'run' | 'squats';
   threshold: number;
   label: string;
   emoji: string;
@@ -22,6 +22,10 @@ const MILESTONES: Milestone[] = [
   { metric: 'run', threshold: 100, label: '100 KM RUN', emoji: '🔥' },
   { metric: 'run', threshold: 500, label: '500 KM RUN', emoji: '⚡' },
   { metric: 'run', threshold: 1000, label: '1000 KM RUN', emoji: '🏆' },
+  { metric: 'squats', threshold: 1000, label: '1K SQUATS', emoji: '🦵' },
+  { metric: 'squats', threshold: 5000, label: '5K SQUATS', emoji: '🔥' },
+  { metric: 'squats', threshold: 10000, label: '10K SQUATS', emoji: '⚡' },
+  { metric: 'squats', threshold: 25000, label: '25K SQUATS', emoji: '🏆' },
 ];
 
 export function checkNewMilestones(
@@ -30,12 +34,14 @@ export function checkNewMilestones(
   prevRun: number,
   newPushups: number,
   newPlank: number,
-  newRun: number
+  newRun: number,
+  prevSquats: number = 0,
+  newSquats: number = 0
 ): Milestone[] {
   const crossed: Milestone[] = [];
   for (const m of MILESTONES) {
-    const prev = m.metric === 'pushups' ? prevPushups : m.metric === 'plank' ? prevPlank : prevRun;
-    const curr = m.metric === 'pushups' ? newPushups : m.metric === 'plank' ? newPlank : newRun;
+    const prev = m.metric === 'pushups' ? prevPushups : m.metric === 'plank' ? prevPlank : m.metric === 'squats' ? prevSquats : prevRun;
+    const curr = m.metric === 'pushups' ? newPushups : m.metric === 'plank' ? newPlank : m.metric === 'squats' ? newSquats : newRun;
     if (prev < m.threshold && curr >= m.threshold) {
       crossed.push(m);
     }
@@ -43,9 +49,9 @@ export function checkNewMilestones(
   return crossed;
 }
 
-export function getEarnedMilestones(pushups: number, plank: number, run: number): Milestone[] {
+export function getEarnedMilestones(pushups: number, plank: number, run: number, squats: number = 0): Milestone[] {
   return MILESTONES.filter((m) => {
-    const val = m.metric === 'pushups' ? pushups : m.metric === 'plank' ? plank : run;
+    const val = m.metric === 'pushups' ? pushups : m.metric === 'plank' ? plank : m.metric === 'squats' ? squats : run;
     return val >= m.threshold;
   });
 }

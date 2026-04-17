@@ -41,7 +41,6 @@ interface DateRangeTabsProps {
 const tabs: { value: DateRangeType; label: string }[] = [
   { value: 'week', label: 'WEEK' },
   { value: 'month', label: 'MONTH' },
-  { value: '3mo', label: '3MO' },
   { value: 'custom', label: 'CUSTOM' },
 ];
 

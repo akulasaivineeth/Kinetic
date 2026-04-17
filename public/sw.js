@@ -27,16 +27,16 @@ self.addEventListener('activate', (event) => {
 // Fetch — network first with timeout, fallback to cache
 self.addEventListener('fetch', (event) => {
   const url = event.request.url;
-  
+
   // Skip non-GET requests entirely
   if (event.request.method !== 'GET') return;
 
   // Skip all Supabase and internal API URLs entirely
   if (
-    url.includes('/api/') || 
-    url.includes('/rest/') || 
-    url.includes('/realtime/') || 
-    url.includes('/auth/') || 
+    url.includes('/api/') ||
+    url.includes('/rest/') ||
+    url.includes('/realtime/') ||
+    url.includes('/auth/') ||
     url.includes('supabase.co')
   ) {
     return;
@@ -70,7 +70,7 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Push notification handling
+// Push notification handling — also signals open app windows to refresh data
 self.addEventListener('push', (event) => {
   if (!event.data) return;
 
@@ -87,7 +87,17 @@ self.addEventListener('push', (event) => {
     ],
   };
 
-  event.waitUntil(self.registration.showNotification(data.title, options));
+  event.waitUntil(
+    Promise.all([
+      // Wake any open app windows so they refetch data immediately
+      self.clients.matchAll({ type: 'window' }).then((clients) => {
+        clients.forEach((client) => {
+          client.postMessage({ type: 'PUSH_DATA_UPDATE', payload: data.data || {} });
+        });
+      }),
+      self.registration.showNotification(data.title, options),
+    ])
+  );
 });
 
 // Notification click — open the log page with prefilled data

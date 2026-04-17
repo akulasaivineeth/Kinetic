@@ -37,7 +37,11 @@ export function useNotifications() {
             queryClient.invalidateQueries({ queryKey: ['notifications'] });
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
+            void createChannel();
+          }
+        });
     };
 
     void createChannel();
@@ -50,9 +54,15 @@ export function useNotifications() {
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    const handleReconnect = () => {
+      void createChannel();
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    };
+    window.addEventListener('kinetic-reconnect', handleReconnect);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('kinetic-reconnect', handleReconnect);
       if (channel) supabase.removeChannel(channel);
     };
   }, [user, queryClient]);

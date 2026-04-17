@@ -24,7 +24,7 @@ export function generateInsights(
     isWithinInterval(new Date(l.logged_at), { start: lastWeekStart, end: thisWeekStart })
   );
 
-  const sum = (arr: WorkoutLog[], key: 'pushup_reps' | 'plank_seconds') =>
+  const sum = (arr: WorkoutLog[], key: 'pushup_reps' | 'plank_seconds' | 'squat_reps') =>
     arr.reduce((s, l) => s + (l[key] || 0), 0);
   const sumRun = (arr: WorkoutLog[]) =>
     arr.reduce((s, l) => s + (Number(l.run_distance) || 0), 0);
@@ -35,6 +35,8 @@ export function generateInsights(
   const lwPlank = sum(lastWeekLogs, 'plank_seconds');
   const twRun = sumRun(thisWeekLogs);
   const lwRun = sumRun(lastWeekLogs);
+  const twSquat = sum(thisWeekLogs, 'squat_reps');
+  const lwSquat = sum(lastWeekLogs, 'squat_reps');
 
   if (twPush > lwPush * 1.2 && lwPush > 0) {
     insights.push({ type: 'positive', text: `Push-ups are up ${Math.round(((twPush - lwPush) / lwPush) * 100)}% from last week. Keep it up!` });
@@ -45,6 +47,9 @@ export function generateInsights(
   if (twRun > lwRun * 1.2 && lwRun > 0) {
     insights.push({ type: 'positive', text: `Running is up ${Math.round(((twRun - lwRun) / lwRun) * 100)}% from last week. Nice pace!` });
   }
+  if (twSquat > lwSquat * 1.2 && lwSquat > 0) {
+    insights.push({ type: 'positive', text: `Squats are up ${Math.round(((twSquat - lwSquat) / lwSquat) * 100)}% from last week. Leg day pays off!` });
+  }
 
   if (twPush === 0 && thisWeekLogs.length > 0) {
     insights.push({ type: 'suggestion', text: 'No push-ups logged this week. Try adding a quick set to your next session.' });
@@ -54,6 +59,9 @@ export function generateInsights(
   }
   if (twPlank === 0 && thisWeekLogs.length > 0) {
     insights.push({ type: 'suggestion', text: 'No plank this week. A 60-second hold goes a long way.' });
+  }
+  if (twSquat === 0 && thisWeekLogs.length > 0) {
+    insights.push({ type: 'suggestion', text: 'No squats this week. Add a set of bodyweight squats to round out your training.' });
   }
 
   if (goals) {
