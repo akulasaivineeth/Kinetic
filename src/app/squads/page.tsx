@@ -113,7 +113,7 @@ export default function SquadsHubPage() {
                       value={joinCode}
                       onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                       placeholder="CODE"
-                      className="w-full px-4 py-3 rounded-k-lg border border-k-line-strong bg-k-bg text-center font-mono font-bold tracking-[0.3em] text-k-ink mb-3"
+                      className="w-full px-4 py-3 rounded-k-lg border border-k-line-strong bg-k-bg text-center font-k-mono font-bold tracking-[0.3em] text-k-ink mb-3"
                       maxLength={6}
                     />
                     {error && <p className="text-[12px] text-red-500 mb-2">{error}</p>}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, Suspense, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense, useMemo, type ComponentType } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppShell } from '@/components/layout/app-shell';
 import { KCard, KEyebrow, KDisplay, KPill } from '@/components/ui/k-primitives';
@@ -41,6 +41,46 @@ function isCoreSlug(slug: string): slug is CoreSlug {
 
 function exerciseIconForSlug(slug: string) {
   return EXERCISE_ICON_MAP[slug] ?? EXERCISE_ICON_MAP[slug.replace(/s$/, '')];
+}
+
+/** v2 monoline icons + values (replaces emoji in history rows). */
+function LogDayMetricsRow({
+  log,
+}: {
+  log: {
+    pushup_reps?: number | null;
+    squat_reps?: number | null;
+    plank_seconds?: number | null;
+    run_distance?: number | string | null;
+  };
+}) {
+  const chips: { key: string; Icon: ComponentType<{ size?: number; color?: string }>; text: string }[] = [];
+  if ((log.pushup_reps ?? 0) > 0) {
+    const Icon = EXERCISE_ICON_MAP.pushups ?? EXERCISE_ICON_MAP.pushup;
+    if (Icon) chips.push({ key: 'pu', Icon, text: String(log.pushup_reps) });
+  }
+  if ((log.squat_reps ?? 0) > 0) {
+    const Icon = EXERCISE_ICON_MAP.squats ?? EXERCISE_ICON_MAP.squat;
+    if (Icon) chips.push({ key: 'sq', Icon, text: String(log.squat_reps) });
+  }
+  if ((log.plank_seconds ?? 0) > 0) {
+    const Icon = EXERCISE_ICON_MAP.plank;
+    if (Icon) chips.push({ key: 'pl', Icon, text: formatPlankTime(log.plank_seconds ?? 0) });
+  }
+  if (Number(log.run_distance ?? 0) > 0) {
+    const Icon = EXERCISE_ICON_MAP.run;
+    if (Icon) chips.push({ key: 'rn', Icon, text: `${Number(log.run_distance)}km` });
+  }
+  return (
+    <div className="flex flex-wrap gap-2.5 items-center font-bold text-sm tracking-wide text-k-ink">
+      {chips.map(({ key, Icon, text }) => (
+        <span key={key} className="inline-flex items-center gap-1">
+          <Icon size={16} color={K.greenDeep} />
+          <span>{text}</span>
+        </span>
+      ))}
+    </div>
+  );
 }
 
 export default function LogPageWrapper() {
@@ -352,12 +392,12 @@ function LogPage() {
       if (isPB) { setPbCelebration('NEW PB!'); delayTime = 1200; }
       if (totalPts > 0 && delayTime === 0) {
         const parts = [
-          pushupPts > 0 ? `💪${Math.round(pushupPts)}` : '',
-          plankPts > 0 ? `🧘${Math.round(plankPts)}` : '',
-          runPts > 0 ? `🏃${Math.round(runPts)}` : '',
-          squatPts > 0 ? `🦵${Math.round(squatPts)}` : '',
+          pushupPts > 0 ? `Push ${Math.round(pushupPts)}` : '',
+          plankPts > 0 ? `Plank ${Math.round(plankPts)}` : '',
+          runPts > 0 ? `Run ${Math.round(runPts)}` : '',
+          squatPts > 0 ? `Squat ${Math.round(squatPts)}` : '',
         ].filter(Boolean).join(' + ');
-        setPbCelebration(`⚡ ${Math.round(totalPts)} PTS${parts ? ` (${parts})` : ''}`);
+        setPbCelebration(`${Math.round(totalPts)} PTS${parts ? ` — ${parts}` : ''}`);
         delayTime = 1200;
       }
       if (delayTime > 0) await new Promise((r) => setTimeout(r, delayTime));
@@ -518,12 +558,7 @@ function LogPage() {
                       className={`w-full text-left p-3 rounded-xl border flex items-center justify-between transition-colors ${
                         editLogId === log.id ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'border-k-line-strong bg-k-elevated text-k-ink hover:border-emerald-500/40'
                       }`}>
-                      <div className="flex gap-3 font-bold text-sm tracking-wide flex-wrap">
-                        {log.pushup_reps > 0 && <span>💪 {log.pushup_reps}</span>}
-                        {log.squat_reps > 0 && <span>🦵 {log.squat_reps}</span>}
-                        {log.plank_seconds > 0 && <span>🧘 {formatPlankTime(log.plank_seconds)}</span>}
-                        {Number(log.run_distance) > 0 && <span>🏃 {Number(log.run_distance)}km</span>}
-                      </div>
+                      <LogDayMetricsRow log={log} />
                       <span className="text-[10px] font-bold uppercase tracking-wider opacity-60">{editLogId === log.id ? 'EDITING' : 'EDIT'}</span>
                     </button>
                   ))}

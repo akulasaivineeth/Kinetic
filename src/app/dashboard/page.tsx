@@ -11,6 +11,8 @@ import { useTier } from '@/hooks/use-tier';
 import { useStreak } from '@/hooks/use-streak';
 import { useWorkoutLogs } from '@/hooks/use-workout-logs';
 import { useGoalSuggestions } from '@/hooks/use-goal-suggestions';
+import { useLeaderboard } from '@/hooks/use-leaderboard';
+import { useAuth } from '@/providers/auth-provider';
 import { K } from '@/lib/design-tokens';
 
 const DAILY_GOAL = 600;
@@ -47,6 +49,14 @@ function useCountUp(target: number, duration = 1200) {
 }
 
 export default function PulsePage() {
+  const { user } = useAuth();
+  const { data: leaderboardWeek = [] } = useLeaderboard('week');
+  const myRank = useMemo(() => {
+    if (!user) return 0;
+    const i = leaderboardWeek.findIndex((e) => e.user_id === user.id);
+    return i >= 0 ? i + 1 : 0;
+  }, [leaderboardWeek, user]);
+
   const { data: today } = useTodayScore();
   const { tier, totalScore } = useTier();
   const { data: streak = 0 } = useStreak();
@@ -196,7 +206,7 @@ export default function PulsePage() {
                     className="font-display font-extrabold italic mt-0.5"
                     style={{ fontSize: 20, color: K.greenDeep }}
                   >
-                    #4
+                    {myRank > 0 ? `#${myRank}` : '—'}
                   </div>
                 </div>
               </div>

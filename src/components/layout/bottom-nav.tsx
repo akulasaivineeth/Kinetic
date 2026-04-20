@@ -18,9 +18,9 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50"
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-k-line/80 dark:border-white/[0.06]"
       style={{
-        background: 'linear-gradient(to top, rgba(22,28,30,0.96) 70%, rgba(22,28,30,0.9))',
+        background: 'var(--nav-bottom-bg)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
       }}
@@ -51,7 +51,10 @@ export function BottomNav() {
                 >
                   <Icon size={26} color="#fff" />
                 </motion.div>
-                <span className="text-[10px] font-semibold text-white/70 tracking-wide -mt-0.5">
+                <span
+                  className="text-[10px] font-semibold tracking-wide -mt-0.5"
+                  style={{ color: 'var(--nav-center-label)' }}
+                >
                   {item.label}
                 </span>
               </Link>
@@ -67,14 +70,12 @@ export function BottomNav() {
               <motion.div whileTap={{ scale: 0.85 }}>
                 <Icon
                   size={22}
-                  color={isActive ? '#1FB37A' : 'rgba(255,255,255,0.45)'}
+                  color={isActive ? '#1FB37A' : 'var(--nav-inactive-icon)'}
                 />
               </motion.div>
               <span
-                className={cn(
-                  'text-[11px]',
-                  isActive ? 'font-bold text-[#1FB37A]' : 'font-medium text-white/45'
-                )}
+                className={cn('text-[11px]', isActive ? 'font-bold text-[#1FB37A]' : 'font-medium')}
+                style={!isActive ? { color: 'var(--nav-inactive-label)' } : undefined}
               >
                 {item.label}
               </span>

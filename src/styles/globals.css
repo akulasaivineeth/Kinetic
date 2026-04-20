@@ -2,8 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Archivo for display/italic headlines */
-@import url('https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700;1,800;1,900&display=swap');
+/* Archivo (display) + JetBrains Mono (codes / mono UI) — matches v2 design HTML */
+@import url('https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700;1,800;1,900&family=JetBrains+Mono:wght@400;600&display=swap');
 
 /* ─── V2 Design Tokens ───────────────────────────────────── */
 :root {
@@ -35,6 +35,12 @@
   --k-shadow-card: 0 1px 2px rgba(15,17,16,0.04), 0 6px 16px rgba(15,17,16,0.04);
   --k-shadow-card-hi: 0 2px 4px rgba(15,17,16,0.05), 0 14px 30px rgba(15,17,16,0.08);
   --k-shadow-fab: 0 6px 20px rgba(31,179,122,0.35), 0 2px 6px rgba(31,179,122,0.2);
+
+  /* Bottom nav — theme-aware (v2 light bar vs dark PWA) */
+  --nav-bottom-bg: linear-gradient(to top, rgba(244, 245, 243, 0.98) 72%, rgba(244, 245, 243, 0.88));
+  --nav-inactive-icon: rgba(15, 17, 16, 0.4);
+  --nav-inactive-label: rgba(15, 17, 16, 0.52);
+  --nav-center-label: rgba(15, 17, 16, 0.55);
 
   /* Legacy compat */
   --emerald: #1FB37A;
@@ -74,6 +80,11 @@ html.dark body {
   --dark-muted: #8E8E93;
   --app-glow: rgba(31,179,122,0.14);
   --app-glow-2: rgba(31,179,122,0.06);
+
+  --nav-bottom-bg: linear-gradient(to top, rgba(22, 28, 30, 0.96) 70%, rgba(22, 28, 30, 0.9));
+  --nav-inactive-icon: rgba(255, 255, 255, 0.45);
+  --nav-inactive-label: rgba(255, 255, 255, 0.45);
+  --nav-center-label: rgba(255, 255, 255, 0.7);
 }
 
 /* ─── Light theme (V2 default) ────────────────────────────── */
@@ -87,6 +98,10 @@ html.light body {
   --dark-muted: #6B7280;
   --app-glow: rgba(31,179,122,0.1);
   --app-glow-2: rgba(31,179,122,0.05);
+  --nav-bottom-bg: linear-gradient(to top, rgba(244, 245, 243, 0.98) 72%, rgba(244, 245, 243, 0.88));
+  --nav-inactive-icon: rgba(15, 17, 16, 0.4);
+  --nav-inactive-label: rgba(15, 17, 16, 0.52);
+  --nav-center-label: rgba(15, 17, 16, 0.55);
 }
 
 html.light body {
@@ -107,6 +122,10 @@ html {
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.font-k-mono {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
 
 body {
