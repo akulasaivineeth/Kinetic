@@ -1,5 +1,30 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
+// ---------- Activity system ----------
+
+export interface ActivityType {
+  id: number;
+  slug: string;
+  name: string;
+  unit: string;
+  emoji: string;
+  base_rate: number;
+  acceleration: number;
+  value_column: string | null;
+  is_core: boolean;
+}
+
+export interface ActivityLog {
+  id: string;
+  user_id: string;
+  activity_type_id: number;
+  value: number;
+  score: number;
+  logged_at: string;
+  submitted_at: string | null;
+  created_at: string;
+}
+
 // ---------- Row types (what you read) ----------
 
 export interface Profile {
@@ -102,6 +127,97 @@ export interface UserMilestoneUnlock {
   label: string;
   emoji: string;
   earned_at: string;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  invite_code: string;
+  avatar_url: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export interface TeamMember {
+  user_id: string;
+  full_name: string;
+  avatar_url: string | null;
+  role: 'owner' | 'admin' | 'member';
+  joined_at: string;
+}
+
+export interface TeamActivity {
+  id: number;
+  slug: string;
+  name: string;
+  unit: string;
+  emoji: string;
+}
+
+export interface UserTeam {
+  team_id: string;
+  team_name: string;
+  invite_code: string;
+  avatar_url: string | null;
+  member_count: number;
+  user_role: string;
+  activity_slugs: string[];
+  team_score: number;
+}
+
+export interface TeamDetails {
+  id: string;
+  name: string;
+  invite_code: string;
+  created_by: string;
+  avatar_url: string | null;
+  created_at: string;
+  members: TeamMember[];
+  activities: TeamActivity[];
+}
+
+export interface MessageReaction {
+  emoji: string;
+  user_id: string;
+  full_name: string;
+}
+
+export interface TeamMessage {
+  id: string;
+  user_id: string;
+  full_name: string;
+  avatar_url: string | null;
+  content: string;
+  created_at: string;
+  reply_to: string | null;
+  reply_content: string | null;
+  reply_user_name: string | null;
+  reactions: MessageReaction[];
+  image_url: string | null;
+}
+
+export interface TeamMilestone {
+  user_id: string;
+  full_name: string;
+  avatar_url: string | null;
+  milestone_key: string;
+  label: string;
+  emoji: string;
+  earned_at: string;
+}
+
+export interface ActivityBreakdownEntry {
+  value: number;
+  score: number;
+}
+
+export interface TeamLeaderboardEntry {
+  user_id: string;
+  full_name: string;
+  avatar_url: string;
+  activity_breakdown: Record<string, ActivityBreakdownEntry>;
+  total_score: number;
+  streak: number;
 }
 
 // ---------- Function return types ----------

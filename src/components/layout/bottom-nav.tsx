@@ -25,15 +25,14 @@ const navItems = [
   },
   {
     href: '/arena',
-    label: 'Arena',
+    label: 'Squads',
     icon: (active: boolean) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
         stroke={active ? '#10B981' : '#636366'}>
-        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 9 8 12 8s5-4 7.5-4a2.5 2.5 0 0 1 0 5H18" />
-        <path d="M18 13v-3H6v3" />
-        <path d="M6 13a6.002 6.002 0 0 0 12 0" />
-        <line x1="12" y1="19" x2="12" y2="22" />
-        <line x1="8" y1="22" x2="16" y2="22" />
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
       </svg>
     ),
   },

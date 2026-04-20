@@ -29,7 +29,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
   const steps = [
     {
-      title: 'WELCOME TO THE ARENA',
+      title: 'WELCOME TO KINETIC',
       subtitle: 'Track push-ups, squats, plank, and running with friends in a year-long fitness challenge.',
       content: (
         <div className="flex justify-center gap-5 py-6">

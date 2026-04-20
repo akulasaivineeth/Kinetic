@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/providers/auth-provider';
 import type { WorkoutLog, WeeklyVolume } from '@/types/database';
-import { startOfWeek, endOfWeek, subMonths, subWeeks, startOfMonth, endOfMonth } from 'date-fns';
+import { startOfWeek, endOfWeek, subMonths, subWeeks, startOfMonth, endOfMonth, endOfDay } from 'date-fns';
 import { calculateSessionScore } from '@/lib/scoring';
 import { get, set, del } from 'idb-keyval';
 import { useEffect, useCallback } from 'react';
@@ -41,7 +41,7 @@ export function getDateRange(range: DateRange, customFrom?: Date, customTo?: Dat
     case 'year':
       return { from: subMonths(now, 12), to: now };
     case 'custom':
-      return { from: customFrom || subWeeks(now, 1), to: customTo || now };
+      return { from: customFrom || subWeeks(now, 1), to: customTo ? endOfDay(customTo) : now };
     default:
       return { from: startOfWeek(now, { weekStartsOn: 1 }), to: now };
   }

@@ -24,20 +24,15 @@ export function useLeaderboard(
     if (!user) return;
 
     let channel: any;
+    let retries = 0;
 
     const createChannel = async () => {
-      // removeChannel must complete before reusing the same topic string; otherwise the client
-      // can still hold the old topic and collide with dedup logic.
       if (channel) {
         await supabase.removeChannel(channel);
         channel = undefined;
       }
 
-      // Supabase reuses channels by topic string. Date.now() collides when multiple hooks
-      // (e.g. header + arena both call useLeaderboard) mount in the same millisecond — then
-      // .channel() returns an already-subscribed channel and .on() throws:
-      // "cannot add postgres_changes callbacks ... after subscribe()".
-      const channelId = `arena-realtime-${user.id}-${crypto.randomUUID()}`;
+      const channelId = `squads-realtime-${user.id}-${crypto.randomUUID()}`;
       channel = supabase
         .channel(channelId)
         .on(
@@ -61,8 +56,13 @@ export function useLeaderboard(
           () => queryClient.invalidateQueries({ queryKey: ['leaderboard'] })
         )
         .subscribe((status) => {
-          if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
-            void createChannel();
+          if (status === 'SUBSCRIBED') {
+            retries = 0;
+          } else if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
+            if (retries < 1) {
+              retries++;
+              void createChannel();
+            }
           }
         });
     };
@@ -71,6 +71,7 @@ export function useLeaderboard(
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
+        retries = 0;
         void createChannel();
         queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
       }
@@ -78,6 +79,7 @@ export function useLeaderboard(
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     const handleReconnect = () => {
+      retries = 0;
       void createChannel();
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
     };
