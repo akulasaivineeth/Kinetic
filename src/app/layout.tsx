@@ -9,7 +9,7 @@ import { WorkoutDataRealtimeSync } from '@/components/workout-data-realtime-sync
 import '@/styles/globals.css';
 
 export const metadata: Metadata = {
-  title: 'Kinetic — Performance Arena',
+  title: 'Kinetic — Performance Squads',
   description: 'Track, compete, and push your limits with Kinetic fitness PWA.',
   manifest: '/manifest.json',
   appleWebApp: {

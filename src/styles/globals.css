@@ -126,6 +126,20 @@ input[type="number"] {
   border: 1px solid transparent;
 }
 
+/* Prevent text selection flicker on touch interactions */
+.touch-manipulation {
+  touch-action: manipulation;
+}
+
+/* Hide scrollbar but keep scrollable */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Safe area padding for PWA */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .safe-bottom {

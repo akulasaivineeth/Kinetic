@@ -55,7 +55,7 @@ function LandingPage() {
             KINETIC
           </h1>
           <p className="text-dark-muted text-sm mt-2 font-medium">
-            Performance Arena
+            Performance Squads
           </p>
         </motion.div>
 
@@ -67,7 +67,7 @@ function LandingPage() {
           className="text-dark-muted text-base mb-10 max-w-xs mx-auto leading-relaxed"
         >
           Track your push-ups, squats, planks, and runs.
-          Compete with friends in the Arena.
+          Compete with friends in your Squad.
         </motion.p>
 
         {inviteCode && (

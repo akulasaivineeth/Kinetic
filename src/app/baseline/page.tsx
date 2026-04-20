@@ -132,7 +132,7 @@ export default function BaselinePage() {
         </motion.button>
 
         <p className="text-[9px] text-dark-muted text-center leading-relaxed">
-          This is logged as your first workout. Your % improvement in the Arena will be measured from these numbers.
+          This is logged as your first workout. Your % improvement will be measured from these numbers.
         </p>
       </div>
     </AppShell>

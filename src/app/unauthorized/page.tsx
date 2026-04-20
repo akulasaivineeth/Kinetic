@@ -41,7 +41,7 @@ export default function UnauthorizedPage() {
         
         <div className="space-y-4 mb-12">
           <p className="text-dark-text font-bold text-sm tracking-wide">
-            PRIVATE PERFORMANCE ARENA
+            PRIVATE PERFORMANCE HUB
           </p>
           <p className="text-dark-muted text-[13px] leading-relaxed">
             Kinetic is currently an invite-only track for elite performance tracking. You need a verified invite link from an active member to initialize your profile.

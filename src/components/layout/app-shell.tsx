@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { Header } from './header';
 import { BottomNav } from './bottom-nav';
 import { PullToRefresh } from '@/components/pull-to-refresh';
@@ -6,20 +6,54 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { subscribeToPush } from '@/lib/push';
 import { useAuth } from '@/providers/auth-provider';
 import { useQueryClient } from '@tanstack/react-query';
+import { usePathname, useRouter } from 'next/navigation';
 
 interface AppShellProps {
   children: ReactNode;
 }
 
+const MAIN_ROUTES = ['/dashboard', '/arena', '/log', '/profile'];
+
 export function AppShell({ children }: AppShellProps) {
   const { softReconnect } = useAuth();
   const queryClient = useQueryClient();
+  const pathname = usePathname();
+  const router = useRouter();
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
 
   const handleRefresh = useCallback(async () => {
     const success = await softReconnect();
     if (!success) queryClient.invalidateQueries();
   }, [softReconnect, queryClient]);
+
+  // Swipe between main routes
+  const touchRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  useEffect(() => {
+    const idx = MAIN_ROUTES.indexOf(pathname);
+    if (idx === -1) return;
+
+    const onStart = (e: TouchEvent) => {
+      touchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (!touchRef.current) return;
+      const el = document.activeElement;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return;
+      const dx = e.changedTouches[0].clientX - touchRef.current.x;
+      const dy = e.changedTouches[0].clientY - touchRef.current.y;
+      const dt = Date.now() - touchRef.current.t;
+      touchRef.current = null;
+      if (Math.abs(dx) < 80 || Math.abs(dx) < Math.abs(dy) * 1.8 || dt > 500) return;
+      if (dx < 0 && idx < MAIN_ROUTES.length - 1) router.push(MAIN_ROUTES[idx + 1]);
+      else if (dx > 0 && idx > 0) router.push(MAIN_ROUTES[idx - 1]);
+    };
+    document.addEventListener('touchstart', onStart, { passive: true });
+    document.addEventListener('touchend', onEnd, { passive: true });
+    return () => {
+      document.removeEventListener('touchstart', onStart);
+      document.removeEventListener('touchend', onEnd);
+    };
+  }, [pathname, router]);
 
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
@@ -60,7 +94,7 @@ export function AppShell({ children }: AppShellProps) {
             <div className="p-4 rounded-2xl bg-dark-elevated border border-emerald-500/30 glass-card-elevated flex items-center justify-between gap-4">
               <div className="flex-1">
                 <p className="text-xs font-black text-dark-text">ENABLE NOTIFICATIONS</p>
-                <p className="text-[10px] text-dark-muted mt-0.5">Stay updated with live arena scores and Whoop workouts.</p>
+                <p className="text-[10px] text-dark-muted mt-0.5">Stay updated with live squad scores and Whoop workouts.</p>
               </div>
               <button 
                 onClick={requestPermission}
