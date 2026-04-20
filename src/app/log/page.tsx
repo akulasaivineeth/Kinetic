@@ -3,8 +3,11 @@
 import { useState, useEffect, useCallback, useRef, Suspense, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppShell } from '@/components/layout/app-shell';
-import { GlassCard } from '@/components/ui/glass-card';
+import { KCard, KEyebrow, KDisplay, KPill } from '@/components/ui/k-primitives';
+import { EXERCISE_ICON_MAP } from '@/components/ui/k-icons';
+import { K } from '@/lib/design-tokens';
 import { useAuth } from '@/providers/auth-provider';
+import { useLeaderboard } from '@/hooks/use-leaderboard';
 import { useGoals } from '@/hooks/use-goals';
 import {
   useWeeklyVolume,
@@ -35,9 +38,13 @@ function isCoreSlug(slug: string): slug is CoreSlug {
   return (CORE_SLUGS as readonly string[]).includes(slug);
 }
 
+function exerciseIconForSlug(slug: string) {
+  return EXERCISE_ICON_MAP[slug] ?? EXERCISE_ICON_MAP[slug.replace(/s$/, '')];
+}
+
 export default function LogPageWrapper() {
   return (
-    <Suspense fallback={<AppShell><div className="flex items-center justify-center pt-20"><div className="text-dark-muted text-sm">Loading...</div></div></AppShell>}>
+    <Suspense fallback={<AppShell><div className="flex items-center justify-center pt-20"><div className="text-k-muted-soft text-sm">Loading...</div></div></AppShell>}>
       <LogPage />
     </Suspense>
   );
@@ -370,6 +377,36 @@ function LogPage() {
   const isToday = isSameDay(selectedDate, new Date());
   const hasAnyInput = pushupReps > 0 || plankSeconds > 0 || runDistance > 0 || squatReps > 0 || Object.values(flexValues).some(v => v > 0);
 
+  const { data: leaderboardWeek = [] } = useLeaderboard('week');
+  const myRankWeek = useMemo(() => {
+    if (!user) return 0;
+    const i = leaderboardWeek.findIndex((e) => e.user_id === user.id);
+    return i >= 0 ? i + 1 : 0;
+  }, [leaderboardWeek, user]);
+
+  const previewRunKm = useMemo(() => {
+    if (profile?.unit_preference === 'imperial') return Number((runDistance * 1.60934).toFixed(3));
+    return runDistance;
+  }, [runDistance, profile?.unit_preference]);
+
+  const previewScorePts = useMemo(() => {
+    const b = calculateSessionScore(pushupReps, plankSeconds, previewRunKm, squatReps);
+    return b.totalPts;
+  }, [pushupReps, plankSeconds, previewRunKm, squatReps]);
+
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryQuery, setLibraryQuery] = useState('');
+  const [libraryTab, setLibraryTab] = useState<'all' | 'core' | 'more'>('all');
+
+  const libraryCandidates = useMemo(() => {
+    let list = activityTypes;
+    if (libraryTab === 'core') list = list.filter((a) => a.is_core);
+    if (libraryTab === 'more') list = list.filter((a) => !a.is_core);
+    const q = libraryQuery.trim().toLowerCase();
+    if (q) list = list.filter((a) => a.name.toLowerCase().includes(q) || a.slug.toLowerCase().includes(q));
+    return list;
+  }, [activityTypes, libraryTab, libraryQuery]);
+
   // Weekly progress for goals
   const totalPushups = (weeklyVolume?.total_pushups || 0) + pushupReps;
   const totalSquats = (weeklyVolume?.total_squats || 0) + squatReps;
@@ -394,50 +431,53 @@ function LogPage() {
   return (
     <AppShell>
       <Confetti active={!!pbCelebration} message={pbCelebration || undefined} />
-      <div className="max-w-md mx-auto px-4 space-y-4 pt-2 pb-32">
-
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <button onClick={() => setCalendarOpen(!calendarOpen)} className="flex items-center gap-2 group">
-            <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase group-hover:text-emerald-500 transition-colors">
-              Session History
-            </p>
+      <div className="space-y-4 pt-1 pb-32" data-testid="uat-log-page">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <KEyebrow>Log session</KEyebrow>
+            <KDisplay size={26} className="mt-1">
+              {isToday ? 'TODAY' : format(selectedDate, 'EEE MMM d').toUpperCase()}
+            </KDisplay>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCalendarOpen(!calendarOpen)}
+            className="flex items-center gap-1.5 text-[11px] font-bold text-k-muted-soft hover:text-emerald-600 dark:hover:text-emerald-400 uppercase tracking-wide shrink-0 mt-1"
+          >
+            History
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-              className={`text-dark-muted transition-transform duration-300 ${calendarOpen ? 'rotate-180' : ''}`}>
+              className={`transition-transform duration-300 ${calendarOpen ? 'rotate-180' : ''}`}>
               <path d="m6 9 6 6 6-6"/>
             </svg>
           </button>
-          <h2 className="text-lg font-black text-dark-text tracking-tight text-right">
-            {isToday ? 'Today' : format(selectedDate, 'EEE, MMM d')}
-          </h2>
         </div>
 
         {/* Calendar */}
         <AnimatePresence>
           {calendarOpen && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden space-y-3">
-              <GlassCard className="!p-3" delay={0}>
+              <KCard pad={12} className="!p-3">
                 <style>{`
-                  .kinetic-cal { --rdp-accent-color: #10B981; --rdp-background-color: rgba(16,185,129,0.12); width: 100%; font-family: inherit; }
+                  .kinetic-cal { --rdp-accent-color: ${K.green}; --rdp-background-color: ${K.mintSoft}; width: 100%; font-family: inherit; }
                   .kinetic-cal .rdp-months { width: 100%; } .kinetic-cal .rdp-month { width: 100%; }
-                  .kinetic-cal .rdp-month_caption { font-size: 14px; font-weight: 800; color: var(--color-dark-text, #f5f5f7); letter-spacing: 0.08em; text-transform: uppercase; padding: 4px 0 8px; }
-                  .kinetic-cal .rdp-weekday { font-size: 10px; font-weight: 700; color: #636366; letter-spacing: 0.1em; text-transform: uppercase; }
+                  .kinetic-cal .rdp-month_caption { font-size: 14px; font-weight: 800; color: var(--k-ink, #0B0D0C); letter-spacing: 0.08em; text-transform: uppercase; padding: 4px 0 8px; }
+                  .kinetic-cal .rdp-weekday { font-size: 10px; font-weight: 700; color: var(--k-muted-soft, #9AA2A9); letter-spacing: 0.1em; text-transform: uppercase; }
                   .kinetic-cal .rdp-day { width: 36px; height: 36px; padding: 0; }
-                  .kinetic-cal .rdp-day_button { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #a1a1a6; border-radius: 10px; transition: all 0.15s ease; }
-                  .kinetic-cal .rdp-day_button:hover { background: rgba(255,255,255,0.06); }
-                  .kinetic-cal .rdp-today { color: #10B981 !important; font-weight: 800; }
-                  .kinetic-cal .rdp-selected .rdp-day_button { background: #10B981 !important; color: #000 !important; font-weight: 900; border-radius: 10px; }
-                  .kinetic-cal .rdp-chevron { fill: #636366; }
+                  .kinetic-cal .rdp-day_button { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: var(--k-muted-soft, #9AA2A9); border-radius: 10px; transition: all 0.15s ease; }
+                  .kinetic-cal .rdp-day_button:hover { background: ${K.mint}; }
+                  .kinetic-cal .rdp-today { color: ${K.greenDeep} !important; font-weight: 800; }
+                  .kinetic-cal .rdp-selected .rdp-day_button { background: ${K.green} !important; color: #fff !important; font-weight: 900; border-radius: 10px; }
+                  .kinetic-cal .rdp-chevron { fill: var(--k-muted-soft, #9AA2A9); }
                   .kinetic-cal .day-has-log button { position: relative; }
-                  .kinetic-cal .day-has-log button::after { content: ''; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: #10B981; }
-                  .kinetic-cal .rdp-selected.day-has-log button::after { background: #000; }
+                  .kinetic-cal .day-has-log button::after { content: ''; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: ${K.green}; }
+                  .kinetic-cal .rdp-selected.day-has-log button::after { background: #fff; }
                   .kinetic-cal .rdp-nav { gap: 4px; }
-                  .kinetic-cal .rdp-button_previous, .kinetic-cal .rdp-button_next { width: 28px; height: 28px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
+                  .kinetic-cal .rdp-button_previous, .kinetic-cal .rdp-button_next { width: 28px; height: 28px; border-radius: 8px; background: ${K.mintSoft}; border: 1px solid ${K.lineStrong}; }
                 `}</style>
                 <DayPicker className="kinetic-cal" mode="single" selected={selectedDate} onSelect={handleDaySelect}
                   month={calendarMonth} onMonthChange={setCalendarMonth} modifiers={{ hasLog: loggedDays }}
                   modifiersClassNames={{ hasLog: 'day-has-log' }} showOutsideDays fixedWeeks />
-              </GlassCard>
+              </KCard>
 
               {currentDayLogs.length > 0 && (
                 <div className="space-y-2">
@@ -447,7 +487,7 @@ function LogPage() {
                   {currentDayLogs.map(log => (
                     <button key={log.id} onClick={() => handleEditLog(log.id)}
                       className={`w-full text-left p-3 rounded-xl border flex items-center justify-between transition-colors ${
-                        editLogId === log.id ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400' : 'border-dark-border bg-dark-elevated text-dark-text hover:border-emerald-500/30'
+                        editLogId === log.id ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'border-k-line-strong bg-k-elevated text-k-ink hover:border-emerald-500/40'
                       }`}>
                       <div className="flex gap-3 font-bold text-sm tracking-wide flex-wrap">
                         {log.pushup_reps > 0 && <span>💪 {log.pushup_reps}</span>}
@@ -460,7 +500,7 @@ function LogPage() {
                   ))}
                   <button onClick={() => { setEditLogId(null); setPushupReps(0); setPlankSeconds(0); setRunDistance(0); setSquatReps(0); setFlexValues({}); setSelectedSlugs(new Set()); }}
                     className={`w-full p-2.5 rounded-xl border border-dashed text-xs font-bold tracking-wider transition-colors ${
-                      !editLogId ? 'border-emerald-500/50 text-emerald-500' : 'border-dark-border/60 text-dark-muted hover:text-emerald-500'
+                      !editLogId ? 'border-emerald-500/50 text-emerald-600 dark:text-emerald-400' : 'border-k-line-strong text-k-muted-soft hover:text-emerald-600 dark:hover:text-emerald-400'
                     }`}>
                     + NEW ENTRY
                   </button>
@@ -482,16 +522,38 @@ function LogPage() {
         {profile?.whoop_access_token && (
           <div className="flex items-center gap-2">
             <button onClick={handleWhoopImport} disabled={isImporting}
-              className="flex-1 px-4 py-2.5 rounded-xl bg-dark-elevated border border-dark-border text-xs font-bold tracking-wider text-dark-muted hover:text-emerald-500 hover:border-emerald-500/30 transition-all disabled:opacity-50">
+              className="flex-1 px-4 py-2.5 rounded-xl bg-k-elevated border border-k-line-strong text-xs font-bold tracking-wider text-k-muted-soft hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/30 transition-all disabled:opacity-50">
               {isImporting ? 'IMPORTING...' : '⌚ IMPORT RECENT WORKOUTS'}
             </button>
             {importResult && <span className="text-xs font-semibold text-emerald-500 animate-fade-in">{importResult}</span>}
           </div>
         )}
 
+        <KCard pad={16} hi className="flex items-center justify-between gap-3">
+          <div>
+            <KEyebrow>Projected score</KEyebrow>
+            <KDisplay size={28} className="mt-0.5 text-emerald-600 dark:text-emerald-400">
+              ~{previewScorePts}
+              <span className="text-base font-bold text-k-muted-soft ml-1">pts</span>
+            </KDisplay>
+            <p className="text-[11px] text-k-muted-soft mt-1 font-medium">Core session only — flex adds after submit.</p>
+          </div>
+          <div className="text-right shrink-0">
+            <KEyebrow className="text-right">This week</KEyebrow>
+            {myRankWeek > 0 ? (
+              <p className="text-sm font-black text-k-ink mt-1">
+                #{myRankWeek}
+                <span className="block text-[10px] font-bold text-k-muted-soft tracking-wide uppercase">leaderboard</span>
+              </p>
+            ) : (
+              <p className="text-xs text-k-muted-soft mt-1 max-w-[7rem] leading-snug">Rank appears once you are on the board.</p>
+            )}
+          </div>
+        </KCard>
+
         {/* ==================== ACTIVITY GRID ==================== */}
         <div>
-          <p className="text-[10px] font-black tracking-wider text-dark-muted uppercase mb-2">
+          <p className="text-[10px] font-black tracking-wider text-k-muted-soft uppercase mb-2">
             {editLogId ? 'ACTIVITIES' : 'TAP TO LOG'}
           </p>
           <div className="grid grid-cols-4 gap-2">
@@ -499,18 +561,23 @@ function LogPage() {
               const active = selectedSlugs.has(act.slug);
               const val = getCoreValue(act.slug as CoreSlug);
               return (
-                <motion.button key={act.slug} onClick={() => toggleActivity(act.slug)} whileTap={{ scale: 0.92 }}
+                <motion.button
+                  key={act.slug}
+                  type="button"
+                  data-testid={`uat-log-tile-${act.slug}`}
+                  onClick={() => toggleActivity(act.slug)}
+                  whileTap={{ scale: 0.92 }}
                   className={`relative flex flex-col items-center justify-center py-3 px-1 rounded-2xl border transition-all ${
                     active
                       ? 'bg-emerald-500/12 border-emerald-500/30 shadow-sm shadow-emerald-500/10'
-                      : 'bg-dark-elevated/40 border-dark-border/40 hover:border-dark-border'
+                      : 'bg-k-elevated/60 border-k-line-strong/80 hover:border-k-line-strong'
                   }`}>
                   <span className="text-xl mb-0.5">{act.emoji}</span>
-                  <span className={`text-[9px] font-bold tracking-wide ${active ? 'text-emerald-400' : 'text-dark-muted'}`}>
+                  <span className={`text-[9px] font-bold tracking-wide ${active ? 'text-emerald-600 dark:text-emerald-400' : 'text-k-muted-soft'}`}>
                     {act.name.split(' ')[0]}
                   </span>
                   {active && val > 0 && (
-                    <span className="text-[8px] font-black text-emerald-500 mt-0.5">
+                    <span className="text-[8px] font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
                       {act.slug === 'plank' ? formatPlankTime(val) : act.slug === 'run' ? `${val}${unitLabel.toLowerCase()}` : val}
                     </span>
                   )}
@@ -520,27 +587,39 @@ function LogPage() {
           </div>
 
           {flexTypes.length > 0 && (
-            <div className="grid grid-cols-4 gap-2 mt-2">
-              {flexTypes.map(act => {
-                const active = selectedSlugs.has(act.slug);
-                const val = flexValues[act.slug] || 0;
-                return (
-                  <motion.button key={act.slug} onClick={() => toggleActivity(act.slug)} whileTap={{ scale: 0.92 }}
-                    className={`relative flex flex-col items-center justify-center py-3 px-1 rounded-2xl border transition-all ${
-                      active
-                        ? 'bg-emerald-500/12 border-emerald-500/30 shadow-sm shadow-emerald-500/10'
-                        : 'bg-dark-elevated/40 border-dark-border/40 hover:border-dark-border'
-                    }`}>
-                    <span className="text-xl mb-0.5">{act.emoji}</span>
-                    <span className={`text-[9px] font-bold tracking-wide leading-tight text-center ${active ? 'text-emerald-400' : 'text-dark-muted'}`}>
-                      {act.name.length > 8 ? act.name.slice(0, 7) + '…' : act.name}
-                    </span>
-                    {active && val > 0 && (
-                      <span className="text-[8px] font-black text-emerald-500 mt-0.5">{val}{act.unit === 'reps' ? '' : act.unit.charAt(0)}</span>
-                    )}
-                  </motion.button>
-                );
-              })}
+            <div className="mt-3 space-y-2">
+              <div className="flex flex-wrap gap-2">
+                {flexTypes
+                  .filter((act) => selectedSlugs.has(act.slug))
+                  .map((act) => {
+                    const val = flexValues[act.slug] || 0;
+                    const Icon = exerciseIconForSlug(act.slug);
+                    return (
+                      <motion.button
+                        key={act.slug}
+                        type="button"
+                        onClick={() => toggleActivity(act.slug)}
+                        whileTap={{ scale: 0.95 }}
+                        className="inline-flex items-center gap-2 pl-2 pr-3 py-2 rounded-k-pill border border-emerald-500/25 bg-k-mint-soft dark:bg-emerald-500/10"
+                      >
+                        {Icon ? <Icon size={20} className="text-emerald-600 dark:text-emerald-400 shrink-0" /> : <span className="text-base">{act.emoji}</span>}
+                        <span className="text-[11px] font-bold text-k-ink max-w-[120px] truncate">{act.name}</span>
+                        {val > 0 && <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400">{val}</span>}
+                      </motion.button>
+                    );
+                  })}
+              </div>
+              <button
+                type="button"
+                data-testid="uat-log-exercise-library"
+                onClick={() => {
+                  setLibraryOpen(true);
+                  setLibraryQuery('');
+                }}
+                className="w-full py-3 rounded-k-md border border-dashed border-k-line-strong text-[11px] font-black tracking-widest text-k-muted-soft hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/35 transition-all uppercase bg-k-elevated/40"
+              >
+                + Exercise library
+              </button>
             </div>
           )}
         </div>
@@ -557,11 +636,11 @@ function LogPage() {
               return (
                 <motion.div key={slug} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
                   transition={{ type: 'spring', stiffness: 300, damping: 30 }} className="overflow-hidden">
-                  <div className="rounded-2xl bg-dark-elevated/50 border border-dark-border/40 p-4">
+                  <div className="rounded-2xl bg-k-elevated/70 border border-k-line-strong/80 p-4">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <span className="text-lg">{act.emoji}</span>
-                        <span className="text-[11px] font-black tracking-wider text-dark-text uppercase">{act.name}</span>
+                        <span className="text-[11px] font-black tracking-wider text-k-ink uppercase">{act.name}</span>
                       </div>
                       {gi && (
                         <span className="text-[9px] font-bold tracking-wider text-emerald-500">
@@ -572,7 +651,7 @@ function LogPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <button type="button" onClick={(e) => { e.stopPropagation(); setCoreValue(slug, Math.max(0, Math.round((val - (slug === 'plank' ? 5 : slug === 'run' ? 0.1 : 1)) * 10) / 10)); }}
-                        className="w-12 h-12 rounded-xl bg-dark-card border border-dark-border flex items-center justify-center text-dark-muted hover:text-red-400 hover:border-red-400/30 active:scale-90 transition-all flex-shrink-0">
+                        className="w-12 h-12 rounded-xl bg-k-card border border-k-line-strong flex items-center justify-center text-k-muted-soft hover:text-red-500 hover:border-red-400/40 active:scale-90 transition-all flex-shrink-0">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M5 12h14"/></svg>
                       </button>
                       {slug === 'plank' ? (
@@ -584,22 +663,28 @@ function LogPage() {
                             setCoreValue(slug, parsePlankMmSsDigitInput(raw));
                           }}
                           placeholder="0:00"
-                          className="flex-1 min-w-0 text-center text-4xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors py-1" />
+                          className="flex-1 min-w-0 text-center text-4xl font-black bg-transparent text-k-ink/25 focus:text-k-ink placeholder-k-muted-soft/40 outline-none transition-colors py-1" />
                       ) : slug === 'run' ? (
                         <input type="number" step="0.1" value={val || ''} onChange={(e) => setCoreValue(slug, parseFloat(e.target.value) || 0)}
                           onWheel={(e) => (e.target as HTMLElement).blur()} placeholder="0.0"
-                          className="flex-1 min-w-0 text-center text-4xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors py-1" />
+                          className="flex-1 min-w-0 text-center text-4xl font-black bg-transparent text-k-ink/25 focus:text-k-ink placeholder-k-muted-soft/40 outline-none transition-colors py-1" />
                       ) : (
-                        <input type="number" value={val || ''} onChange={(e) => setCoreValue(slug, parseInt(e.target.value) || 0)}
-                          onWheel={(e) => (e.target as HTMLElement).blur()} placeholder="0"
-                          className="flex-1 min-w-0 text-center text-4xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors py-1" />
+                        <input
+                          type="number"
+                          value={val || ''}
+                          onChange={(e) => setCoreValue(slug, parseInt(e.target.value) || 0)}
+                          onWheel={(e) => (e.target as HTMLElement).blur()}
+                          placeholder="0"
+                          data-testid={slug === 'pushups' ? 'uat-log-pushup-reps' : undefined}
+                          className="flex-1 min-w-0 text-center text-4xl font-black bg-transparent text-k-ink/25 focus:text-k-ink placeholder-k-muted-soft/40 outline-none transition-colors py-1"
+                        />
                       )}
                       <button type="button" onClick={(e) => { e.stopPropagation(); setCoreValue(slug, Math.round((val + (slug === 'plank' ? 5 : slug === 'run' ? 0.1 : 1)) * 10) / 10); }}
-                        className="w-12 h-12 rounded-xl bg-dark-card border border-dark-border flex items-center justify-center text-dark-muted hover:text-emerald-400 hover:border-emerald-500/30 active:scale-90 transition-all flex-shrink-0">
+                        className="w-12 h-12 rounded-xl bg-k-card border border-k-line-strong flex items-center justify-center text-k-muted-soft hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/35 active:scale-90 transition-all flex-shrink-0">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
                       </button>
                     </div>
-                    <p className="text-[9px] text-dark-muted text-center mt-1 font-semibold tracking-wider">
+                    <p className="text-[9px] text-k-muted-soft text-center mt-1 font-semibold tracking-wider">
                       {slug === 'plank' ? '±5 SEC' : slug === 'run' ? `±0.1 ${unitLabel}` : '±1 REP'}
                     </p>
                   </div>
@@ -612,27 +697,27 @@ function LogPage() {
             return (
               <motion.div key={slug} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }} className="overflow-hidden">
-                <div className="rounded-2xl bg-dark-elevated/50 border border-dark-border/40 p-4">
+                <div className="rounded-2xl bg-k-elevated/70 border border-k-line-strong/80 p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-lg">{act.emoji}</span>
-                    <span className="text-[11px] font-black tracking-wider text-dark-text uppercase">{act.name}</span>
-                    <span className="text-[9px] text-dark-muted font-semibold">({act.unit})</span>
+                    <span className="text-[11px] font-black tracking-wider text-k-ink uppercase">{act.name}</span>
+                    <span className="text-[9px] text-k-muted-soft font-semibold">({act.unit})</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button type="button" onClick={(e) => { e.stopPropagation(); setFlexValues(prev => ({ ...prev, [slug]: Math.max(0, Math.round(((prev[slug] || 0) - (act.unit === 'km' ? 0.1 : 1)) * 10) / 10) })); }}
-                      className="w-12 h-12 rounded-xl bg-dark-card border border-dark-border flex items-center justify-center text-dark-muted hover:text-red-400 hover:border-red-400/30 active:scale-90 transition-all flex-shrink-0">
+                      className="w-12 h-12 rounded-xl bg-k-card border border-k-line-strong flex items-center justify-center text-k-muted-soft hover:text-red-500 hover:border-red-400/40 active:scale-90 transition-all flex-shrink-0">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M5 12h14"/></svg>
                     </button>
                     <input type="number" step={act.unit === 'km' ? '0.1' : '1'} value={val || ''}
                       onChange={(e) => setFlexValues(prev => ({ ...prev, [slug]: parseFloat(e.target.value) || 0 }))}
                       onWheel={(e) => (e.target as HTMLElement).blur()} placeholder="0"
-                      className="flex-1 min-w-0 text-center text-4xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors py-1" />
+                      className="flex-1 min-w-0 text-center text-4xl font-black bg-transparent text-k-ink/25 focus:text-k-ink placeholder-k-muted-soft/40 outline-none transition-colors py-1" />
                     <button type="button" onClick={(e) => { e.stopPropagation(); setFlexValues(prev => ({ ...prev, [slug]: Math.round(((prev[slug] || 0) + (act.unit === 'km' ? 0.1 : 1)) * 10) / 10 })); }}
-                      className="w-12 h-12 rounded-xl bg-dark-card border border-dark-border flex items-center justify-center text-dark-muted hover:text-emerald-400 hover:border-emerald-500/30 active:scale-90 transition-all flex-shrink-0">
+                      className="w-12 h-12 rounded-xl bg-k-card border border-k-line-strong flex items-center justify-center text-k-muted-soft hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/35 active:scale-90 transition-all flex-shrink-0">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
                     </button>
                   </div>
-                  <p className="text-[9px] text-dark-muted text-center mt-1 font-semibold tracking-wider">
+                  <p className="text-[9px] text-k-muted-soft text-center mt-1 font-semibold tracking-wider">
                     {act.unit === 'km' ? '±0.1 KM' : `±1 ${act.unit.toUpperCase()}`}
                   </p>
                 </div>
@@ -643,7 +728,7 @@ function LogPage() {
 
         {/* Action Buttons */}
         <div className="space-y-3">
-          <motion.button whileTap={{ scale: 0.97 }} onClick={handleSubmit}
+          <motion.button whileTap={{ scale: 0.97 }} onClick={handleSubmit} data-testid="uat-log-submit"
             disabled={isSubmitting || submitted || isSessionRefreshing || (!hasAnyInput && selectedSlugs.size === 0)}
             className="w-full py-4 rounded-2xl emerald-gradient font-black text-sm tracking-wider text-white flex items-center justify-center gap-2 disabled:opacity-50 transition-all duration-200">
             {submitted ? <>{editLogId ? 'UPDATED ✓' : 'SUBMITTED ✓'}</>
@@ -661,14 +746,98 @@ function LogPage() {
           {hasAnyInput && !isSubmitting && !submitted && (
             <motion.button initial={{ opacity: 0 }} animate={{ opacity: 1 }} whileTap={{ scale: 0.95 }}
               onClick={() => { setPushupReps(0); setPlankSeconds(0); setRunDistance(0); setSquatReps(0); setFlexValues({}); setSelectedSlugs(new Set()); setEditLogId(null); }}
-              className="w-full py-3 rounded-xl bg-dark-elevated border border-dashed border-dark-border text-[10px] font-black tracking-widest text-dark-muted hover:text-red-400 hover:border-red-400/30 transition-all uppercase">
+              className="w-full py-3 rounded-xl bg-k-elevated border border-dashed border-k-line-strong text-[10px] font-black tracking-widest text-k-muted-soft hover:text-red-500 hover:border-red-400/35 transition-all uppercase">
               ERASE & RESET
             </motion.button>
           )}
 
-          {submitError && <p className="text-xs text-red-400 font-semibold text-center">{submitError}</p>}
+          {submitError && <p className="text-xs text-red-500 font-semibold text-center">{submitError}</p>}
         </div>
       </div>
+
+      <AnimatePresence>
+        {libraryOpen && (
+          <>
+            <motion.button
+              type="button"
+              aria-label="Close exercise library"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[60] bg-black/45 backdrop-blur-[2px]"
+              onClick={() => setLibraryOpen(false)}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="log-exercise-library-title"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 420, damping: 38 }}
+              className="fixed inset-x-0 bottom-0 z-[70] max-h-[min(88dvh,640px)] rounded-t-k-lg bg-k-card shadow-k-card-hi border-t border-k-line-strong flex flex-col"
+            >
+              <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-k-line-strong shrink-0">
+                <div id="log-exercise-library-title">
+                  <KEyebrow>Exercise library</KEyebrow>
+                  <p className="text-sm font-bold text-k-ink mt-0.5">Add to this session</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setLibraryOpen(false)}
+                  className="w-10 h-10 rounded-full bg-k-elevated text-k-muted-soft font-bold text-lg leading-none hover:text-k-ink"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="px-4 py-3 space-y-3 overflow-y-auto flex-1 min-h-0">
+                <input
+                  type="search"
+                  value={libraryQuery}
+                  onChange={(e) => setLibraryQuery(e.target.value)}
+                  placeholder="Search exercises…"
+                  className="w-full rounded-k-md border border-k-line-strong bg-k-bg px-3 py-2.5 text-sm text-k-ink placeholder:text-k-muted-soft outline-none focus:border-emerald-500/50"
+                />
+                <div className="flex flex-wrap gap-2">
+                  {(['all', 'core', 'more'] as const).map((tab) => (
+                    <KPill key={tab} active={libraryTab === tab} size="sm" onClick={() => setLibraryTab(tab)}>
+                      {tab === 'all' ? 'All' : tab === 'core' ? 'Core' : 'More'}
+                    </KPill>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-2 pb-4">
+                  {libraryCandidates.map((act) => {
+                    const on = selectedSlugs.has(act.slug);
+                    const Icon = exerciseIconForSlug(act.slug);
+                    return (
+                      <button
+                        key={act.slug}
+                        type="button"
+                        onClick={() => {
+                          toggleActivity(act.slug);
+                        }}
+                        className={`text-left rounded-k-md border p-3 flex flex-col gap-2 transition-colors ${
+                          on ? 'border-emerald-500/45 bg-k-mint-soft dark:bg-emerald-500/10' : 'border-k-line-strong bg-k-elevated/50 hover:border-emerald-500/30'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-9 h-9 rounded-k-sm bg-k-card border border-k-line-strong flex items-center justify-center shrink-0 text-k-green">
+                            {Icon ? <Icon size={22} className="text-emerald-600 dark:text-emerald-400" /> : <span className="text-lg">{act.emoji}</span>}
+                          </div>
+                          <span className="text-[12px] font-bold text-k-ink leading-tight line-clamp-2">{act.name}</span>
+                        </div>
+                        <span className={`text-[10px] font-black uppercase tracking-wider ${on ? 'text-emerald-600 dark:text-emerald-400' : 'text-k-muted-soft'}`}>
+                          {on ? 'Added' : 'Add'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </AppShell>
   );
 }

@@ -24,7 +24,7 @@ test.describe('cross flows', { tag: ['@crossflow', '@smoke'] }, () => {
     await expect(page.getByTestId('uat-squads-page').getByText(/^HUB$/)).toBeVisible();
     await page.getByRole('link', { name: /LOG/i }).click();
     await expect(page).toHaveURL(/\/log/);
-    await expect(page.getByText('CURRENT SESSION')).toBeVisible();
+    await expect(page.getByTestId('uat-log-page')).toBeVisible();
   });
 
   test('squads hub scope toggle after navigation', async ({ page }) => {

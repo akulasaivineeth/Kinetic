@@ -9,15 +9,16 @@ test.describe('log workout', { tag: ['@log', '@smoke'] }, () => {
 
   test('log page shows session and submit control', async ({ page }) => {
     await page.goto('/log');
-    await expect(page.getByText('CURRENT SESSION')).toBeVisible();
-    await expect(page.getByRole('button', { name: /SUBMIT TO ARENA/i })).toBeVisible();
+    await expect(page.getByTestId('uat-log-page')).toBeVisible();
+    await expect(page.getByText('Log session')).toBeVisible();
+    await expect(page.getByRole('button', { name: /^SUBMIT$/i })).toBeVisible();
   });
 
   test('submit minimal log reaches dashboard', async ({ page }) => {
     test.setTimeout(60_000);
     await page.goto('/log');
     await fillPushupReps(page, '2');
-    await page.getByRole('button', { name: /SUBMIT TO ARENA/i }).click();
+    await page.getByRole('button', { name: /^SUBMIT$/i }).click();
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 25_000 });
   });
 
@@ -31,7 +32,7 @@ test.describe('log workout', { tag: ['@log', '@smoke'] }, () => {
     }
 
     await recentBtn.click();
-    await expect(page.getByRole('button', { name: /UPDATE LOG|SUBMIT TO ARENA/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^(UPDATE LOG|SUBMIT)$/i })).toBeVisible();
     await fillPushupReps(page, '3');
     await page.getByRole('button', { name: /UPDATE LOG/i }).click();
     await expect(page.getByText(/UPDATED|SUBMITTED/i).first()).toBeVisible({ timeout: 20_000 });

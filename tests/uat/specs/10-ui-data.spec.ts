@@ -47,7 +47,7 @@ test.describe('UI data and multi-range toggles', { tag: ['@data', '@ui'] }, () =
   test('log page history or empty state', async ({ page }) => {
     await page.goto('/log');
     await expect(
-      page.getByText('No submitted logs yet.').or(page.getByText('CURRENT SESSION')).first()
+      page.getByText('No submitted logs yet.').or(page.getByTestId('uat-log-page')).first()
     ).toBeVisible({ timeout: 15_000 });
   });
 });
