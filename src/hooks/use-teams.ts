@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { endOfWeek, startOfWeek } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
-import { encodeTeamCrest, type TeamCrestPick } from '@/lib/squad-crest-codec';
+import type { TeamCrestPick } from '@/lib/squad-crest-codec';
 import { useAuth } from '@/providers/auth-provider';
 import type { UserTeam, TeamDetails, TeamMessage, TeamLeaderboardEntry, TeamMilestone } from '@/types/database';
 
@@ -380,7 +380,6 @@ export function useTeamMilestones(teamId: string | null) {
 
 export function useCreateTeam() {
   const { user } = useAuth();
-  const supabase = createClient();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -395,34 +394,28 @@ export function useCreateTeam() {
     }) => {
       if (!user) throw new Error('Not authenticated');
 
-      const code = Math.random().toString(36).slice(2, 8).toUpperCase();
-      const avatar_url = crest ? encodeTeamCrest(crest) : null;
-      const { data: team, error: teamErr } = await supabase
-        .from('teams')
-        .insert({ name, invite_code: code, created_by: user.id, avatar_url })
-        .select()
-        .single();
-      if (teamErr) throw teamErr;
-
-      await supabase.from('team_members').insert({
-        team_id: team.id,
-        user_id: user.id,
-        role: 'owner',
+      const res = await fetch('/api/teams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ name, activitySlugs, crest }),
       });
 
-      if (activitySlugs.length > 0) {
-        const { data: types } = await supabase
-          .from('activity_types')
-          .select('id, slug')
-          .in('slug', activitySlugs);
-        if (types?.length) {
-          await supabase.from('team_activities').insert(
-            types.map((t) => ({ team_id: team.id, activity_type_id: t.id }))
-          );
-        }
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        team_id?: string;
+        invite_code?: string;
+      };
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Could not create squad');
       }
 
-      return { team_id: team.id, invite_code: code };
+      if (!data.team_id || !data.invite_code) {
+        throw new Error('Invalid response from server');
+      }
+
+      return { team_id: data.team_id, invite_code: data.invite_code };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['user-teams'] });
