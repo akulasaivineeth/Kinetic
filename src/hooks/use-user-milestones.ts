@@ -41,7 +41,7 @@ export function useUserMilestoneUnlocks(limit = 40) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, queryClient, supabase]);
+  }, [user, queryClient]);
 
   return useQuery({
     queryKey: ['user-milestone-unlocks', user?.id, limit],

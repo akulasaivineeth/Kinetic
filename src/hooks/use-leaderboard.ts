@@ -49,11 +49,13 @@ export function useLeaderboard(
 
     let channel: any;
     let retries = 0;
+    let isHealthy = false;
 
     const createChannel = async () => {
       if (channel) {
         await supabase.removeChannel(channel);
         channel = undefined;
+        isHealthy = false;
       }
 
       const channelId = `squads-realtime-${user.id}-${crypto.randomUUID()}`;
@@ -82,7 +84,9 @@ export function useLeaderboard(
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
             retries = 0;
+            isHealthy = true;
           } else if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
+            isHealthy = false;
             if (retries < 1) {
               retries++;
               void createChannel();
@@ -93,15 +97,20 @@ export function useLeaderboard(
 
     void createChannel();
 
+    // On tab visible: only invalidate cache for fresh data; don't recreate healthy channel
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        retries = 0;
-        void createChannel();
         queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+        // Only recreate channel if it's unhealthy
+        if (!isHealthy) {
+          retries = 0;
+          void createChannel();
+        }
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    // On auth reconnect: always recreate channel (session token changed)
     const handleReconnect = () => {
       retries = 0;
       void createChannel();

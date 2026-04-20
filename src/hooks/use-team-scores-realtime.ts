@@ -56,5 +56,6 @@ export function useTeamScoresRealtime(teamId: string | null, memberUserIds: stri
       if (debounce.current) clearTimeout(debounce.current);
       void supabase.removeChannel(ch);
     };
-  }, [teamId, enabled, memberUserIds, supabase, queryClient]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamId, enabled, memberUserIds, queryClient]);
 }

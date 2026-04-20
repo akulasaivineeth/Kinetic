@@ -16,6 +16,15 @@ import { useUserMilestoneUnlocks } from '@/hooks/use-user-milestones';
 import { useAuth } from '@/providers/auth-provider';
 import { K } from '@/lib/design-tokens';
 
+/** Map a milestone_key like 'pushups_1000' to the matching SVG exercise icon. */
+function MilestoneIcon({ milestoneKey, size = 26 }: { milestoneKey: string; size?: number }) {
+  const metric = milestoneKey.split('_')[0]; // pushups, plank, run, squats
+  const Icon = EXERCISE_ICON_MAP[metric] ?? EXERCISE_ICON_MAP[metric + 's'];
+  if (Icon) return <Icon size={size} color={K.greenDeep} />;
+  // fallback for unknown metrics
+  return <IcTrophy size={size} color={K.gold} />;
+}
+
 const DAILY_GOAL = 600;
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -489,9 +498,13 @@ export default function PulsePage() {
             <div className="flex gap-2 overflow-x-auto pb-1 -mx-0.5 px-0.5">
               {recentMilestones.map((m) => (
                 <KCard key={m.id} pad={12} className="min-w-[148px] max-w-[180px] shrink-0">
-                  <p className="text-2xl leading-none" aria-hidden>
-                    {m.emoji}
-                  </p>
+                  <div
+                    className="flex items-center justify-center"
+                    style={{ width: 40, height: 40, borderRadius: 10, background: K.mintSoft }}
+                    aria-hidden
+                  >
+                    <MilestoneIcon milestoneKey={m.milestone_key} size={24} />
+                  </div>
                   <p className="text-[11px] font-bold text-k-ink mt-2 leading-tight line-clamp-3">{m.label}</p>
                   <p className="text-[9px] font-semibold text-k-muted-soft mt-1 uppercase tracking-wide">
                     {format(new Date(m.earned_at), 'MMM d, yyyy')}

@@ -25,6 +25,8 @@ export function invalidateWorkoutRelatedQueries(queryClient: QueryClient) {
     'activity-logs',
     'user-teams',
     'global-squads-week',
+    'team-leaderboard',
+    'team-milestones',
   ] as const;
 
   for (const key of prefixes) {

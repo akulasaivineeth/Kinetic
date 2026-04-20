@@ -1,10 +1,21 @@
 'use client';
 
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/providers/auth-provider';
 
 export function ConnectionGuard() {
-  const { isSessionRefreshing, isStale } = useAuth();
+  const { isSessionRefreshing, isStale, softReconnect } = useAuth();
+  const [retrying, setRetrying] = useState(false);
+
+  const handleReconnect = useCallback(async () => {
+    setRetrying(true);
+    const ok = await softReconnect();
+    setRetrying(false);
+    if (!ok) {
+      window.location.reload();
+    }
+  }, [softReconnect]);
 
   return (
     <>
@@ -40,10 +51,11 @@ export function ConnectionGuard() {
               </p>
               <button
                 type="button"
-                onClick={() => window.location.reload()}
-                className="px-6 py-3 rounded-2xl bg-emerald-500 text-black text-xs font-black tracking-widest uppercase"
+                onClick={handleReconnect}
+                disabled={retrying}
+                className="px-6 py-3 rounded-2xl bg-emerald-500 text-black text-xs font-black tracking-widest uppercase disabled:opacity-60"
               >
-                TAP TO RELOAD
+                {retrying ? 'RETRYING…' : 'TAP TO RECONNECT'}
               </button>
             </motion.div>
           </motion.div>
@@ -52,3 +64,4 @@ export function ConnectionGuard() {
     </>
   );
 }
+

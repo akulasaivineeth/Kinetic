@@ -38,11 +38,13 @@ export function WorkoutDataRealtimeSync() {
       }, 120);
     };
 
+    let isHealthy = false;
     let reconnectAttempt = 0;
     const setup = async () => {
       if (channel) {
         await supabase.removeChannel(channel);
         channel = undefined;
+        isHealthy = false;
       }
       const id = `user-workouts-${user.id}-${crypto.randomUUID()}`;
       channel = supabase
@@ -70,7 +72,9 @@ export function WorkoutDataRealtimeSync() {
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
             reconnectAttempt = 0;
+            isHealthy = true;
           } else if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
+            isHealthy = false;
             const delay = Math.min(30000, 800 * Math.pow(2, reconnectAttempt) + Math.random() * 400);
             reconnectAttempt += 1;
             setTimeout(() => {
@@ -82,16 +86,19 @@ export function WorkoutDataRealtimeSync() {
 
     void setup();
 
+    // On tab visible: only invalidate caches for fresh data; skip channel recreation if healthy
     let visibilityDebounce: ReturnType<typeof setTimeout> | null = null;
     const onVisibility = () => {
       if (document.visibilityState !== 'visible') return;
       if (visibilityDebounce) clearTimeout(visibilityDebounce);
       visibilityDebounce = setTimeout(() => {
         visibilityDebounce = null;
-        void setup();
+        invalidateWorkoutDerived();
+        if (!isHealthy) void setup();
       }, 400);
     };
     document.addEventListener('visibilitychange', onVisibility);
+    // On auth reconnect: always recreate (token changed)
     const onReconnect = () => void setup();
     window.addEventListener('kinetic-reconnect', onReconnect);
 

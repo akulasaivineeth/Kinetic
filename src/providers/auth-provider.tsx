@@ -135,23 +135,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       };
 
-      try {
-        await Promise.race([
-          refresh(),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('wake-session-timeout')), 10000)
-          ),
-        ]);
+      const attemptRefresh = async (): Promise<boolean> => {
+        try {
+          await Promise.race([
+            refresh(),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('wake-session-timeout')), 15000)
+            ),
+          ]);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+
+      let ok = await attemptRefresh();
+      // Auto-retry once after 3s before marking stale
+      if (!ok) {
+        await new Promise((r) => setTimeout(r, 3000));
+        ok = await attemptRefresh();
+      }
+
+      if (ok) {
         setIsStale(false);
         window.dispatchEvent(new CustomEvent('kinetic-reconnect'));
-      } catch {
+      } else {
         setIsStale(true);
-      } finally {
-        setIsSessionRefreshing(false);
-        resolveGate();
-        sessionGateRef.current = null;
-        wakeInFlightRef.current = false;
       }
+
+      setIsSessionRefreshing(false);
+      resolveGate();
+      sessionGateRef.current = null;
+      wakeInFlightRef.current = false;
     };
 
     const handleVisibilityChange = () => {

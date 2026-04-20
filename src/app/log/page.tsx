@@ -733,11 +733,11 @@ function LogPage() {
                             setCoreValue(slug, parsePlankMmSsDigitInput(raw));
                           }}
                           placeholder="0:00"
-                          className="flex-1 min-w-0 text-center text-4xl font-black bg-transparent text-k-ink/25 focus:text-k-ink placeholder-k-muted-soft/40 outline-none transition-colors py-1" />
+                          className="flex-1 min-w-0 text-center text-4xl font-display font-black bg-transparent text-k-ink/25 focus:text-k-ink placeholder-k-muted-soft/40 outline-none transition-colors py-1" />
                       ) : slug === 'run' ? (
                         <input type="number" step="0.1" value={val || ''} onChange={(e) => setCoreValue(slug, parseFloat(e.target.value) || 0)}
                           onWheel={(e) => (e.target as HTMLElement).blur()} placeholder="0.0"
-                          className="flex-1 min-w-0 text-center text-4xl font-black bg-transparent text-k-ink/25 focus:text-k-ink placeholder-k-muted-soft/40 outline-none transition-colors py-1" />
+                          className="flex-1 min-w-0 text-center text-4xl font-display font-black bg-transparent text-k-ink/25 focus:text-k-ink placeholder-k-muted-soft/40 outline-none transition-colors py-1" />
                       ) : (
                         <input
                           type="number"
@@ -746,7 +746,7 @@ function LogPage() {
                           onWheel={(e) => (e.target as HTMLElement).blur()}
                           placeholder="0"
                           data-testid={slug === 'pushups' ? 'uat-log-pushup-reps' : undefined}
-                          className="flex-1 min-w-0 text-center text-4xl font-black bg-transparent text-k-ink/25 focus:text-k-ink placeholder-k-muted-soft/40 outline-none transition-colors py-1"
+                          className="flex-1 min-w-0 text-center text-4xl font-display font-black bg-transparent text-k-ink/25 focus:text-k-ink placeholder-k-muted-soft/40 outline-none transition-colors py-1"
                         />
                       )}
                       <button type="button" onClick={(e) => { e.stopPropagation(); setCoreValue(slug, Math.round((val + (slug === 'plank' ? 5 : slug === 'run' ? 0.1 : 1)) * 10) / 10); }}
@@ -784,7 +784,7 @@ function LogPage() {
                     <input type="number" step={act.unit === 'km' ? '0.1' : '1'} value={val || ''}
                       onChange={(e) => setFlexValues(prev => ({ ...prev, [slug]: parseFloat(e.target.value) || 0 }))}
                       onWheel={(e) => (e.target as HTMLElement).blur()} placeholder="0"
-                      className="flex-1 min-w-0 text-center text-4xl font-black bg-transparent text-k-ink/25 focus:text-k-ink placeholder-k-muted-soft/40 outline-none transition-colors py-1" />
+                      className="flex-1 min-w-0 text-center text-4xl font-display font-black bg-transparent text-k-ink/25 focus:text-k-ink placeholder-k-muted-soft/40 outline-none transition-colors py-1" />
                     <button type="button" onClick={(e) => { e.stopPropagation(); setFlexValues(prev => ({ ...prev, [slug]: Math.round(((prev[slug] || 0) + (act.unit === 'km' ? 0.1 : 1)) * 10) / 10 })); }}
                       className="w-12 h-12 rounded-xl bg-k-card border border-k-line-strong flex items-center justify-center text-k-muted-soft hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/35 active:scale-90 transition-all flex-shrink-0">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
