@@ -1,22 +1,23 @@
 import { test, expect } from '@playwright/test';
 import { requireSignedIn } from '../fixtures/require-auth';
 
-test.describe('arena', { tag: ['@arena', '@smoke'] }, () => {
+test.describe('squads hub', { tag: ['@arena', '@smoke'] }, () => {
   test.beforeEach(async ({ page }) => {
     await requireSignedIn(page);
   });
 
-  test('arena header and export', async ({ page }) => {
-    await page.goto('/arena');
-    await expect(page.getByTestId('uat-arena-page').getByRole('heading', { name: /ARENA/i })).toBeVisible();
-    await expect(page.getByText('LIVE RANKINGS')).toBeVisible();
-    await expect(page.getByTestId('uat-arena-export')).toBeVisible();
+  test('squads hub header and actions', async ({ page }) => {
+    await page.goto('/squads');
+    const root = page.getByTestId('uat-squads-page');
+    await expect(root.getByText(/^HUB$/)).toBeVisible();
+    await expect(root.getByRole('button', { name: /New squad/i })).toBeVisible();
+    await expect(root.getByRole('button', { name: /^Join$/i })).toBeVisible();
   });
 
-  test('arena metric toggles visible', async ({ page }) => {
-    await page.goto('/arena');
-    const filters = page.getByTestId('uat-arena-filters');
-    await expect(filters.getByRole('button', { name: 'VOLUME', exact: true })).toBeVisible();
-    await expect(filters.getByRole('button', { name: 'RAW', exact: true })).toBeVisible();
+  test('yours and global scope toggles', async ({ page }) => {
+    await page.goto('/squads');
+    await page.getByRole('button', { name: 'Global', exact: true }).click();
+    await page.getByRole('button', { name: 'Yours', exact: true }).click();
+    await expect(page.getByTestId('uat-squads-page')).toBeVisible();
   });
 });

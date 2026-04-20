@@ -8,7 +8,7 @@ import { IcPulse, IcSquads, IcLog, IcProfile } from '@/components/ui/k-icons';
 
 const navItems = [
   { href: '/dashboard', label: 'Pulse', Icon: IcPulse },
-  { href: '/arena', label: 'Squads', Icon: IcSquads },
+  { href: '/squads', label: 'Squads', Icon: IcSquads },
   { href: '/log', label: 'Log', Icon: IcLog, isCenter: true },
   { href: '/profile', label: 'Profile', Icon: IcProfile },
 ];
@@ -27,7 +27,10 @@ export function BottomNav() {
     >
       <div className="flex items-start justify-around px-6 pt-3 pb-[max(7px,env(safe-area-inset-bottom))] max-w-lg mx-auto">
         {navItems.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive =
+            item.href === '/squads'
+              ? pathname === '/squads' || pathname.startsWith('/squads/')
+              : pathname === item.href;
           const { Icon } = item;
 
           if (item.isCenter) {

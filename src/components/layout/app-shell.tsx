@@ -12,7 +12,7 @@ interface AppShellProps {
   children: ReactNode;
 }
 
-const MAIN_ROUTES = ['/dashboard', '/arena', '/log', '/profile'];
+const MAIN_ROUTES = ['/dashboard', '/squads', '/log', '/profile'];
 
 export function AppShell({ children }: AppShellProps) {
   const { softReconnect } = useAuth();

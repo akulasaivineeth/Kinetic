@@ -16,8 +16,8 @@ test.describe('auth session', { tag: ['@auth', '@smoke'] }, () => {
     await page.goto('/dashboard');
     await page.getByRole('link', { name: /LOG/i }).click();
     await expect(page).toHaveURL(/\/log/);
-    await page.getByRole('link', { name: /ARENA/i }).click();
-    await expect(page).toHaveURL(/\/arena/);
+    await page.getByRole('link', { name: /Squads/i }).click();
+    await expect(page).toHaveURL(/\/squads/);
     await page.getByRole('link', { name: 'PROFILE', exact: true }).click();
     await expect(page).toHaveURL(/\/profile/);
     await page.getByRole('link', { name: /DASHBOARD/i }).click();

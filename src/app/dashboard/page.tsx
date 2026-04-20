@@ -106,7 +106,7 @@ export default function PulsePage() {
 
   return (
     <AppShell>
-      <div className="space-y-7 pt-1 pb-4">
+      <div className="space-y-7 pt-1 pb-4" data-testid="uat-dashboard-pulse">
         {/* ── Eyebrow ── */}
         <KEyebrow>Today &middot; {dateLabel}</KEyebrow>
 

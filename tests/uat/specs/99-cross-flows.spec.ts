@@ -11,7 +11,7 @@ test.describe('cross flows', { tag: ['@crossflow', '@smoke'] }, () => {
     test.setTimeout(60_000);
     await page.goto('/log');
     await fillPushupReps(page, '1');
-    await page.getByRole('button', { name: /SUBMIT TO ARENA/i }).click();
+    await page.getByRole('button', { name: /^SUBMIT$/i }).click();
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 25_000 });
     await expect(page.getByTestId('uat-dashboard-pulse')).toBeVisible();
   });
@@ -19,20 +19,19 @@ test.describe('cross flows', { tag: ['@crossflow', '@smoke'] }, () => {
   test('theme change then navigate across shell preserves layout', async ({ page }) => {
     await page.goto('/profile');
     await page.getByTestId('uat-profile-theme-toggle').click();
-    await page.getByRole('link', { name: /ARENA/i }).click();
-    await expect(page).toHaveURL(/\/arena/);
-    await expect(page.getByRole('heading', { name: /ARENA/i })).toBeVisible();
+    await page.getByRole('link', { name: /Squads/i }).click();
+    await expect(page).toHaveURL(/\/squads/);
+    await expect(page.getByTestId('uat-squads-page').getByText(/^HUB$/)).toBeVisible();
     await page.getByRole('link', { name: /LOG/i }).click();
     await expect(page).toHaveURL(/\/log/);
     await expect(page.getByText('CURRENT SESSION')).toBeVisible();
   });
 
-  test('arena export control then metric mode switch', async ({ page }) => {
-    await page.goto('/arena');
-    await page.getByTestId('uat-arena-export').click();
-    const filters = page.getByTestId('uat-arena-filters');
-    await filters.getByRole('button', { name: '% IMP.', exact: true }).click();
-    await expect(filters.getByRole('button', { name: '% IMP.', exact: true })).toBeVisible();
+  test('squads hub scope toggle after navigation', async ({ page }) => {
+    await page.goto('/squads');
+    await page.getByTestId('uat-squads-page').getByRole('button', { name: 'Global', exact: true }).click();
+    await page.getByTestId('uat-squads-page').getByRole('button', { name: 'Yours', exact: true }).click();
+    await expect(page.getByTestId('uat-squads-page')).toBeVisible();
   });
 
   test('profile export link targets CSV API', async ({ page }) => {

@@ -101,9 +101,28 @@ export function KAvatar({ name = '?', size = 44, color, src, ring, className }: 
   );
 }
 
+export type KCrestShape = 'shield' | 'hex' | 'circle' | 'diamond' | 'chevron';
+export type KCrestEmblem = 'bolt' | 'flame' | 'star' | 'peak' | 'wave' | 'cross' | 'arrow' | 'skull';
+
+const CREST_SHAPES: readonly KCrestShape[] = ['shield', 'hex', 'circle', 'diamond', 'chevron'] as const;
+const CREST_EMBLEMS: readonly KCrestEmblem[] = ['bolt', 'flame', 'star', 'peak', 'wave', 'cross', 'arrow', 'skull'] as const;
+
+/** Deterministic crest styling from any string (e.g. team UUID). */
+export function crestVariantFromSeed(seed: string): { shape: KCrestShape; emblem: KCrestEmblem; color: string } {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
+  }
+  const shape = CREST_SHAPES[Math.abs(h) % CREST_SHAPES.length];
+  const emblem = CREST_EMBLEMS[(Math.abs(h) >> 4) % CREST_EMBLEMS.length];
+  const hue = Math.abs(Math.imul(h, 47)) % 360;
+  const color = `hsl(${hue} 58% 42%)`;
+  return { shape, emblem, color };
+}
+
 interface KCrestProps {
-  shape?: 'shield' | 'hex' | 'circle' | 'diamond' | 'chevron';
-  emblem?: 'bolt' | 'flame' | 'star' | 'peak' | 'wave' | 'cross' | 'arrow' | 'skull';
+  shape?: KCrestShape;
+  emblem?: KCrestEmblem;
   color?: string;
   size?: number;
   glow?: boolean;

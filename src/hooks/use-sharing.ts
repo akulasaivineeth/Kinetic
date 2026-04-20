@@ -68,7 +68,7 @@ export function useSendSharingRequest() {
           body: {
             recipientEmail,
             requesterName: user.user_metadata?.full_name || user.email,
-            inviteUrl: `${window.location.origin}/arena`, // deep-link back to arena
+            inviteUrl: `${window.location.origin}/squads`, // deep-link back to squads hub
           },
         });
       } catch (e) {

@@ -1,9 +1,81 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { endOfWeek, startOfWeek } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/providers/auth-provider';
 import type { UserTeam, TeamDetails, TeamMessage, TeamLeaderboardEntry, TeamMilestone } from '@/types/database';
+
+export type GlobalSquadRow = Pick<
+  UserTeam,
+  'team_id' | 'team_name' | 'invite_code' | 'avatar_url' | 'member_count' | 'team_score'
+>;
+
+function thisWeekBounds() {
+  const now = new Date();
+  return {
+    from: startOfWeek(now, { weekStartsOn: 1 }).toISOString(),
+    to: endOfWeek(now, { weekStartsOn: 1 }).toISOString(),
+  };
+}
+
+/** Sum of members' session_score in the current ISO week (Mon–Sun, local). */
+async function fetchTeamsWeeklyAggregates(
+  supabase: ReturnType<typeof createClient>,
+  teamIds: string[],
+): Promise<Map<string, { score: number; memberCount: number }>> {
+  const out = new Map<string, { score: number; memberCount: number }>();
+  if (!teamIds.length) return out;
+
+  const { data: mems, error: memErr } = await supabase
+    .from('team_members')
+    .select('team_id, user_id')
+    .in('team_id', teamIds);
+  if (memErr) throw memErr;
+
+  for (const tid of teamIds) {
+    out.set(tid, { score: 0, memberCount: 0 });
+  }
+  for (const m of mems ?? []) {
+    const cur = out.get(m.team_id);
+    if (cur) cur.memberCount += 1;
+  }
+
+  const userIds = [...new Set((mems ?? []).map((m) => m.user_id))];
+  if (!userIds.length) return out;
+
+  const { from, to } = thisWeekBounds();
+  const { data: logs, error: logErr } = await supabase
+    .from('workout_logs')
+    .select('user_id, session_score')
+    .in('user_id', userIds)
+    .not('submitted_at', 'is', null)
+    .gte('logged_at', from)
+    .lte('logged_at', to);
+  if (logErr) throw logErr;
+
+  const userScore = new Map<string, number>();
+  for (const l of logs ?? []) {
+    userScore.set(l.user_id, (userScore.get(l.user_id) ?? 0) + (l.session_score || 0));
+  }
+
+  const teamUsers = new Map<string, string[]>();
+  for (const m of mems ?? []) {
+    const arr = teamUsers.get(m.team_id) ?? [];
+    arr.push(m.user_id);
+    teamUsers.set(m.team_id, arr);
+  }
+
+  for (const tid of teamIds) {
+    let score = 0;
+    for (const uid of teamUsers.get(tid) ?? []) {
+      score += userScore.get(uid) ?? 0;
+    }
+    const cur = out.get(tid);
+    if (cur) cur.score = score;
+  }
+  return out;
+}
 
 export function useUserTeams() {
   const { user } = useAuth();
@@ -28,13 +100,12 @@ export function useUserTeams() {
         .in('id', teamIds);
       if (teamErr) throw teamErr;
 
+      const weekly = await fetchTeamsWeeklyAggregates(supabase, teamIds);
+
       const results: UserTeam[] = [];
       for (const team of teams ?? []) {
         const mem = memberships.find((m) => m.team_id === team.id);
-        const { count } = await supabase
-          .from('team_members')
-          .select('*', { count: 'exact', head: true })
-          .eq('team_id', team.id);
+        const agg = weekly.get(team.id);
 
         const { data: acts } = await supabase
           .from('team_activities')
@@ -46,13 +117,52 @@ export function useUserTeams() {
           team_name: team.name,
           invite_code: team.invite_code,
           avatar_url: team.avatar_url,
-          member_count: count ?? 0,
+          member_count: agg?.memberCount ?? 0,
           user_role: mem?.role ?? 'member',
           activity_slugs: (acts ?? []).map((a) => String(a.activity_type_id)),
-          team_score: 0,
+          team_score: agg?.score ?? 0,
         });
       }
-      return results;
+      return results.sort((a, b) => b.team_score - a.team_score);
+    },
+    enabled: !!user,
+  });
+}
+
+export function useGlobalSquadsThisWeek(limit = 48) {
+  const { user } = useAuth();
+  const supabase = createClient();
+
+  return useQuery({
+    queryKey: ['global-squads-week', user?.id, limit],
+    queryFn: async (): Promise<GlobalSquadRow[]> => {
+      if (!user) return [];
+
+      const { data: teams, error } = await supabase
+        .from('teams')
+        .select('id, name, invite_code, avatar_url')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+
+      const ids = (teams ?? []).map((t) => t.id);
+      if (!ids.length) return [];
+
+      const weekly = await fetchTeamsWeeklyAggregates(supabase, ids);
+
+      return (teams ?? [])
+        .map((t) => {
+          const agg = weekly.get(t.id);
+          return {
+            team_id: t.id,
+            team_name: t.name,
+            invite_code: t.invite_code,
+            avatar_url: t.avatar_url,
+            member_count: agg?.memberCount ?? 0,
+            team_score: agg?.score ?? 0,
+          };
+        })
+        .sort((a, b) => b.team_score - a.team_score);
     },
     enabled: !!user,
   });
@@ -119,11 +229,13 @@ export function useTeamMessages(teamId: string | null) {
         .from('team_messages')
         .select('*, profiles:user_id(full_name, avatar_url)')
         .eq('team_id', teamId)
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: false })
         .limit(50);
       if (error) throw error;
 
-      return (data ?? []).map((m: Record<string, unknown>) => ({
+      const chronological = [...(data ?? [])].reverse();
+
+      return chronological.map((m: Record<string, unknown>) => ({
         id: m.id as string,
         user_id: m.user_id as string,
         full_name: (m.profiles as Record<string, unknown>)?.full_name as string ?? '',
@@ -269,6 +381,7 @@ export function useCreateTeam() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-teams'] });
+      queryClient.invalidateQueries({ queryKey: ['global-squads-week'] });
     },
   });
 }
@@ -301,6 +414,7 @@ export function useJoinTeam() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-teams'] });
+      queryClient.invalidateQueries({ queryKey: ['global-squads-week'] });
     },
   });
 }

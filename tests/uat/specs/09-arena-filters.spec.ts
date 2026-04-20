@@ -1,37 +1,27 @@
 import { test, expect } from '@playwright/test';
 import { requireSignedIn } from '../fixtures/require-auth';
 
-test.describe('arena filters and chart', { tag: ['@arena', '@filters'] }, () => {
+test.describe('squads hub scope', { tag: ['@arena', '@filters'] }, () => {
   test.beforeEach(async ({ page }) => {
     await requireSignedIn(page);
   });
 
-  test('date range and metric toggles', async ({ page }) => {
-    await page.goto('/arena');
-    await expect(page.getByTestId('uat-arena-page').getByRole('heading', { name: /ARENA/i })).toBeVisible();
-
-    const f = page.getByTestId('uat-arena-filters');
-    await f.getByRole('button', { name: 'MONTH', exact: true }).click();
-    await f.getByRole('button', { name: '3MO', exact: true }).click();
-    await f.getByRole('button', { name: 'WEEK', exact: true }).click();
-    await f.getByRole('button', { name: 'PEAK', exact: true }).click();
-    await f.getByRole('button', { name: 'VOLUME', exact: true }).click();
-    await f.getByRole('button', { name: '% IMP.', exact: true }).click();
-    await f.getByRole('button', { name: 'RAW', exact: true }).click();
+  test('global and yours pills switch', async ({ page }) => {
+    await page.goto('/squads');
+    const root = page.getByTestId('uat-squads-page');
+    await root.getByRole('button', { name: 'Global', exact: true }).click();
+    await root.getByRole('button', { name: 'Yours', exact: true }).click();
+    await expect(root).toBeVisible();
   });
 
-  test('intensity velocity card present', async ({ page }) => {
-    await page.goto('/arena');
-    await expect(page.getByText('INTENSITY VELOCITY')).toBeVisible();
-  });
-
-  test('podium or empty state visible', async ({ page }) => {
-    await page.goto('/arena');
+  test('podium section or empty state visible', async ({ page }) => {
+    await page.goto('/squads');
     await expect(
       page
-        .getByText('Log sessions to start the competition')
-        .or(page.getByText('YOU', { exact: true }))
-        .first()
-    ).toBeVisible({ timeout: 10_000 });
+        .getByText('This week — top 3')
+        .or(page.getByText('No squads yet'))
+        .or(page.getByText('No squads to show'))
+        .first(),
+    ).toBeVisible({ timeout: 15_000 });
   });
 });

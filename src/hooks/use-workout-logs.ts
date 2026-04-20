@@ -364,7 +364,7 @@ export function useSubmitLog() {
                   userId: friendId,
                   title: `${userName} just logged a workout 💪`,
                   body: 'Check the Arena to see how you compare!',
-                  data: { url: '/arena' },
+                  data: { url: '/squads' },
                 }),
               }).catch(() => {}); // fire-and-forget
             }
