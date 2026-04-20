@@ -12,6 +12,7 @@ import { useStreak } from '@/hooks/use-streak';
 import { useWorkoutLogs } from '@/hooks/use-workout-logs';
 import { useGoalSuggestions } from '@/hooks/use-goal-suggestions';
 import { useLeaderboard } from '@/hooks/use-leaderboard';
+import { useUserMilestoneUnlocks } from '@/hooks/use-user-milestones';
 import { useAuth } from '@/providers/auth-provider';
 import { K } from '@/lib/design-tokens';
 
@@ -61,6 +62,7 @@ export default function PulsePage() {
   const { tier, totalScore } = useTier();
   const { data: streak = 0 } = useStreak();
   const suggestions = useGoalSuggestions();
+  const { data: recentMilestones = [], isLoading: milestonesLoading } = useUserMilestoneUnlocks(8);
 
   const now = useMemo(() => new Date(), []);
   const lastWeekStart = useMemo(
@@ -455,6 +457,49 @@ export default function PulsePage() {
               </div>
             </div>
           </KCard>
+        </div>
+
+        {/* ── Milestones (personal) ── */}
+        <div>
+          <div className="flex justify-between items-baseline mb-3 gap-2">
+            <div>
+              <KEyebrow>Milestones</KEyebrow>
+              <KDisplay size={20} className="mt-1">
+                YOUR BADGES
+              </KDisplay>
+            </div>
+            <Link
+              href="/profile"
+              className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400 no-underline"
+            >
+              Profile
+            </Link>
+          </div>
+          {milestonesLoading ? (
+            <KCard pad={14}>
+              <div className="h-14 rounded-k-md bg-k-elevated/80 animate-pulse" />
+            </KCard>
+          ) : recentMilestones.length === 0 ? (
+            <KCard pad={16}>
+              <p className="text-[12px] text-k-muted-soft leading-snug">
+                Keep logging — lifetime milestones unlock as your totals grow. You&apos;ll get a notification when you earn one.
+              </p>
+            </KCard>
+          ) : (
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-0.5 px-0.5">
+              {recentMilestones.map((m) => (
+                <KCard key={m.id} pad={12} className="min-w-[148px] max-w-[180px] shrink-0">
+                  <p className="text-2xl leading-none" aria-hidden>
+                    {m.emoji}
+                  </p>
+                  <p className="text-[11px] font-bold text-k-ink mt-2 leading-tight line-clamp-3">{m.label}</p>
+                  <p className="text-[9px] font-semibold text-k-muted-soft mt-1 uppercase tracking-wide">
+                    {format(new Date(m.earned_at), 'MMM d, yyyy')}
+                  </p>
+                </KCard>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* ── Tier progress ── */}

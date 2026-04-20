@@ -11,7 +11,8 @@ export function QueryProvider({ children }: { children: ReactNode }) {
           queries: {
             staleTime: 60 * 1000,
             retry: 2,
-            refetchOnWindowFocus: true,
+            // PWA / mobile: focus fires often; combined with realtime invalidations it can stampede the network.
+            refetchOnWindowFocus: false,
             refetchOnReconnect: true,
           },
         },

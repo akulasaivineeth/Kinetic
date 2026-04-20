@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, useRef, useCallback, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
+import { invalidateWorkoutRelatedQueries } from '@/lib/kinetic-query-cache';
 import type { User } from '@supabase/supabase-js';
 import type { Profile } from '@/types/database';
 
@@ -46,9 +47,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sessionGateRef = useRef<{ promise: Promise<void>; resolve: () => void } | null>(null);
 
   const waitForSession = useCallback(async () => {
-    if (sessionGateRef.current) {
-      await sessionGateRef.current.promise;
-    }
+    if (!sessionGateRef.current) return;
+    await Promise.race([
+      sessionGateRef.current.promise,
+      new Promise<void>((resolve) => setTimeout(resolve, 12000)),
+    ]);
   }, []);
 
   const fetchProfile = async (userId: string) => {
@@ -66,12 +69,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-      if (user) await fetchProfile(user.id);
-      setLoading(false);
+      try {
+        const { data: { user } } = await Promise.race([
+          supabase.auth.getUser(),
+          new Promise<never>((_, rej) =>
+            setTimeout(() => rej(new Error('auth-bootstrap-timeout')), 12000),
+          ),
+        ]);
+        setUser(user);
+        if (user) await fetchProfile(user.id);
+      } catch {
+        // Unblock the shell on slow networks; Supabase may still deliver session via onAuthStateChange.
+      } finally {
+        setLoading(false);
+      }
     };
-    getUser();
+    void getUser();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
@@ -213,7 +226,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (profileData) setProfile(profileData);
 
       setIsStale(false);
-      queryClient.invalidateQueries();
+      invalidateWorkoutRelatedQueries(queryClient);
       window.dispatchEvent(new CustomEvent('kinetic-reconnect'));
       return true;
     } catch {

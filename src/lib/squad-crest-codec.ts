@@ -1,5 +1,10 @@
-import type { KCrestEmblem, KCrestShape } from '@/components/ui/k-primitives';
-import { CREST_EMBLEM_OPTIONS, CREST_SHAPE_OPTIONS, crestVariantFromSeed } from '@/components/ui/k-primitives';
+import {
+  CREST_EMBLEM_OPTIONS,
+  CREST_SHAPE_OPTIONS,
+  crestVariantFromSeed,
+  type KCrestEmblem,
+  type KCrestShape,
+} from '@/lib/crest-constants';
 
 const PREFIX = 'kcrest|';
 

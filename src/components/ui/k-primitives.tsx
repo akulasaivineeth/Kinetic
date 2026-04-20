@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import type { KCrestEmblem, KCrestShape } from '@/lib/crest-constants';
 import { cn } from '@/lib/utils';
 
 interface KCardProps {
@@ -103,27 +104,8 @@ export function KAvatar({ name = '?', size = 44, color, src, ring, className }: 
   );
 }
 
-export type KCrestShape = 'shield' | 'hex' | 'circle' | 'diamond' | 'chevron';
-export type KCrestEmblem = 'bolt' | 'flame' | 'star' | 'peak' | 'wave' | 'cross' | 'arrow' | 'skull';
-
-export const CREST_SHAPE_OPTIONS: readonly KCrestShape[] = ['shield', 'hex', 'circle', 'diamond', 'chevron'] as const;
-export const CREST_EMBLEM_OPTIONS: readonly KCrestEmblem[] = ['bolt', 'flame', 'star', 'peak', 'wave', 'cross', 'arrow', 'skull'] as const;
-
-const CREST_SHAPES = CREST_SHAPE_OPTIONS;
-const CREST_EMBLEMS = CREST_EMBLEM_OPTIONS;
-
-/** Deterministic crest styling from any string (e.g. team UUID). */
-export function crestVariantFromSeed(seed: string): { shape: KCrestShape; emblem: KCrestEmblem; color: string } {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) {
-    h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
-  }
-  const shape = CREST_SHAPES[Math.abs(h) % CREST_SHAPES.length];
-  const emblem = CREST_EMBLEMS[(Math.abs(h) >> 4) % CREST_EMBLEMS.length];
-  const hue = Math.abs(Math.imul(h, 47)) % 360;
-  const color = `hsl(${hue} 58% 42%)`;
-  return { shape, emblem, color };
-}
+export type { KCrestShape, KCrestEmblem } from '@/lib/crest-constants';
+export { CREST_EMBLEM_OPTIONS, CREST_SHAPE_OPTIONS, crestVariantFromSeed } from '@/lib/crest-constants';
 
 interface KCrestProps {
   shape?: KCrestShape;

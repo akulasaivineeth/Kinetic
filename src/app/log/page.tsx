@@ -624,6 +624,7 @@ function LogPage() {
             {coreTypes.map(act => {
               const active = selectedSlugs.has(act.slug);
               const val = getCoreValue(act.slug as CoreSlug);
+              const TileIcon = exerciseIconForSlug(act.slug);
               return (
                 <motion.button
                   key={act.slug}
@@ -636,7 +637,9 @@ function LogPage() {
                       ? 'bg-emerald-500/12 border-emerald-500/30 shadow-sm shadow-emerald-500/10'
                       : 'bg-k-elevated/60 border-k-line-strong/80 hover:border-k-line-strong'
                   }`}>
-                  <span className="text-xl mb-0.5">{act.emoji}</span>
+                  <span className="mb-0.5 flex h-7 w-7 items-center justify-center text-emerald-600 dark:text-emerald-400">
+                    {TileIcon ? <TileIcon size={22} /> : <span className="text-xl">{act.emoji}</span>}
+                  </span>
                   <span className={`text-[9px] font-bold tracking-wide ${active ? 'text-emerald-600 dark:text-emerald-400' : 'text-k-muted-soft'}`}>
                     {act.name.split(' ')[0]}
                   </span>
@@ -697,13 +700,16 @@ function LogPage() {
             if (isCoreSlug(slug)) {
               const val = getCoreValue(slug);
               const gi = goalInfo(slug);
+              const HeaderIcon = exerciseIconForSlug(slug);
               return (
                 <motion.div key={slug} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
                   transition={{ type: 'spring', stiffness: 300, damping: 30 }} className="overflow-hidden">
                   <div className="rounded-2xl bg-k-elevated/70 border border-k-line-strong/80 p-4">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">{act.emoji}</span>
+                        <span className="flex h-8 w-8 items-center justify-center text-emerald-600 dark:text-emerald-400">
+                          {HeaderIcon ? <HeaderIcon size={22} /> : <span className="text-lg">{act.emoji}</span>}
+                        </span>
                         <span className="text-[11px] font-black tracking-wider text-k-ink uppercase">{act.name}</span>
                       </div>
                       {gi && (
@@ -758,12 +764,15 @@ function LogPage() {
 
             // Non-core activity
             const val = flexValues[slug] || 0;
+            const FlexHeaderIcon = exerciseIconForSlug(slug);
             return (
               <motion.div key={slug} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }} className="overflow-hidden">
                 <div className="rounded-2xl bg-k-elevated/70 border border-k-line-strong/80 p-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-lg">{act.emoji}</span>
+                    <span className="flex h-8 w-8 items-center justify-center text-emerald-600 dark:text-emerald-400">
+                      {FlexHeaderIcon ? <FlexHeaderIcon size={22} /> : <span className="text-lg">{act.emoji}</span>}
+                    </span>
                     <span className="text-[11px] font-black tracking-wider text-k-ink uppercase">{act.name}</span>
                     <span className="text-[9px] text-k-muted-soft font-semibold">({act.unit})</span>
                   </div>

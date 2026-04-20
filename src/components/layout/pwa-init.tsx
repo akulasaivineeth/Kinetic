@@ -4,6 +4,7 @@ import { useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { registerServiceWorker } from '@/lib/offline';
 import { subscribeToPush } from '@/lib/push';
+import { invalidateWorkoutRelatedQueries } from '@/lib/kinetic-query-cache';
 import { useAuth } from '@/providers/auth-provider';
 
 export function PWAInit() {
@@ -20,7 +21,7 @@ export function PWAInit() {
     if (!('serviceWorker' in navigator)) return;
     const handleSWMessage = (event: MessageEvent) => {
       if (event.data?.type === 'PUSH_DATA_UPDATE') {
-        queryClient.invalidateQueries();
+        invalidateWorkoutRelatedQueries(queryClient);
         window.dispatchEvent(new CustomEvent('kinetic-reconnect'));
       }
     };

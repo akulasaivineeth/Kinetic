@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, Suspense, useEffect } from 'react';
+import { useState, useRef, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -9,14 +9,12 @@ import { KCard, KEyebrow, KDisplay, KRing } from '@/components/ui/k-primitives';
 import { useAuth } from '@/providers/auth-provider';
 import { useTier } from '@/hooks/use-tier';
 import { useTheme } from '@/providers/theme-provider';
-import { useGoals, useUpdateGoals } from '@/hooks/use-goals';
 import { useSharingConnections, useSendSharingRequest, useRemoveSharing } from '@/hooks/use-sharing';
 import { getInitials } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { resizeImage } from '@/lib/image-resize';
 import { useSearchParams } from 'next/navigation';
 import { SCORING_FAQ } from '@/lib/scoring';
-import { useQueryClient } from '@tanstack/react-query';
 
 function ProfilePageContent() {
   const { user, profile, signOut, refreshProfile } = useAuth();
@@ -25,13 +23,10 @@ function ProfilePageContent() {
   const whoopParam = searchParams.get('whoop');
   const whoopReason = searchParams.get('reason');
   const { theme, toggleTheme } = useTheme();
-  const { data: goals } = useGoals();
-  const updateGoals = useUpdateGoals();
   const { data: connections = [] } = useSharingConnections();
   const sendRequest = useSendSharingRequest();
   const removeSharing = useRemoveSharing();
 
-  const [showGoals, setShowGoals] = useState(false);
   const [showSharing, setShowSharing] = useState(false);
   const [showInvites, setShowInvites] = useState(false);
   const [showFaq, setShowFaq] = useState(false);
@@ -44,51 +39,6 @@ function ProfilePageContent() {
   const [signingOut, setSigningOut] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
-  const queryClient = useQueryClient();
-
-  // Controlled goal state
-  const [goalDraft, setGoalDraft] = useState<Record<string, number>>({});
-  const [goalsSaved, setGoalsSaved] = useState(false);
-  const [goalsSaving, setGoalsSaving] = useState(false);
-
-  // Sync goal draft from server data when it loads
-  useEffect(() => {
-    if (goals && Object.keys(goalDraft).length === 0) {
-      setGoalDraft({
-        pushup_weekly_goal: goals.pushup_weekly_goal,
-        plank_weekly_goal: goals.plank_weekly_goal,
-        run_weekly_goal: goals.run_weekly_goal,
-        squat_weekly_goal: goals.squat_weekly_goal,
-        pushup_peak_goal: goals.pushup_peak_goal,
-        plank_peak_goal: goals.plank_peak_goal,
-        run_peak_goal: goals.run_peak_goal,
-        squat_peak_goal: goals.squat_peak_goal,
-      });
-    }
-  }, [goals, goalDraft]);
-
-  const handleSaveGoals = async () => {
-    setGoalsSaving(true);
-    setGoalsSaved(false);
-    try {
-      await updateGoals.mutateAsync(goalDraft);
-      // Invalidate dashboard queries so changes reflect immediately
-      queryClient.invalidateQueries({ queryKey: ['weekly-volume'] });
-      queryClient.invalidateQueries({ queryKey: ['stamina'] });
-      queryClient.invalidateQueries({ queryKey: ['goals'] });
-      setGoalsSaved(true);
-      setTimeout(() => setGoalsSaved(false), 2500);
-    } catch (e) {
-      console.error('Goal save failed:', e);
-    } finally {
-      setGoalsSaving(false);
-    }
-  };
-
-  const goalsDirty = goals && Object.keys(goalDraft).length > 0 && Object.entries(goalDraft).some(
-    ([key, val]) => val !== (goals as Record<string, unknown>)[key]
-  );
-
   // Avatar upload
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -349,84 +299,20 @@ function ProfilePageContent() {
 
           <div className="h-4" />
 
-          {/* Performance Goals */}
-          <KCard pad={18} className="flex items-center gap-3 cursor-pointer" onClick={() => setShowGoals(!showGoals)}>
-            <div className="w-10 h-10 rounded-xl bg-k-elevated flex items-center justify-center">
-              <span className="text-lg">🎯</span>
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-k-ink">Performance Goals</p>
-            </div>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2" strokeLinecap="round">
-              <line x1="4" y1="21" x2="4" y2="14" />
-              <line x1="4" y1="10" x2="4" y2="3" />
-              <line x1="12" y1="21" x2="12" y2="12" />
-              <line x1="12" y1="8" x2="12" y2="3" />
-              <line x1="20" y1="21" x2="20" y2="16" />
-              <line x1="20" y1="12" x2="20" y2="3" />
-            </svg>
-          </KCard>
-
-          {/* Goals Editor */}
-          <AnimatePresence>
-            {showGoals && goals && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="pt-2 space-y-2">
-                  {[
-                    { label: 'Push-up Weekly Goal', key: 'pushup_weekly_goal' as const, suffix: 'reps' },
-                    { label: 'Squat Weekly Goal', key: 'squat_weekly_goal' as const, suffix: 'reps' },
-                    { label: 'Plank Weekly Goal', key: 'plank_weekly_goal' as const, suffix: 'sec' },
-                    { label: 'Run Weekly Goal', key: 'run_weekly_goal' as const, suffix: 'km' },
-                    { label: 'Push-up Peak Goal', key: 'pushup_peak_goal' as const, suffix: 'reps' },
-                    { label: 'Plank Peak Goal', key: 'plank_peak_goal' as const, suffix: 'sec' },
-                    { label: 'Run Peak Goal', key: 'run_peak_goal' as const, suffix: 'km' },
-                  ].map((item) => (
-                    <div key={item.key} className="flex items-center justify-between px-4 py-2 rounded-xl bg-k-elevated/50">
-                      <span className="text-xs text-k-muted-soft">{item.label}</span>
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="number"
-                          value={goalDraft[item.key] ?? ''}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value);
-                            if (!isNaN(val)) {
-                              setGoalDraft((prev) => ({ ...prev, [item.key]: val }));
-                            } else if (e.target.value === '') {
-                              setGoalDraft((prev) => ({ ...prev, [item.key]: 0 }));
-                            }
-                          }}
-                          onWheel={(e) => (e.target as HTMLElement).blur()}
-                          className="w-16 text-right text-sm font-bold bg-transparent text-k-ink outline-none"
-                        />
-                        <span className="text-[10px] text-k-muted-soft">{item.suffix}</span>
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Save Goals Button */}
-                  <motion.button
-                    whileTap={{ scale: 0.97 }}
-                    onClick={handleSaveGoals}
-                    disabled={goalsSaving || !goalsDirty}
-                    className={`w-full py-3 rounded-xl text-[11px] font-black tracking-widest uppercase transition-all ${
-                      goalsSaved
-                        ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-400'
-                        : goalsDirty
-                          ? 'emerald-gradient text-black shadow-lg shadow-emerald-500/20'
-                          : 'bg-k-elevated border border-k-line-strong text-k-muted-soft'
-                    }`}
-                  >
-                    {goalsSaving ? 'SAVING...' : goalsSaved ? '✓ SAVED' : goalsDirty ? 'SAVE GOALS' : 'NO CHANGES'}
-                  </motion.button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <Link href="/profile/goals" className="block no-underline">
+            <KCard pad={18} className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-k-elevated flex items-center justify-center">
+                <span className="text-lg">🎯</span>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-k-ink">Performance goals</p>
+                <p className="text-[10px] text-k-muted-soft mt-0.5">Weekly & peak targets</p>
+              </div>
+              <span className="text-k-muted-soft text-lg" aria-hidden>
+                →
+              </span>
+            </KCard>
+          </Link>
 
           <div className="h-2" />
 

@@ -11,7 +11,7 @@ import {
   YAxis,
   Legend,
 } from 'recharts';
-import { KCard, KEyebrow, KPill } from '@/components/ui/k-primitives';
+import { KCard, KEyebrow } from '@/components/ui/k-primitives';
 import { useAllTimeStats } from '@/hooks/use-alltime-stats';
 import { useWorkoutLogs } from '@/hooks/use-workout-logs';
 import { useAuth } from '@/providers/auth-provider';
@@ -109,6 +109,7 @@ export function PersonalHubPanel() {
   );
 
   const catLabel = CATEGORIES.find((c) => c.id === exercise)?.label ?? exercise;
+  const selectedCompare = weekCompare.find((r) => r.id === exercise);
 
   return (
     <div className="space-y-4">
@@ -135,40 +136,56 @@ export function PersonalHubPanel() {
       <div>
         <KEyebrow className="mb-2">This week vs last week</KEyebrow>
         {loadTw || loadLw ? (
-          <div className="h-32 rounded-k-lg bg-k-card animate-pulse" />
+          <div className="h-24 rounded-k-lg bg-k-card animate-pulse" />
         ) : (
-          <KCard pad={14} className="space-y-2.5">
-            {weekCompare.map((row) => {
-              const { id } = row;
-              const label = CATEGORIES.find((c) => c.id === id)?.label ?? id;
-              return (
-                <div
-                  key={id}
-                  className="flex items-center justify-between gap-2 text-[12px] border-b border-k-line last:border-0 pb-2 last:pb-0"
+          <KCard
+            pad={14}
+            className="border border-white/[0.06] bg-k-card/80 shadow-[0_8px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl dark:bg-k-card/60"
+          >
+            <label className="sr-only" htmlFor="personal-hub-exercise">
+              Exercise
+            </label>
+            <div className="relative">
+              <select
+                id="personal-hub-exercise"
+                value={exercise}
+                onChange={(e) => setExercise(e.target.value as PersonalTrendCategory)}
+                className="w-full appearance-none rounded-k-pill border border-k-line-strong/90 bg-k-elevated/70 py-2.5 pl-4 pr-10 text-[13px] font-bold text-k-ink shadow-inner outline-none transition-colors focus:border-emerald-500/40 focus:ring-2 focus:ring-emerald-500/15"
+              >
+                {CATEGORIES.map(({ id, label }) => (
+                  <option key={id} value={id}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <span
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-k-muted-soft text-xs"
+                aria-hidden
+              >
+                ▾
+              </span>
+            </div>
+            {selectedCompare && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[12px]">
+                <span className="text-k-muted-soft tabular-nums">
+                  {fmtVolume(exercise, selectedCompare.tw, unitPref)}
+                  <span className="text-k-muted-soft/70"> vs </span>
+                  {fmtVolume(exercise, selectedCompare.lw, unitPref)}
+                </span>
+                <span
+                  className={`font-bold tabular-nums ${
+                    selectedCompare.deltaPct > 0
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : selectedCompare.deltaPct < 0
+                        ? 'text-red-500'
+                        : 'text-k-muted-soft'
+                  }`}
                 >
-                  <span className="font-bold text-k-ink shrink-0">{label}</span>
-                  <div className="flex items-center gap-2 min-w-0 flex-wrap justify-end">
-                    <span className="text-k-muted-soft tabular-nums">
-                      {fmtVolume(id, row.tw, unitPref)}
-                      <span className="text-k-muted-soft/70"> vs </span>
-                      {fmtVolume(id, row.lw, unitPref)}
-                    </span>
-                    <span
-                      className={`font-bold tabular-nums shrink-0 ${
-                        row.deltaPct > 0
-                          ? 'text-emerald-600 dark:text-emerald-400'
-                          : row.deltaPct < 0
-                            ? 'text-red-500'
-                            : 'text-k-muted-soft'
-                      }`}
-                    >
-                      {row.deltaPct > 0 ? '+' : ''}
-                      {row.deltaPct}%
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+                  {selectedCompare.deltaPct > 0 ? '+' : ''}
+                  {selectedCompare.deltaPct}%
+                </span>
+              </div>
+            )}
           </KCard>
         )}
       </div>
@@ -177,13 +194,6 @@ export function PersonalHubPanel() {
         <div className="flex justify-between items-baseline mb-2 gap-2 flex-wrap">
           <KEyebrow>Trends · this week</KEyebrow>
           <span className="text-[11px] text-k-muted-soft">vs last week (line)</span>
-        </div>
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {CATEGORIES.map(({ id, label }) => (
-            <KPill key={id} size="sm" active={exercise === id} onClick={() => setExercise(id)}>
-              {label}
-            </KPill>
-          ))}
         </div>
 
         {loadCh ? (
@@ -232,15 +242,23 @@ export function PersonalHubPanel() {
                     stroke={K.green}
                     strokeWidth={2.5}
                     connectNulls={false}
-                    dot={(props: { cx?: number; cy?: number; payload?: { peak?: boolean } }) => {
-                      const { cx, cy, payload } = props;
+                    dot={(props: {
+                      cx?: number;
+                      cy?: number;
+                      index?: number;
+                      payload?: { peak?: boolean; name?: string };
+                    }) => {
+                      const { cx, cy, payload, index } = props;
+                      const key = `pt-${payload?.name ?? index ?? 0}-${cx ?? 0}-${cy ?? 0}`;
                       if (payload?.peak && typeof cx === 'number' && typeof cy === 'number') {
-                        return <circle cx={cx} cy={cy} r={5} fill={K.gold} stroke={K.ink} strokeWidth={1} />;
+                        return (
+                          <circle key={key} cx={cx} cy={cy} r={5} fill={K.gold} stroke={K.ink} strokeWidth={1} />
+                        );
                       }
                       if (typeof cx === 'number' && typeof cy === 'number') {
-                        return <circle cx={cx} cy={cy} r={2} fill={K.green} />;
+                        return <circle key={key} cx={cx} cy={cy} r={2} fill={K.green} />;
                       }
-                      return <g />;
+                      return <g key={key} />;
                     }}
                   />
                 </LineChart>

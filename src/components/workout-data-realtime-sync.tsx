@@ -38,6 +38,7 @@ export function WorkoutDataRealtimeSync() {
       }, 120);
     };
 
+    let reconnectAttempt = 0;
     const setup = async () => {
       if (channel) {
         await supabase.removeChannel(channel);
@@ -67,16 +68,28 @@ export function WorkoutDataRealtimeSync() {
           invalidateWorkoutDerived
         )
         .subscribe((status) => {
-          if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
-            void setup();
+          if (status === 'SUBSCRIBED') {
+            reconnectAttempt = 0;
+          } else if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
+            const delay = Math.min(30000, 800 * Math.pow(2, reconnectAttempt) + Math.random() * 400);
+            reconnectAttempt += 1;
+            setTimeout(() => {
+              void setup();
+            }, delay);
           }
         });
     };
 
     void setup();
 
+    let visibilityDebounce: ReturnType<typeof setTimeout> | null = null;
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') void setup();
+      if (document.visibilityState !== 'visible') return;
+      if (visibilityDebounce) clearTimeout(visibilityDebounce);
+      visibilityDebounce = setTimeout(() => {
+        visibilityDebounce = null;
+        void setup();
+      }, 400);
     };
     document.addEventListener('visibilitychange', onVisibility);
     const onReconnect = () => void setup();
@@ -84,6 +97,7 @@ export function WorkoutDataRealtimeSync() {
 
     return () => {
       if (debounceTimer) clearTimeout(debounceTimer);
+      if (visibilityDebounce) clearTimeout(visibilityDebounce);
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('kinetic-reconnect', onReconnect);
       if (channel) void supabase.removeChannel(channel);
