@@ -177,19 +177,23 @@ export function useGlobalSquadsThisWeek(limit = 48) {
 }
 
 export function useTeamDetails(teamId: string | null) {
+  const { user } = useAuth();
   const supabase = createClient();
 
   return useQuery({
-    queryKey: ['team-details', teamId],
+    queryKey: ['team-details', teamId, user?.id],
     queryFn: async (): Promise<TeamDetails | null> => {
-      if (!teamId) return null;
+      if (!teamId || !user) return null;
 
       const { data: team, error } = await supabase
         .from('teams')
         .select('*')
         .eq('id', teamId)
         .single();
-      if (error) throw error;
+      if (error) {
+        console.error('[useTeamDetails] teams query failed:', error.message, error.code);
+        throw error;
+      }
 
       const { data: members } = await supabase
         .from('team_members')
@@ -222,9 +226,12 @@ export function useTeamDetails(teamId: string | null) {
         }),
       } as TeamDetails;
     },
-    enabled: !!teamId,
+    enabled: !!teamId && !!user,
+    retry: 2,
+    retryDelay: 1000,
   });
 }
+
 
 export function useTeamMessages(teamId: string | null) {
   const supabase = createClient();
