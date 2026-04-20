@@ -6,10 +6,10 @@ test.describe('squads hub scope', { tag: ['@arena', '@filters'] }, () => {
     await requireSignedIn(page);
   });
 
-  test('global and yours pills switch', async ({ page }) => {
+  test('squads and yours pills switch', async ({ page }) => {
     await page.goto('/squads');
     const root = page.getByTestId('uat-squads-page');
-    await root.getByRole('button', { name: 'Global', exact: true }).click();
+    await root.getByRole('button', { name: 'Squads', exact: true }).click();
     await root.getByRole('button', { name: 'Yours', exact: true }).click();
     await expect(root).toBeVisible();
   });
@@ -20,7 +20,7 @@ test.describe('squads hub scope', { tag: ['@arena', '@filters'] }, () => {
       page
         .getByText('This week — top 3')
         .or(page.getByText('No squads yet'))
-        .or(page.getByText('No squads to show'))
+        .or(page.getByText('All-time roll-up'))
         .first(),
     ).toBeVisible({ timeout: 15_000 });
   });

@@ -24,17 +24,15 @@ test.describe('UI data and multi-range toggles', { tag: ['@data', '@ui'] }, () =
     await expect(pulse.locator('svg').first()).toBeVisible();
   });
 
-  test('squads hub loads standings or empty state', async ({ page }) => {
+  test('squads hub shows personal rollups on Yours tab', async ({ page }) => {
     await page.goto('/squads');
     const root = page.getByTestId('uat-squads-page');
-    await expect(
-      root.getByText('Standings').or(root.getByText('No squads yet')).or(root.getByText('No squads to show')).first(),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(root.getByText('All-time roll-up')).toBeVisible({ timeout: 15_000 });
   });
 
   test('squads scope toggle remains visible', async ({ page }) => {
     await page.goto('/squads');
-    await page.getByTestId('uat-squads-page').getByRole('button', { name: 'Global', exact: true }).click();
+    await page.getByTestId('uat-squads-page').getByRole('button', { name: 'Squads', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Yours', exact: true })).toBeVisible();
   });
 

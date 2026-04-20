@@ -29,7 +29,7 @@ test.describe('cross flows', { tag: ['@crossflow', '@smoke'] }, () => {
 
   test('squads hub scope toggle after navigation', async ({ page }) => {
     await page.goto('/squads');
-    await page.getByTestId('uat-squads-page').getByRole('button', { name: 'Global', exact: true }).click();
+    await page.getByTestId('uat-squads-page').getByRole('button', { name: 'Squads', exact: true }).click();
     await page.getByTestId('uat-squads-page').getByRole('button', { name: 'Yours', exact: true }).click();
     await expect(page.getByTestId('uat-squads-page')).toBeVisible();
   });

@@ -14,9 +14,9 @@ test.describe('squads hub', { tag: ['@arena', '@smoke'] }, () => {
     await expect(root.getByRole('button', { name: /^Join$/i })).toBeVisible();
   });
 
-  test('yours and global scope toggles', async ({ page }) => {
+  test('yours and squads scope toggles', async ({ page }) => {
     await page.goto('/squads');
-    await page.getByRole('button', { name: 'Global', exact: true }).click();
+    await page.getByRole('button', { name: 'Squads', exact: true }).click();
     await page.getByRole('button', { name: 'Yours', exact: true }).click();
     await expect(page.getByTestId('uat-squads-page')).toBeVisible();
   });

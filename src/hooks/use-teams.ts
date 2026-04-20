@@ -109,8 +109,15 @@ export function useUserTeams() {
 
         const { data: acts } = await supabase
           .from('team_activities')
-          .select('activity_type_id')
+          .select('activity_type_id, activity_types:activity_type_id(slug)')
           .eq('team_id', team.id);
+
+        const activity_slugs = (acts ?? [])
+          .map((a: Record<string, unknown>) => {
+            const at = a.activity_types as Record<string, unknown> | null;
+            return typeof at?.slug === 'string' ? at.slug : '';
+          })
+          .filter(Boolean);
 
         results.push({
           team_id: team.id,
@@ -119,7 +126,7 @@ export function useUserTeams() {
           avatar_url: team.avatar_url,
           member_count: agg?.memberCount ?? 0,
           user_role: mem?.role ?? 'member',
-          activity_slugs: (acts ?? []).map((a) => String(a.activity_type_id)),
+          activity_slugs,
           team_score: agg?.score ?? 0,
         });
       }
@@ -279,10 +286,27 @@ export function useTeamLeaderboard(teamId: string | null, dateFrom?: string, dat
 
       const { data: logs } = await query;
 
-      const map = new Map<string, { total_score: number }>();
+      type Agg = {
+        total_score: number;
+        pushups: number;
+        plank_seconds: number;
+        run_distance: number;
+        squats: number;
+      };
+      const map = new Map<string, Agg>();
       for (const log of logs ?? []) {
-        const cur = map.get(log.user_id) ?? { total_score: 0 };
+        const cur = map.get(log.user_id) ?? {
+          total_score: 0,
+          pushups: 0,
+          plank_seconds: 0,
+          run_distance: 0,
+          squats: 0,
+        };
         cur.total_score += log.session_score || 0;
+        cur.pushups += log.pushup_reps || 0;
+        cur.plank_seconds += log.plank_seconds || 0;
+        cur.run_distance += Number(log.run_distance) || 0;
+        cur.squats += log.squat_reps || 0;
         map.set(log.user_id, cur);
       }
 
@@ -290,12 +314,23 @@ export function useTeamLeaderboard(teamId: string | null, dateFrom?: string, dat
         const mr = m as Record<string, unknown>;
         const uid = mr.user_id as string;
         const prof = mr.profiles as Record<string, unknown> | null;
-        const stats = map.get(uid) ?? { total_score: 0 };
+        const stats = map.get(uid) ?? {
+          total_score: 0,
+          pushups: 0,
+          plank_seconds: 0,
+          run_distance: 0,
+          squats: 0,
+        };
         return {
           user_id: uid,
           full_name: (prof?.full_name as string) ?? '',
           avatar_url: (prof?.avatar_url as string) ?? '',
-          activity_breakdown: {},
+          activity_breakdown: {
+            pushups: { value: stats.pushups, score: 0 },
+            plank: { value: stats.plank_seconds, score: 0 },
+            run: { value: stats.run_distance, score: 0 },
+            squats: { value: stats.squats, score: 0 },
+          },
           total_score: stats.total_score,
           streak: 0,
         } as TeamLeaderboardEntry;
