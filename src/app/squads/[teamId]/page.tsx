@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { endOfWeek, format, startOfWeek } from 'date-fns';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Vote } from 'lucide-react';
 import { AppShell } from '@/components/layout/app-shell';
 import { KCard, KEyebrow, KDisplay, KPill, KCrest, KAvatar } from '@/components/ui/k-primitives';
 import { SquadChatPanel } from '@/components/squads/squad-chat-panel';
@@ -177,9 +177,18 @@ export default function SquadDetailPage() {
               </KCard>
             </div>
 
-            {squad.activities.length > 0 && (
-              <div>
-                <KEyebrow className="mb-2">Lineup · tracked moves</KEyebrow>
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <KEyebrow>Lineup · tracked moves</KEyebrow>
+                <Link
+                  href={`/squads/${teamId}/vote`}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400 hover:opacity-90 shrink-0"
+                >
+                  <Vote size={14} strokeWidth={2.4} aria-hidden />
+                  Start vote
+                </Link>
+              </div>
+              {squad.activities.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {squad.activities.map((a: TeamActivity) => (
                     <span
@@ -191,8 +200,14 @@ export default function SquadDetailPage() {
                     </span>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <KCard pad={12} className="!py-3">
+                  <p className="text-[12px] text-k-muted-soft leading-relaxed">
+                    No moves linked yet. Open a vote to rehearse the lineup flow with your squad.
+                  </p>
+                </KCard>
+              )}
+            </div>
 
             <KEyebrow className="mt-1">Members · this week</KEyebrow>
             {loadBoard ? (
