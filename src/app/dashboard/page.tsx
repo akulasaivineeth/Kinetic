@@ -1,988 +1,626 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
+import { useMemo, useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
+import { format, startOfWeek, endOfWeek, subWeeks } from 'date-fns';
 import { AppShell } from '@/components/layout/app-shell';
-import { GlassCard } from '@/components/ui/glass-card';
-import { ScoreRing } from '@/components/ui/score-ring';
-import { TogglePills } from '@/components/ui/toggle-pills';
-import { ExerciseSelect } from '@/components/ui/exercise-select';
-import { DateRangeTabs } from '@/components/ui/date-range-tabs';
-import { ErrorBoundary } from '@/components/ui/error-boundary';
-import { DashboardCardSkeleton, ChartSkeleton } from '@/components/ui/skeleton';
-import { useWorkoutLogs, type DateRange, getDateRange } from '@/hooks/use-workout-logs';
-import {
-  isWeekLineMode,
-  shouldUseMonthBars,
-  getChartLogFetchRange,
-  buildWeekLineChart,
-  buildMultiWeekBars,
-  buildMonthlyBars,
-  averageDailyDeltaOverCalendarSpan,
-  type PersonalTrendCategory,
-  type WeekLinePoint,
-  type WeekBarRow,
-} from '@/lib/personal-trends-chart';
-import { useAllTimeStats } from '@/hooks/use-alltime-stats';
-import { useRecentWeeks } from '@/hooks/use-recent-weeks';
-import { useWeeklyVolume } from '@/hooks/use-workout-logs';
-import { useGoals } from '@/hooks/use-goals';
+import { KCard, KEyebrow, KDisplay, KRing } from '@/components/ui/k-primitives';
+import { IcFlame, IcSparkle, IcTrophy, EXERCISE_ICON_MAP } from '@/components/ui/k-icons';
+import { useTodayScore } from '@/hooks/use-today-score';
+import { useTier } from '@/hooks/use-tier';
 import { useStreak } from '@/hooks/use-streak';
+import { useWorkoutLogs } from '@/hooks/use-workout-logs';
 import { useGoalSuggestions } from '@/hooks/use-goal-suggestions';
-import { useAuth } from '@/providers/auth-provider';
-import { formatDistance, formatPlankTime } from '@/lib/utils';
-import { generateInsights } from '@/lib/insights';
-import { useUserMilestoneUnlocks } from '@/hooks/use-user-milestones';
-import { TrendingUp, TrendingDown, Lightbulb, AlertTriangle, Award } from 'lucide-react';
-import { Onboarding } from '@/components/ui/onboarding';
-import type { WorkoutLog } from '@/types/database';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  Cell,
-  ReferenceLine,
-  ReferenceDot,
-} from 'recharts';
-import { format, startOfWeek, endOfWeek } from 'date-fns';
+import { K } from '@/lib/design-tokens';
 
-function PersonalTrendTooltip({
-  active,
-  payload,
-  heading,
-  category,
-  metric,
-  mode,
-  unitPref,
-}: {
-  active?: boolean;
-  heading?: string;
-  // Recharts Payload<ValueType, NameType> — value may be an array for some chart types
-  payload?: ReadonlyArray<{
-    name?: string | number;
-    value?: unknown;
-    dataKey?: string | number;
-    color?: string;
-  }>;
-  category: PersonalTrendCategory;
-  metric: 'volume' | 'peak';
-  mode: 'raw' | 'percent';
-  unitPref: 'metric' | 'imperial' | undefined;
-}) {
-  if (!active || !payload?.length) return null;
-  const fmt = (v: unknown, seriesName?: string) => {
-    if (v === null || v === undefined || (typeof v === 'number' && Number.isNaN(v))) {
-      const s = String(seriesName ?? '');
-      if (mode === 'raw' && s.startsWith('This week')) return 'Rest day';
-      return '—';
+const DAILY_GOAL = 600;
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function useCountUp(target: number, duration = 1200) {
+  const [value, setValue] = useState(0);
+  const didAnimate = useRef(false);
+
+  useEffect(() => {
+    if (target <= 0) {
+      setValue(0);
+      return;
     }
-    const n = typeof v === 'number' ? v : Number(v);
-    if (mode === 'percent') return `${Number(n).toFixed(1)}%`;
-    if (category === 'plank') return `${Number(n).toFixed(1)} min`;
-    if (category === 'run') {
-      const d = formatDistance(Number(n), unitPref);
-      return `${d} ${unitPref === 'imperial' ? 'mi' : 'km'}`;
+    if (didAnimate.current) {
+      setValue(target);
+      return;
     }
-    return `${Math.round(n)}`;
-  };
-  const catLabel =
-    category === 'pushups' ? 'Push-ups' : category === 'plank' ? 'Plank' : category === 'squats' ? 'Squats' : 'Run';
-  const subtitle = `${metric === 'volume' ? 'Volume' : 'Peak'} · ${mode === 'raw' ? 'Raw' : '% impr.'}`;
-  return (
-    <div
-      style={{
-        background: 'rgba(28, 28, 30, 0.95)',
-        border: '1px solid rgba(255,255,255,0.1)',
-        borderRadius: 12,
-        color: '#F5F5F7',
-        fontSize: 12,
-        padding: '10px 12px',
-      }}
-    >
-      {heading ? (
-        <p className="text-[11px] font-bold text-dark-text mb-1">{heading}</p>
-      ) : null}
-      <p className="text-[10px] font-semibold uppercase mb-1 opacity-80">
-        {catLabel} · {subtitle}
-      </p>
-      {payload.map((p) => (
-        <p key={String(p.dataKey)} className="font-semibold" style={{ color: p.color }}>
-          {String(p.name ?? '')}: {fmt(p.value, String(p.name ?? ''))}
-        </p>
-      ))}
-    </div>
-  );
+    didAnimate.current = true;
+
+    let raf: number;
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - t0) / duration);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setValue(Math.round(target * eased));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+
+  return value;
 }
 
-function PersonalTrendLineTick({
-  x,
-  y,
-  payload,
-  points,
-}: {
-  x: number;
-  y: number;
-  payload: { value: string };
-  points: WeekLinePoint[];
-}) {
-  const pt = points.find((p) => p.sortKey === payload.value);
-  if (!pt) return null;
-  return (
-    <g transform={`translate(${x},${y})`}>
-      <text textAnchor="middle" fill="#8E8E93" fontSize={9} dy={10}>
-        {pt.weekday}
-      </text>
-      <text textAnchor="middle" fill="#8E8E93" fontSize={8} dy={22}>
-        {pt.datePart}
-      </text>
-    </g>
-  );
-}
-
-function PersonalTrendBarTick({
-  x,
-  y,
-  payload,
-  bars,
-}: {
-  x: number;
-  y: number;
-  payload: { value: string };
-  bars: WeekBarRow[];
-}) {
-  const row = bars.find((b) => b.sortKey === payload.value);
-  if (!row) return null;
-  return (
-    <g transform={`translate(${x},${y}) rotate(-32)`}>
-      <text textAnchor="end" fill="#8E8E93" fontSize={8} x={0} y={0} dy={4}>
-        {row.tickTop}
-      </text>
-      <text textAnchor="end" fill="#8E8E93" fontSize={7} x={0} y={0} dy={14}>
-        {row.tickBottom}
-      </text>
-    </g>
-  );
-}
-
-export default function DashboardPage() {
-  const { profile } = useAuth();
-  const [showOnboarding, setShowOnboarding] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return !localStorage.getItem('kinetic-onboarded');
-  });
-  const [trendDateRange, setTrendDateRange] = useState<DateRange>('week');
-  const [trendCustomFrom, setTrendCustomFrom] = useState<Date | undefined>();
-  const [trendCustomTo, setTrendCustomTo] = useState<Date | undefined>();
-  const [trendCategory, setTrendCategory] = useState<PersonalTrendCategory>('pushups');
-  const [trendMetric, setTrendMetric] = useState<'volume' | 'peak'>('volume');
-  const [trendMode, setTrendMode] = useState<'raw' | 'percent'>('raw');
-
-  const visibleRange = useMemo(
-    () => getDateRange(trendDateRange, trendCustomFrom, trendCustomTo),
-    [trendDateRange, trendCustomFrom, trendCustomTo]
-  );
-  const lineMode = isWeekLineMode(trendDateRange, trendCustomFrom, trendCustomTo);
-  const monthBarBuckets = useMemo(
-    () => shouldUseMonthBars(trendDateRange, trendCustomFrom, trendCustomTo),
-    [trendDateRange, trendCustomFrom, trendCustomTo]
-  );
-  const chartLogRange = useMemo(
-    () =>
-      getChartLogFetchRange(visibleRange.from, visibleRange.to, lineMode, monthBarBuckets),
-    [visibleRange.from, visibleRange.to, lineMode, monthBarBuckets]
-  );
-
-  const { data: trendLogs = [] } = useWorkoutLogs(trendDateRange, trendCustomFrom, trendCustomTo);
-  const { data: chartLogs = [] } = useWorkoutLogs('custom', chartLogRange.from, chartLogRange.to);
-
-  const { data: allTimeStats } = useAllTimeStats();
-  const { data: recentWeeks = [] } = useRecentWeeks(4);
-  const { data: weeklyVolume } = useWeeklyVolume();
-  const { data: goals } = useGoals();
+export default function PulsePage() {
+  const { data: today } = useTodayScore();
+  const { tier, totalScore } = useTier();
   const { data: streak = 0 } = useStreak();
+  const suggestions = useGoalSuggestions();
 
-  const weeklyGoalPct = useMemo(() => {
-    const pushGoal = goals?.pushup_weekly_goal || 500;
-    const plankGoal = goals?.plank_weekly_goal || 600;
-    const runGoal = goals?.run_weekly_goal || 15;
-    const squatGoal = goals?.squat_weekly_goal || 300;
-    const pushProg = Math.min((weeklyVolume?.total_pushups || 0) / pushGoal, 1);
-    const plankProg = Math.min((weeklyVolume?.total_plank_seconds || 0) / plankGoal, 1);
-    const runProg = Math.min(Number(weeklyVolume?.total_run_distance || 0) / runGoal, 1);
-    const squatProg = Math.min((weeklyVolume?.total_squats || 0) / squatGoal, 1);
-    return Math.round(((pushProg + plankProg + runProg + squatProg) / 4) * 100);
-  }, [weeklyVolume, goals]);
+  const now = useMemo(() => new Date(), []);
+  const lastWeekStart = useMemo(
+    () => startOfWeek(subWeeks(now, 1), { weekStartsOn: 1 }),
+    [now],
+  );
+  const lastWeekEnd = useMemo(
+    () => endOfWeek(subWeeks(now, 1), { weekStartsOn: 1 }),
+    [now],
+  );
 
-  const weekLinePoints = useMemo(() => {
-    if (!lineMode) return null;
-    const wkStart = startOfWeek(visibleRange.from, { weekStartsOn: 1 });
-    const wkEnd = endOfWeek(visibleRange.from, { weekStartsOn: 1 });
-    return buildWeekLineChart(
-      chartLogs,
-      wkStart,
-      wkEnd,
-      trendCategory,
-      trendMetric,
-      trendMode
-    );
-  }, [lineMode, chartLogs, visibleRange.from, trendCategory, trendMetric, trendMode]);
+  const { data: thisWeekLogs = [] } = useWorkoutLogs('week');
+  const { data: lastWeekLogs = [] } = useWorkoutLogs(
+    'custom',
+    lastWeekStart,
+    lastWeekEnd,
+  );
 
-  const barBundle = useMemo(() => {
-    if (lineMode) return null;
-    if (monthBarBuckets) {
-      return buildMonthlyBars(
-        chartLogs,
-        visibleRange.from,
-        visibleRange.to,
-        trendCategory,
-        trendMetric,
-        trendMode
-      );
+  const todayScore = today?.score ?? 0;
+  const todaySessions = today?.sessions ?? 0;
+  const exercises = today?.exercises ?? [];
+  const ringPct = Math.min(1, todayScore / DAILY_GOAL);
+  const animatedScore = useCountUp(todayScore);
+  const todayIdx = (now.getDay() + 6) % 7;
+
+  const thisWeekScores = useMemo(() => {
+    const s = [0, 0, 0, 0, 0, 0, 0];
+    for (const l of thisWeekLogs) {
+      const idx = (new Date(l.logged_at).getDay() + 6) % 7;
+      s[idx] += l.session_score || 0;
     }
-    return buildMultiWeekBars(
-      chartLogs,
-      visibleRange.from,
-      visibleRange.to,
-      trendCategory,
-      trendMetric,
-      trendMode
-    );
-  }, [
-    lineMode,
-    monthBarBuckets,
-    chartLogs,
-    visibleRange.from,
-    visibleRange.to,
-    trendCategory,
-    trendMetric,
-    trendMode,
-  ]);
+    return s;
+  }, [thisWeekLogs]);
 
-  const primarySeries = lineMode ? weekLinePoints ?? [] : barBundle?.bars ?? [];
-  const showTrendOverlayLine =
-    lineMode && !(trendMetric === 'peak' && trendMode === 'raw');
-  const peakHighlightPoint = weekLinePoints?.find((p) => p.peakHighlight);
+  const lastWeekScores = useMemo(() => {
+    const s = [0, 0, 0, 0, 0, 0, 0];
+    for (const l of lastWeekLogs) {
+      const idx = (new Date(l.logged_at).getDay() + 6) % 7;
+      s[idx] += l.session_score || 0;
+    }
+    return s;
+  }, [lastWeekLogs]);
 
-  // CSV Export for Dashboard (matches Personal Trends range)
-  const handleExportCSV = () => {
-    if (!trendLogs.length) return;
-    const headers = ['Date', 'Push-ups', 'Squats', 'Plank (sec)', `Run (${profile?.unit_preference === 'imperial' ? 'MI' : 'KM'})`, 'Notes'];
-    const rows = trendLogs.map(l => [
-      format(new Date(l.logged_at), 'yyyy-MM-dd'),
-      l.pushup_reps,
-      l.squat_reps,
-      l.plank_seconds,
-      formatDistance(Number(l.run_distance), profile?.unit_preference),
-      (l.notes || '').replace(/,/g, ';')
-    ]);
-    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute("download", `kinetic_export_${trendDateRange}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  const thisWeekTotal = thisWeekScores.reduce((a, b) => a + b, 0);
+  const lastWeekTotal = lastWeekScores.reduce((a, b) => a + b, 0);
+  const weekDelta =
+    lastWeekTotal > 0
+      ? Math.round(((thisWeekTotal - lastWeekTotal) / lastWeekTotal) * 100)
+      : 0;
+  const barMax = Math.max(...thisWeekScores, ...lastWeekScores, 1);
 
-  const weekComparison = useMemo(() => {
-    if (!lineMode || !weekLinePoints) return { thisWeek: 0, lastWeek: 0 };
-    const num = (t: number | null | undefined) =>
-      typeof t === 'number' && !Number.isNaN(t) ? t : 0;
-    const thisWeek = weekLinePoints.reduce((s, p) => s + num(p.total), 0);
-    const lastWeek = weekLinePoints.reduce((s, p) => s + num(p.overlay), 0);
-    return { thisWeek, lastWeek };
-  }, [lineMode, weekLinePoints]);
-
-  const lineTrendVelocity = useMemo(() => {
-    if (!lineMode || !weekLinePoints || weekLinePoints.length < 2) return null;
-    return averageDailyDeltaOverCalendarSpan(weekLinePoints);
-  }, [lineMode, weekLinePoints]);
+  const dateLabel = format(now, 'EEEE, MMM d');
 
   return (
     <AppShell>
-      {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
-      <div className="max-w-md mx-auto px-6 space-y-6 pt-2 pb-32">
+      <div className="space-y-7 pt-1 pb-4">
+        {/* ── Eyebrow ── */}
+        <KEyebrow>Today &middot; {dateLabel}</KEyebrow>
 
+        {/* ── Hero ring card ── */}
+        <KCard pad={22} className="relative overflow-hidden">
+          <div
+            className="absolute pointer-events-none rounded-full opacity-70"
+            style={{
+              top: -40,
+              right: -40,
+              width: 180,
+              height: 180,
+              background: `radial-gradient(circle, ${K.mint} 0%, transparent 70%)`,
+            }}
+          />
 
-        {/* Section Header — All-Time Stats */}
-        <div data-testid="uat-dashboard-arena-section">
-          <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-1">
-            ALL-TIME ROLL-UP
-          </p>
-          <h3 className="text-2xl font-black italic leading-tight">
-            YOUR<br />TOTALS
-          </h3>
-        </div>
+          <div className="flex items-center gap-[18px] relative">
+            <KRing pct={ringPct} size={138} stroke={12} color={K.green}>
+              <div className="text-center">
+                <div
+                  className="font-display font-black italic text-k-ink leading-none"
+                  style={{ fontSize: 38, letterSpacing: -1 }}
+                >
+                  {animatedScore}
+                </div>
+                <div
+                  className="text-k-muted font-semibold uppercase"
+                  style={{ fontSize: 10, letterSpacing: 1.2, marginTop: 4 }}
+                >
+                  of {DAILY_GOAL} pts
+                </div>
+              </div>
+            </KRing>
 
-        {/* Metric Cards — All-Time Total + Peak */}
-        {!allTimeStats ? (
-          <div className="space-y-3">
-            <DashboardCardSkeleton />
-            <DashboardCardSkeleton />
-            <DashboardCardSkeleton />
+            <div className="flex-1 min-w-0">
+              <div
+                className="text-k-muted font-bold uppercase"
+                style={{ fontSize: 10, letterSpacing: 1.8 }}
+              >
+                Today&apos;s effort
+              </div>
+
+              <KDisplay size={24} className="mt-1 mb-[10px]">
+                KEEP
+                <br />
+                GOING
+              </KDisplay>
+
+              <div className="flex gap-[14px]">
+                <div>
+                  <div
+                    className="text-k-muted font-bold uppercase"
+                    style={{ fontSize: 10, letterSpacing: 1 }}
+                  >
+                    Streak
+                  </div>
+                  <div className="flex items-baseline gap-1 mt-0.5">
+                    <IcFlame size={14} color={K.danger} />
+                    <span
+                      className="font-display font-extrabold italic text-k-ink"
+                      style={{ fontSize: 20 }}
+                    >
+                      {streak}
+                    </span>
+                    <span
+                      className="text-k-muted font-semibold"
+                      style={{ fontSize: 11 }}
+                    >
+                      wk
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  className="self-stretch w-px"
+                  style={{ background: K.line }}
+                />
+
+                <div>
+                  <div
+                    className="text-k-muted font-bold uppercase"
+                    style={{ fontSize: 10, letterSpacing: 1 }}
+                  >
+                    Rank
+                  </div>
+                  <div
+                    className="font-display font-extrabold italic mt-0.5"
+                    style={{ fontSize: 20, color: K.greenDeep }}
+                  >
+                    #4
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        ) : (
-        <div className="space-y-3">
-          {/* Push-ups Card */}
-          <GlassCard className="relative overflow-hidden" delay={0.1}>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-lg">💪</span>
-              <span className="text-[11px] font-semibold tracking-wider text-dark-muted uppercase">
-                PUSH-UPS
-              </span>
-            </div>
-            <div className="flex items-end justify-between">
-              <div>
-                <p className="text-[9px] font-semibold tracking-wider text-dark-muted uppercase">TOTAL</p>
-                <span className="text-4xl font-black text-dark-text">
-                  {allTimeStats ? Math.round(allTimeStats.totalPushups).toLocaleString() : '0'}
-                </span>
-                <span className="text-sm text-dark-muted ml-1">reps</span>
-              </div>
-              <div className="text-right">
-                <p className="text-[9px] font-semibold tracking-wider text-dark-muted uppercase">PEAK</p>
-                <span className="text-2xl font-black text-emerald-500">
-                  {allTimeStats ? Math.round(allTimeStats.peakPushups) : 0}
-                </span>
-                <span className="text-xs text-dark-muted ml-1">reps</span>
-              </div>
-            </div>
-            {recentWeeks.length > 0 && (
-              <div className="h-10 mt-3 -mx-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={recentWeeks}>
-                    <defs>
-                      <linearGradient id="pushupGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#10B981" stopOpacity={0.3} />
-                        <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <Area type="monotone" dataKey="pushups" stroke="#10B981" strokeWidth={2} fill="url(#pushupGrad)" dot={{ r: 3, fill: '#10B981' }} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </GlassCard>
+        </KCard>
 
-          {/* Squats Card */}
-          <GlassCard className="relative overflow-hidden" delay={0.15}>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-lg">🦵</span>
-              <span className="text-[11px] font-semibold tracking-wider text-dark-muted uppercase">
-                SQUATS
-              </span>
+        {/* ── Logged today ── */}
+        <div>
+          <div className="flex justify-between items-baseline mb-3">
+            <div>
+              <KEyebrow>Logged today</KEyebrow>
+              <KDisplay size={22} className="mt-1">
+                {todaySessions} SESSION{todaySessions !== 1 ? 'S' : ''}
+              </KDisplay>
             </div>
-            <div className="flex items-end justify-between">
-              <div>
-                <p className="text-[9px] font-semibold tracking-wider text-dark-muted uppercase">TOTAL</p>
-                <span className="text-4xl font-black text-dark-text">
-                  {allTimeStats ? Math.round(allTimeStats.totalSquats).toLocaleString() : '0'}
-                </span>
-                <span className="text-sm text-dark-muted ml-1">reps</span>
-              </div>
-              <div className="text-right">
-                <p className="text-[9px] font-semibold tracking-wider text-dark-muted uppercase">PEAK</p>
-                <span className="text-2xl font-black text-emerald-500">
-                  {allTimeStats ? Math.round(allTimeStats.peakSquats) : 0}
-                </span>
-                <span className="text-xs text-dark-muted ml-1">reps</span>
-              </div>
-            </div>
-            {recentWeeks.length > 0 && (
-              <div className="h-10 mt-3 -mx-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={recentWeeks}>
-                    <defs>
-                      <linearGradient id="squatGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#10B981" stopOpacity={0.3} />
-                        <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <Area type="monotone" dataKey="squats" stroke="#10B981" strokeWidth={2} fill="url(#squatGrad)" dot={{ r: 3, fill: '#10B981' }} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </GlassCard>
+            <Link
+              href="/log"
+              className="flex items-center gap-1.5 text-white font-bold uppercase no-underline"
+              style={{
+                background: K.green,
+                borderRadius: K.r.pill,
+                padding: '8px 14px',
+                fontSize: 11,
+                letterSpacing: 0.6,
+                boxShadow: '0 4px 10px rgba(31,179,122,0.3)',
+              }}
+            >
+              <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> LOG
+            </Link>
+          </div>
 
-          {/* Plank Card */}
-          <GlassCard className="relative overflow-hidden" delay={0.2}>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-lg">🧘</span>
-              <span className="text-[11px] font-semibold tracking-wider text-dark-muted uppercase">
-                PLANK
-              </span>
-            </div>
-            <div className="flex items-end justify-between">
-              <div>
-                <p className="text-[9px] font-semibold tracking-wider text-dark-muted uppercase">TOTAL</p>
-                <span className="text-4xl font-black text-dark-text">
-                  {allTimeStats ? (allTimeStats.totalPlankSeconds / 60).toFixed(1) : '0.0'}
-                </span>
-                <span className="text-sm text-dark-muted ml-1">min</span>
-              </div>
-              <div className="text-right">
-                <p className="text-[9px] font-semibold tracking-wider text-dark-muted uppercase">PEAK</p>
-                <span className="text-2xl font-black text-emerald-500">
-                  {allTimeStats ? formatPlankTime(allTimeStats.peakPlankSeconds) : '0:00'}
-                </span>
-              </div>
-            </div>
-            {recentWeeks.length > 0 && (
-              <div className="h-10 mt-3 -mx-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={recentWeeks}>
-                    <defs>
-                      <linearGradient id="plankGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#10B981" stopOpacity={0.3} />
-                        <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <Area type="monotone" dataKey="plankMin" stroke="#10B981" strokeWidth={2} fill="url(#plankGrad)" dot={{ r: 3, fill: '#10B981' }} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </GlassCard>
+          <div className="flex flex-col gap-[10px]">
+            {exercises.map((ex) => {
+              const Icon = EXERCISE_ICON_MAP[ex.slug];
+              return (
+                <KCard key={ex.slug} pad={14}>
+                  <div className="flex items-center gap-[14px]">
+                    <div
+                      className="flex-shrink-0 flex items-center justify-center"
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 12,
+                        background: K.mintSoft,
+                      }}
+                    >
+                      {Icon ? (
+                        <Icon size={26} color={K.greenDeep} />
+                      ) : null}
+                    </div>
 
-          {/* Running Card */}
-          <GlassCard className="relative overflow-hidden" delay={0.3}>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-lg">🏃</span>
-              <span className="text-[11px] font-semibold tracking-wider text-dark-muted uppercase">
-                RUNNING ({profile?.unit_preference === 'imperial' ? 'MI' : 'KM'})
-              </span>
-            </div>
-            <div className="flex items-end justify-between">
-              <div>
-                <p className="text-[9px] font-semibold tracking-wider text-dark-muted uppercase">TOTAL</p>
-                <span className="text-4xl font-black text-dark-text">
-                  {allTimeStats ? formatDistance(allTimeStats.totalRunDistance, profile?.unit_preference).toFixed(1) : '0.0'}
-                </span>
-                <span className="text-sm text-dark-muted ml-1">{profile?.unit_preference === 'imperial' ? 'mi' : 'km'}</span>
-              </div>
-              <div className="text-right">
-                <p className="text-[9px] font-semibold tracking-wider text-dark-muted uppercase">PEAK</p>
-                <span className="text-2xl font-black text-emerald-500">
-                  {allTimeStats ? formatDistance(allTimeStats.peakRunDistance, profile?.unit_preference).toFixed(1) : '0.0'}
-                </span>
-                <span className="text-xs text-dark-muted ml-1">{profile?.unit_preference === 'imperial' ? 'mi' : 'km'}</span>
-              </div>
-            </div>
-            {recentWeeks.length > 0 && (
-              <div className="h-10 mt-3 -mx-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={recentWeeks}>
-                    <defs>
-                      <linearGradient id="runGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#10B981" stopOpacity={0.3} />
-                        <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <Area type="monotone" dataKey="runKm" stroke="#10B981" strokeWidth={2} fill="url(#runGrad)" dot={{ r: 3, fill: '#10B981' }} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </GlassCard>
+                    <div className="flex-1 min-w-0">
+                      <div
+                        className="text-k-muted font-bold uppercase"
+                        style={{ fontSize: 10, letterSpacing: 1 }}
+                      >
+                        {ex.name}
+                      </div>
+                      <div className="flex items-baseline gap-1 mt-0.5">
+                        <span
+                          className="font-display font-black italic text-k-ink"
+                          style={{ fontSize: 22, letterSpacing: -0.5 }}
+                        >
+                          {ex.unit === 'sec'
+                            ? `${Math.floor(ex.value / 60)}:${String(
+                                ex.value % 60,
+                              ).padStart(2, '0')}`
+                            : ex.value}
+                        </span>
+                        <span
+                          className="text-k-muted font-semibold"
+                          style={{ fontSize: 12 }}
+                        >
+                          {ex.unit}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <div
+                        className="text-k-muted font-bold uppercase"
+                        style={{ fontSize: 9, letterSpacing: 1 }}
+                      >
+                        Points
+                      </div>
+                      <div
+                        className="font-display font-black italic"
+                        style={{
+                          fontSize: 18,
+                          color: K.greenDeep,
+                          letterSpacing: -0.3,
+                          marginTop: 2,
+                        }}
+                      >
+                        {ex.score}
+                      </div>
+                    </div>
+                  </div>
+                </KCard>
+              );
+            })}
+          </div>
         </div>
-        )}
 
-        <div className="pt-4" data-testid="uat-dashboard-trends">
-          <h3 className="text-2xl font-black italic mb-4">
-            PERSONAL TRENDS
-          </h3>
+        {/* ── Weekly bar chart ── */}
+        <div>
+          <div className="flex justify-between items-baseline mb-3">
+            <div>
+              <KEyebrow>This week</KEyebrow>
+              <KDisplay size={22} className="mt-1">
+                {thisWeekTotal.toLocaleString()} PTS
+              </KDisplay>
+            </div>
+            {weekDelta !== 0 && (
+              <div className="flex items-center gap-1">
+                <IcSparkle size={12} color={K.greenDeep} />
+                <span
+                  className="font-bold"
+                  style={{
+                    fontSize: 11,
+                    color: K.greenDeep,
+                    letterSpacing: 0.4,
+                  }}
+                >
+                  {weekDelta > 0 ? '+' : ''}
+                  {weekDelta}% vs last
+                </span>
+              </div>
+            )}
+          </div>
 
-          {/* Date Range + Metric Toggles */}
-          <div className="space-y-4 mb-6">
-            <div className="flex items-center justify-between gap-3">
-              <ExerciseSelect
-                options={[
-                  { value: 'pushups' as const, label: 'Push-ups' },
-                  { value: 'squats' as const, label: 'Squats' },
-                  { value: 'plank' as const, label: 'Plank' },
-                  { value: 'run' as const, label: 'Run' },
-                ]}
-                selected={trendCategory}
-                onChange={setTrendCategory}
-              />
-              <DateRangeTabs
-                motionScope="dash-trends-tabs"
-                selected={trendDateRange}
-                onChange={setTrendDateRange}
-                onCustomDates={(from, to) => {
-                  setTrendCustomFrom(from);
-                  setTrendCustomTo(to);
+          <KCard pad={18}>
+            <div
+              className="flex items-end"
+              style={{ gap: 10, height: 120 }}
+            >
+              {thisWeekScores.map((v, i) => {
+                const last = lastWeekScores[i];
+                const isToday = i === todayIdx;
+                return (
+                  <div
+                    key={i}
+                    className="flex-1 flex flex-col items-center gap-1"
+                  >
+                    <div
+                      className="font-bold"
+                      style={{
+                        fontSize: 9,
+                        height: 12,
+                        letterSpacing: 0.5,
+                        color: isToday ? K.greenDeep : K.mutedSoft,
+                      }}
+                    >
+                      {v > 0 ? v : ''}
+                    </div>
+                    <div
+                      className="flex-1 w-full flex items-end justify-center"
+                      style={{ gap: 2 }}
+                    >
+                      <div
+                        style={{
+                          width: 6,
+                          height: `${(last / barMax) * 100}%`,
+                          background: K.lineStrong,
+                          borderRadius: 3,
+                          minHeight: last > 0 ? 3 : 0,
+                        }}
+                      />
+                      <div
+                        style={{
+                          width: 14,
+                          height: `${(v / barMax) * 100}%`,
+                          background: isToday ? K.green : K.greenDeep,
+                          borderRadius: 4,
+                          minHeight: v > 0 ? 3 : 0,
+                          opacity: v === 0 ? 0.2 : 1,
+                          boxShadow: isToday
+                            ? `0 0 12px ${K.green}88`
+                            : 'none',
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex" style={{ gap: 10, marginTop: 8 }}>
+              {DAY_LABELS.map((d, i) => (
+                <div
+                  key={d}
+                  className="flex-1 text-center uppercase"
+                  style={{
+                    fontSize: 10,
+                    letterSpacing: 0.5,
+                    color: i === todayIdx ? K.greenDeep : K.mutedSoft,
+                    fontWeight: i === todayIdx ? 700 : 500,
+                  }}
+                >
+                  {d}
+                </div>
+              ))}
+            </div>
+
+            <div
+              className="flex"
+              style={{
+                gap: 14,
+                marginTop: 12,
+                paddingTop: 12,
+                borderTop: `1px solid ${K.line}`,
+              }}
+            >
+              <div className="flex items-center gap-1.5">
+                <div
+                  style={{
+                    width: 10,
+                    height: 10,
+                    background: K.greenDeep,
+                    borderRadius: 2,
+                  }}
+                />
+                <span
+                  className="text-k-muted font-semibold"
+                  style={{ fontSize: 10, letterSpacing: 0.4 }}
+                >
+                  This week
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div
+                  style={{
+                    width: 10,
+                    height: 10,
+                    background: K.lineStrong,
+                    borderRadius: 2,
+                  }}
+                />
+                <span
+                  className="text-k-muted font-semibold"
+                  style={{ fontSize: 10, letterSpacing: 0.4 }}
+                >
+                  Last week
+                </span>
+              </div>
+            </div>
+          </KCard>
+        </div>
+
+        {/* ── Tier progress ── */}
+        <div>
+          <KEyebrow>Progression</KEyebrow>
+          <KDisplay size={22} className="mt-1 mb-3">
+            TIER UP
+          </KDisplay>
+
+          <KCard pad={18}>
+            <div className="flex items-center gap-[14px] mb-[14px]">
+              <div
+                className="flex-shrink-0 flex items-center justify-center"
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 12,
+                  background: `linear-gradient(135deg, ${tier.color}, ${tier.color}cc)`,
+                  boxShadow: `0 4px 14px ${tier.color}66`,
+                }}
+              >
+                <IcTrophy size={24} color="#fff" />
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div
+                  className="text-k-muted font-bold uppercase"
+                  style={{ fontSize: 10, letterSpacing: 1.2 }}
+                >
+                  Current tier
+                </div>
+                <div
+                  className="font-display font-black italic text-k-ink"
+                  style={{ fontSize: 22, marginTop: 2 }}
+                >
+                  {tier.name.toUpperCase()}
+                </div>
+              </div>
+
+              {tier.next && (
+                <div className="text-right">
+                  <div
+                    className="text-k-muted font-bold uppercase"
+                    style={{ fontSize: 10, letterSpacing: 1 }}
+                  >
+                    Next
+                  </div>
+                  <div
+                    className="font-bold"
+                    style={{
+                      fontSize: 13,
+                      color: tier.next.color,
+                      marginTop: 2,
+                    }}
+                  >
+                    {tier.next.name}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                height: 6,
+                borderRadius: 3,
+                background: '#EFEFEF',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  height: '100%',
+                  width: `${Math.round(tier.pct * 100)}%`,
+                  background: `linear-gradient(90deg, ${tier.color}, ${tier.next?.color || tier.color})`,
+                  borderRadius: 3,
+                  transition: 'width 1s',
                 }}
               />
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <TogglePills
-                motionScope="dash-trends-metric"
-                options={[
-                  { value: 'volume' as const, label: 'VOLUME' },
-                  { value: 'peak' as const, label: 'PEAK' },
-                ]}
-                selected={trendMetric}
-                onChange={setTrendMetric}
-                size="sm"
-              />
-              <TogglePills
-                motionScope="dash-trends-mode"
-                options={[
-                  { value: 'raw' as const, label: 'RAW' },
-                  { value: 'percent' as const, label: '% IMP.' },
-                ]}
-                selected={trendMode}
-                onChange={setTrendMode}
-                size="sm"
-              />
+            <div
+              className="flex justify-between text-k-muted"
+              style={{ marginTop: 8, fontSize: 11 }}
+            >
+              <span>{totalScore.toLocaleString()} pts</span>
+              {tier.next && (
+                <span>{tier.next.min.toLocaleString()} pts</span>
+              )}
             </div>
+          </KCard>
+        </div>
+
+        {/* ── Insights ── */}
+        <div>
+          <KEyebrow>Insights</KEyebrow>
+
+          <div className="flex flex-col gap-[10px] mt-[10px]">
+            {suggestions.length > 0 ? (
+              suggestions.slice(0, 2).map((s, i) => (
+                <KCard key={i} pad={14}>
+                  <div className="flex items-start gap-3">
+                    <div
+                      className="flex-shrink-0 flex items-center justify-center"
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        background: i === 0 ? K.mintSoft : '#FCF3E4',
+                      }}
+                    >
+                      {i === 0 ? (
+                        <IcSparkle size={14} color={K.greenDeep} />
+                      ) : (
+                        <IcFlame size={14} color="#D38B2A" />
+                      )}
+                    </div>
+                    <div
+                      className="text-k-ink leading-relaxed"
+                      style={{ fontSize: 13 }}
+                    >
+                      {s.reason}
+                    </div>
+                  </div>
+                </KCard>
+              ))
+            ) : (
+              <>
+                <KCard pad={14}>
+                  <div className="flex items-start gap-3">
+                    <div
+                      className="flex-shrink-0 flex items-center justify-center"
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        background: K.mintSoft,
+                      }}
+                    >
+                      <IcSparkle size={14} color={K.greenDeep} />
+                    </div>
+                    <div
+                      className="text-k-ink leading-relaxed"
+                      style={{ fontSize: 13 }}
+                    >
+                      Log your first workout today to unlock personal
+                      insights and track your progress.
+                    </div>
+                  </div>
+                </KCard>
+                <KCard pad={14}>
+                  <div className="flex items-start gap-3">
+                    <div
+                      className="flex-shrink-0 flex items-center justify-center"
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        background: '#FCF3E4',
+                      }}
+                    >
+                      <IcFlame size={14} color="#D38B2A" />
+                    </div>
+                    <div
+                      className="text-k-ink leading-relaxed"
+                      style={{ fontSize: 13 }}
+                    >
+                      Build a weekly streak to climb the ranks and
+                      unlock new tiers.
+                    </div>
+                  </div>
+                </KCard>
+              </>
+            )}
           </div>
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.4 }}
-          >
-            <GlassCard className="p-5" animate={false}>
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <p className="text-lg font-black">PERFORMANCE</p>
-                  <p className="text-lg font-black">VELOCITY</p>
-                  <p className="text-[10px] font-semibold tracking-wider text-dark-muted mt-1">
-                    {lineMode ? 'THIS WEEK vs LAST WEEK' : trendDateRange === 'month' ? 'WEEKLY TOTALS' : 'MONTHLY TOTALS'}
-                  </p>
-                </div>
-                {lineMode ? (
-                  <div className="text-right">
-                    <p className="text-[9px] font-semibold tracking-wider text-dark-muted">THIS WEEK</p>
-                    <p className="text-xl font-black text-emerald-500">
-                      {trendMode === 'percent' ? `${weekComparison.thisWeek.toFixed(1)}%` : Math.round(weekComparison.thisWeek).toLocaleString()}
-                    </p>
-                    <p className="text-[9px] font-semibold tracking-wider text-dark-muted mt-1">LAST WEEK</p>
-                    <p className="text-base font-bold text-gray-400">
-                      {trendMode === 'percent' ? `${weekComparison.lastWeek.toFixed(1)}%` : Math.round(weekComparison.lastWeek).toLocaleString()}
-                    </p>
-                    {lineTrendVelocity != null ? (
-                      <>
-                        <p className="text-[9px] font-semibold tracking-wider text-dark-muted mt-1">
-                          AVG / DAY
-                        </p>
-                        <p className="text-sm font-bold text-gray-500">
-                          {trendMode === 'percent'
-                            ? `${lineTrendVelocity >= 0 ? '+' : ''}${lineTrendVelocity.toFixed(2)}%/d`
-                            : trendCategory === 'plank'
-                              ? `${lineTrendVelocity >= 0 ? '+' : ''}${lineTrendVelocity.toFixed(1)} min/d`
-                              : trendCategory === 'run'
-                                ? (() => {
-                                    const v = lineTrendVelocity;
-                                    const sign = v > 0 ? '+' : v < 0 ? '-' : '';
-                                    const n = formatDistance(Math.abs(v), profile?.unit_preference);
-                                    const u = profile?.unit_preference === 'imperial' ? 'mi' : 'km';
-                                    return `${sign}${n} ${u}/d`;
-                                  })()
-                                : `${lineTrendVelocity >= 0 ? '+' : ''}${Math.round(lineTrendVelocity).toLocaleString()} /d`}
-                        </p>
-                      </>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="text-right">
-                    {barBundle?.avgLine != null && (
-                      <>
-                        <p className="text-[9px] font-semibold tracking-wider text-dark-muted">ROLLING AVG</p>
-                        <p className="text-xl font-black text-emerald-500">
-                          {trendMode === 'percent' ? `${barBundle.avgLine.toFixed(1)}%` : Math.round(barBundle.avgLine).toLocaleString()}
-                        </p>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="h-40" data-testid="uat-dashboard-trends-chart">
-                <ResponsiveContainer width="100%" height="100%">
-                  {lineMode ? (
-                    <LineChart
-                      margin={{ top: 4, right: 4, left: 4, bottom: 4 }}
-                      data={
-                        weekLinePoints && weekLinePoints.length > 0
-                          ? weekLinePoints
-                          : [
-                              {
-                                sortKey: '_',
-                                weekday: '—',
-                                datePart: '',
-                                tooltipLabel: 'No data',
-                                total: 0,
-                              },
-                            ]
-                      }
-                    >
-                      <XAxis
-                        dataKey="sortKey"
-                        type="category"
-                        axisLine={false}
-                        tickLine={false}
-                        interval={0}
-                        height={36}
-                        tick={(tickProps) => {
-                          const p = tickProps as {
-                            x: number;
-                            y: number;
-                            payload: { value: string };
-                          };
-                          const pts: WeekLinePoint[] =
-                            weekLinePoints && weekLinePoints.length > 0
-                              ? weekLinePoints
-                              : [
-                                  {
-                                    sortKey: '_',
-                                    weekday: '—',
-                                    datePart: '',
-                                    tooltipLabel: 'No data',
-                                    total: 0,
-                                  },
-                                ];
-                          return (
-                            <PersonalTrendLineTick
-                              x={p.x}
-                              y={p.y}
-                              payload={p.payload}
-                              points={pts}
-                            />
-                          );
-                        }}
-                      />
-                      <YAxis hide />
-                      <Tooltip
-                        content={({ active, payload }) => {
-                          const row = payload?.[0]?.payload as WeekLinePoint | undefined;
-                          return (
-                            <PersonalTrendTooltip
-                              active={active}
-                              payload={payload}
-                              heading={row?.tooltipLabel}
-                              category={trendCategory}
-                              metric={trendMetric}
-                              mode={trendMode}
-                              unitPref={profile?.unit_preference}
-                            />
-                          );
-                        }}
-                      />
-                      <Line
-                        type="monotone"
-                        name={
-                          trendMode === 'percent'
-                            ? 'This week (%)'
-                            : 'This week'
-                        }
-                        dataKey="total"
-                        stroke="#10B981"
-                        strokeWidth={3}
-                        dot={false}
-                        connectNulls={false}
-                        activeDot={{ r: 4, fill: '#10B981' }}
-                      />
-                      {showTrendOverlayLine ? (
-                        <Line
-                          type="monotone"
-                          name={
-                            trendMode === 'percent'
-                              ? 'Prior week (%)'
-                              : 'Prior week (same weekday)'
-                          }
-                          dataKey="overlay"
-                          stroke="#6B7280"
-                          strokeWidth={2}
-                          strokeDasharray="4 4"
-                          dot={false}
-                          connectNulls={false}
-                          activeDot={{ r: 3, fill: '#6B7280' }}
-                        />
-                      ) : null}
-                      {peakHighlightPoint &&
-                      typeof peakHighlightPoint.total === 'number' ? (
-                        <ReferenceDot
-                          x={peakHighlightPoint.sortKey}
-                          y={peakHighlightPoint.total}
-                          r={5}
-                          fill="#10B981"
-                          stroke="#F5F5F7"
-                          strokeWidth={2}
-                        />
-                      ) : null}
-                    </LineChart>
-                  ) : (
-                    <BarChart
-                      data={
-                        barBundle && barBundle.bars.length > 0
-                          ? barBundle.bars
-                          : [
-                              {
-                                label: 'No data',
-                                sortKey: 'x',
-                                total: 0,
-                                isPartial: false,
-                                tickTop: '—',
-                                tickBottom: '',
-                              },
-                            ]
-                      }
-                      margin={{ bottom: 36, left: 4, right: 4, top: 4 }}
-                    >
-                      <XAxis
-                        dataKey="sortKey"
-                        type="category"
-                        axisLine={false}
-                        tickLine={false}
-                        interval={0}
-                        height={44}
-                        tick={(tickProps) => {
-                          const p = tickProps as {
-                            x: number;
-                            y: number;
-                            payload: { value: string };
-                          };
-                          const rows: WeekBarRow[] =
-                            barBundle && barBundle.bars.length > 0
-                              ? barBundle.bars
-                              : [
-                                  {
-                                    label: 'No data',
-                                    sortKey: 'x',
-                                    total: 0,
-                                    isPartial: false,
-                                    tickTop: '—',
-                                    tickBottom: '',
-                                  },
-                                ];
-                          return (
-                            <PersonalTrendBarTick
-                              x={p.x}
-                              y={p.y}
-                              payload={p.payload}
-                              bars={rows}
-                            />
-                          );
-                        }}
-                      />
-                      <YAxis hide />
-                      <Tooltip
-                        content={({ active, payload }) => {
-                          const row = payload?.[0]?.payload as WeekBarRow | undefined;
-                          return (
-                            <PersonalTrendTooltip
-                              active={active}
-                              payload={payload}
-                              heading={row?.label}
-                              category={trendCategory}
-                              metric={trendMetric}
-                              mode={trendMode}
-                              unitPref={profile?.unit_preference}
-                            />
-                          );
-                        }}
-                      />
-                      {barBundle?.avgLine != null ? (
-                        <ReferenceLine
-                          y={barBundle.avgLine}
-                          stroke="#9CA3AF"
-                          strokeDasharray="5 5"
-                          label={{
-                            value: 'AVG.',
-                            position: 'insideTopRight',
-                            fill: '#9CA3AF',
-                            fontSize: 9,
-                          }}
-                        />
-                      ) : null}
-                      <Bar dataKey="total" radius={[4, 4, 0, 0]}>
-                        {(barBundle && barBundle.bars.length > 0
-                          ? barBundle.bars
-                          : [{ label: 'No data', sortKey: 'x', total: 0, isPartial: false }]
-                        ).map((entry, i) => (
-                          <Cell
-                            key={entry.sortKey || `b-${i}`}
-                            fill={
-                              entry.isPartial
-                                ? 'rgba(16, 185, 129, 0.38)'
-                                : '#10B981'
-                            }
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  )}
-                </ResponsiveContainer>
-              </div>
-              <p className="text-[9px] text-dark-muted mt-3 leading-relaxed">
-                {lineMode
-                  ? "Green = this week's daily totals. Dashed gray = last week (same weekday). Gaps = rest days."
-                  : monthBarBuckets
-                    ? 'Each bar = one calendar month. Dashed line = rolling 4-month average.'
-                    : 'Each bar = one week (Mon–Sun). Dashed line = rolling 4-week average.'}
-              </p>
-            </GlassCard>
-          </motion.div>
         </div>
-
-        {/* Weekly Goal % + Streak Rings */}
-        <div className="flex justify-center gap-8 py-6" data-testid="uat-dashboard-stamina">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ type: 'spring', delay: 0.5 }}
-          >
-            <ScoreRing
-              value={weeklyGoalPct}
-              label="WEEKLY GOAL"
-              sublabel={weeklyGoalPct >= 100 ? 'CRUSHED IT' : weeklyGoalPct >= 75 ? 'ALMOST THERE' : weeklyGoalPct >= 50 ? 'ON TRACK' : 'KEEP GOING'}
-              color="#10B981"
-            />
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ type: 'spring', delay: 0.6 }}
-          >
-            <ScoreRing
-              value={streak}
-              max={52}
-              label="STREAK"
-              sublabel={streak >= 12 ? 'ON FIRE' : streak >= 4 ? 'CONSISTENT' : streak >= 1 ? 'BUILDING' : 'START NOW'}
-              color="#10B981"
-            />
-          </motion.div>
-        </div>
-        <div className="space-y-2 px-2 -mt-2 pb-2">
-          <p className="text-[9px] text-dark-muted text-center leading-relaxed">
-            <span className="font-semibold text-emerald-500/70">WEEKLY GOAL</span> — Average progress across your push-up, squat, plank, and run targets. Set goals in Profile.
-          </p>
-          <p className="text-[9px] text-dark-muted text-center leading-relaxed">
-            <span className="font-semibold text-emerald-500/70">STREAK</span> — Consecutive weeks with 4+ logged workouts. Miss a week and it resets.
-          </p>
-        </div>
-
-        {/* Insights */}
-        <ErrorBoundary fallbackTitle="Insights unavailable">
-          <InsightsSection logs={trendLogs} goals={goals ?? null} streak={streak} />
-        </ErrorBoundary>
-
-        {/* Goal Suggestions */}
-        <ErrorBoundary fallbackTitle="Goal suggestions unavailable">
-          <GoalSuggestionsSection />
-        </ErrorBoundary>
-
-        {/* Milestones */}
-        <ErrorBoundary fallbackTitle="Milestones unavailable">
-          <MilestonesSection />
-        </ErrorBoundary>
       </div>
     </AppShell>
-  );
-}
-
-function InsightsSection({ logs, goals, streak }: { logs: WorkoutLog[]; goals: import('@/types/database').PerformanceGoals | null; streak: number }) {
-  const insights = useMemo(() => generateInsights(logs, goals, streak), [logs, goals, streak]);
-  if (insights.length === 0) return null;
-
-  const iconMap = { positive: TrendingUp, suggestion: Lightbulb, warning: AlertTriangle };
-  const colorMap = { positive: 'text-emerald-500', suggestion: 'text-amber-400', warning: 'text-red-400' };
-
-  return (
-    <div className="pt-2">
-      <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-2">INSIGHTS</p>
-      <div className="space-y-2">
-        {insights.map((insight, i) => {
-          const Icon = iconMap[insight.type];
-          return (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.1 }}
-              className="flex items-start gap-3 px-4 py-3 rounded-2xl bg-white/[0.02] border border-white/[0.06]"
-            >
-              <Icon size={14} className={`${colorMap[insight.type]} mt-0.5 shrink-0`} />
-              <p className="text-[11px] text-dark-text leading-relaxed">{insight.text}</p>
-            </motion.div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function GoalSuggestionsSection() {
-  const suggestions = useGoalSuggestions();
-  if (suggestions.length === 0) return null;
-
-  return (
-    <div className="pt-2">
-      <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-2">GOAL ADJUSTMENT</p>
-      <div className="space-y-2">
-        {suggestions.map((s, i) => (
-          <div key={i} className="flex items-start gap-3 px-4 py-3 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
-            {s.direction === 'up' ? (
-              <TrendingUp size={14} className="text-emerald-500 mt-0.5 shrink-0" />
-            ) : (
-              <TrendingDown size={14} className="text-amber-400 mt-0.5 shrink-0" />
-            )}
-            <div>
-              <p className="text-[11px] text-dark-text leading-relaxed">{s.reason}</p>
-              <p className="text-[10px] text-dark-muted mt-1">
-                {s.current} → <span className="text-emerald-500 font-bold">{s.suggested}</span>
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function MilestonesSection() {
-  const { data: unlocks = [], isPending } = useUserMilestoneUnlocks();
-
-  if (isPending) return null;
-
-  return (
-    <div className="pt-2 pb-4">
-      <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-2">MILESTONES EARNED</p>
-      {unlocks.length === 0 ? (
-        <p className="text-[10px] text-dark-muted leading-relaxed px-1">
-          Milestones unlock here when you cross a lifetime total (for example 1K push-ups). Submit a log that crosses the line to earn it and get a notification.
-        </p>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {unlocks.map((row, i) => (
-            <motion.div
-              key={row.id}
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: i * 0.05 }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20"
-            >
-              <Award size={12} className="text-emerald-500" />
-              <span className="text-[10px] font-bold text-emerald-400 tracking-wider">
-                {row.emoji} {row.label}
-              </span>
-            </motion.div>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
