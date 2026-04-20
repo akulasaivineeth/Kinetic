@@ -13,9 +13,46 @@ export function useUserTeams() {
     queryKey: ['user-teams', user?.id],
     queryFn: async (): Promise<UserTeam[]> => {
       if (!user) return [];
-      const { data, error } = await supabase.rpc('get_user_teams' as string, { p_user_id: user.id } as Record<string, unknown>);
-      if (error) throw error;
-      return (data ?? []) as UserTeam[];
+
+      const { data: memberships, error: memErr } = await supabase
+        .from('team_members')
+        .select('team_id, role')
+        .eq('user_id', user.id);
+      if (memErr) throw memErr;
+      if (!memberships?.length) return [];
+
+      const teamIds = memberships.map((m) => m.team_id);
+      const { data: teams, error: teamErr } = await supabase
+        .from('teams')
+        .select('*')
+        .in('id', teamIds);
+      if (teamErr) throw teamErr;
+
+      const results: UserTeam[] = [];
+      for (const team of teams ?? []) {
+        const mem = memberships.find((m) => m.team_id === team.id);
+        const { count } = await supabase
+          .from('team_members')
+          .select('*', { count: 'exact', head: true })
+          .eq('team_id', team.id);
+
+        const { data: acts } = await supabase
+          .from('team_activities')
+          .select('activity_type_id')
+          .eq('team_id', team.id);
+
+        results.push({
+          team_id: team.id,
+          team_name: team.name,
+          invite_code: team.invite_code,
+          avatar_url: team.avatar_url,
+          member_count: count ?? 0,
+          user_role: mem?.role ?? 'member',
+          activity_slugs: (acts ?? []).map((a) => String(a.activity_type_id)),
+          team_score: 0,
+        });
+      }
+      return results;
     },
     enabled: !!user,
   });
@@ -28,9 +65,44 @@ export function useTeamDetails(teamId: string | null) {
     queryKey: ['team-details', teamId],
     queryFn: async (): Promise<TeamDetails | null> => {
       if (!teamId) return null;
-      const { data, error } = await supabase.rpc('get_team_details' as string, { p_team_id: teamId } as Record<string, unknown>);
+
+      const { data: team, error } = await supabase
+        .from('teams')
+        .select('*')
+        .eq('id', teamId)
+        .single();
       if (error) throw error;
-      return (data as TeamDetails[])?.[0] ?? null;
+
+      const { data: members } = await supabase
+        .from('team_members')
+        .select('user_id, role, joined_at, profiles:user_id(full_name, avatar_url)')
+        .eq('team_id', teamId);
+
+      const { data: acts } = await supabase
+        .from('team_activities')
+        .select('activity_type_id, activity_types:activity_type_id(slug, name, unit, emoji)')
+        .eq('team_id', teamId);
+
+      return {
+        ...team,
+        members: (members ?? []).map((m: Record<string, unknown>) => ({
+          user_id: m.user_id as string,
+          full_name: (m.profiles as Record<string, unknown>)?.full_name as string ?? '',
+          avatar_url: (m.profiles as Record<string, unknown>)?.avatar_url as string | null,
+          role: m.role as 'owner' | 'admin' | 'member',
+          joined_at: m.joined_at as string,
+        })),
+        activities: (acts ?? []).map((a: Record<string, unknown>) => {
+          const at = a.activity_types as Record<string, unknown> | null;
+          return {
+            id: a.activity_type_id as number,
+            slug: (at?.slug ?? '') as string,
+            name: (at?.name ?? '') as string,
+            unit: (at?.unit ?? '') as string,
+            emoji: (at?.emoji ?? '') as string,
+          };
+        }),
+      } as TeamDetails;
     },
     enabled: !!teamId,
   });
@@ -43,9 +115,27 @@ export function useTeamMessages(teamId: string | null) {
     queryKey: ['team-messages', teamId],
     queryFn: async (): Promise<TeamMessage[]> => {
       if (!teamId) return [];
-      const { data, error } = await supabase.rpc('get_team_messages' as string, { p_team_id: teamId, p_limit: 50 } as Record<string, unknown>);
+      const { data, error } = await supabase
+        .from('team_messages')
+        .select('*, profiles:user_id(full_name, avatar_url)')
+        .eq('team_id', teamId)
+        .order('created_at', { ascending: true })
+        .limit(50);
       if (error) throw error;
-      return (data ?? []) as TeamMessage[];
+
+      return (data ?? []).map((m: Record<string, unknown>) => ({
+        id: m.id as string,
+        user_id: m.user_id as string,
+        full_name: (m.profiles as Record<string, unknown>)?.full_name as string ?? '',
+        avatar_url: (m.profiles as Record<string, unknown>)?.avatar_url as string | null,
+        content: m.content as string,
+        created_at: m.created_at as string,
+        reply_to: m.reply_to as string | null,
+        reply_content: null,
+        reply_user_name: null,
+        reactions: [],
+        image_url: m.image_url as string | null,
+      })) as TeamMessage[];
     },
     enabled: !!teamId,
     refetchInterval: 5000,
@@ -59,13 +149,45 @@ export function useTeamLeaderboard(teamId: string | null, dateFrom?: string, dat
     queryKey: ['team-leaderboard', teamId, dateFrom, dateTo],
     queryFn: async (): Promise<TeamLeaderboardEntry[]> => {
       if (!teamId) return [];
-      const { data, error } = await supabase.rpc('get_team_leaderboard' as string, {
-        p_team_id: teamId,
-        p_date_from: dateFrom,
-        p_date_to: dateTo,
-      } as Record<string, unknown>);
-      if (error) throw error;
-      return (data ?? []) as TeamLeaderboardEntry[];
+
+      const { data: members } = await supabase
+        .from('team_members')
+        .select('user_id, profiles:user_id(full_name, avatar_url)')
+        .eq('team_id', teamId);
+      if (!members?.length) return [];
+
+      const userIds = members.map((m) => (m as Record<string, unknown>).user_id as string);
+      let query = supabase
+        .from('workout_logs')
+        .select('user_id, pushup_reps, plank_seconds, run_distance, squat_reps, session_score')
+        .in('user_id', userIds)
+        .not('submitted_at', 'is', null);
+      if (dateFrom) query = query.gte('logged_at', dateFrom);
+      if (dateTo) query = query.lte('logged_at', dateTo);
+
+      const { data: logs } = await query;
+
+      const map = new Map<string, { total_score: number }>();
+      for (const log of logs ?? []) {
+        const cur = map.get(log.user_id) ?? { total_score: 0 };
+        cur.total_score += log.session_score || 0;
+        map.set(log.user_id, cur);
+      }
+
+      return members.map((m) => {
+        const mr = m as Record<string, unknown>;
+        const uid = mr.user_id as string;
+        const prof = mr.profiles as Record<string, unknown> | null;
+        const stats = map.get(uid) ?? { total_score: 0 };
+        return {
+          user_id: uid,
+          full_name: (prof?.full_name as string) ?? '',
+          avatar_url: (prof?.avatar_url as string) ?? '',
+          activity_breakdown: {},
+          total_score: stats.total_score,
+          streak: 0,
+        } as TeamLeaderboardEntry;
+      }).sort((a, b) => b.total_score - a.total_score);
     },
     enabled: !!teamId,
   });
@@ -78,9 +200,31 @@ export function useTeamMilestones(teamId: string | null) {
     queryKey: ['team-milestones', teamId],
     queryFn: async (): Promise<TeamMilestone[]> => {
       if (!teamId) return [];
-      const { data, error } = await supabase.rpc('get_team_milestones' as string, { p_team_id: teamId } as Record<string, unknown>);
+
+      const { data: members } = await supabase
+        .from('team_members')
+        .select('user_id')
+        .eq('team_id', teamId);
+      if (!members?.length) return [];
+
+      const userIds = members.map((m) => m.user_id);
+      const { data, error } = await supabase
+        .from('user_milestone_unlocks')
+        .select('*, profiles:user_id(full_name, avatar_url)')
+        .in('user_id', userIds)
+        .order('earned_at', { ascending: false })
+        .limit(20);
       if (error) throw error;
-      return (data ?? []) as TeamMilestone[];
+
+      return (data ?? []).map((m: Record<string, unknown>) => ({
+        user_id: m.user_id as string,
+        full_name: (m.profiles as Record<string, unknown>)?.full_name as string ?? '',
+        avatar_url: (m.profiles as Record<string, unknown>)?.avatar_url as string | null,
+        milestone_key: m.milestone_key as string,
+        label: m.label as string,
+        emoji: m.emoji as string,
+        earned_at: m.earned_at as string,
+      })) as TeamMilestone[];
     },
     enabled: !!teamId,
   });
@@ -94,13 +238,34 @@ export function useCreateTeam() {
   return useMutation({
     mutationFn: async ({ name, activitySlugs }: { name: string; activitySlugs: string[] }) => {
       if (!user) throw new Error('Not authenticated');
-      const { data, error } = await supabase.rpc('create_team' as string, {
-        p_name: name,
-        p_user_id: user.id,
-        p_activity_slugs: activitySlugs,
-      } as Record<string, unknown>);
-      if (error) throw error;
-      return data as { team_id: string; invite_code: string };
+
+      const code = Math.random().toString(36).slice(2, 8).toUpperCase();
+      const { data: team, error: teamErr } = await supabase
+        .from('teams')
+        .insert({ name, invite_code: code, created_by: user.id })
+        .select()
+        .single();
+      if (teamErr) throw teamErr;
+
+      await supabase.from('team_members').insert({
+        team_id: team.id,
+        user_id: user.id,
+        role: 'owner',
+      });
+
+      if (activitySlugs.length > 0) {
+        const { data: types } = await supabase
+          .from('activity_types')
+          .select('id, slug')
+          .in('slug', activitySlugs);
+        if (types?.length) {
+          await supabase.from('team_activities').insert(
+            types.map((t) => ({ team_id: team.id, activity_type_id: t.id }))
+          );
+        }
+      }
+
+      return { team_id: team.id, invite_code: code };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-teams'] });
@@ -116,12 +281,23 @@ export function useJoinTeam() {
   return useMutation({
     mutationFn: async (inviteCode: string) => {
       if (!user) throw new Error('Not authenticated');
-      const { data, error } = await supabase.rpc('join_team_by_code' as string, {
-        p_user_id: user.id,
-        p_invite_code: inviteCode.trim().toUpperCase(),
-      } as Record<string, unknown>);
-      if (error) throw error;
-      return data;
+
+      const { data: team, error: findErr } = await supabase
+        .from('teams')
+        .select('id')
+        .eq('invite_code', inviteCode.trim().toUpperCase())
+        .single();
+      if (findErr) throw new Error('Team not found. Check the invite code.');
+
+      const { error: joinErr } = await supabase
+        .from('team_members')
+        .insert({ team_id: team.id, user_id: user.id, role: 'member' });
+      if (joinErr) {
+        if (joinErr.message.includes('duplicate')) throw new Error('Already a member');
+        throw joinErr;
+      }
+
+      return { team_id: team.id };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-teams'] });
@@ -142,13 +318,15 @@ export function useSendTeamMessage() {
       imageUrl?: string;
     }) => {
       if (!user) throw new Error('Not authenticated');
-      const { error } = await supabase.rpc('send_team_message' as string, {
-        p_team_id: teamId,
-        p_user_id: user.id,
-        p_content: content,
-        p_reply_to: replyTo ?? null,
-        p_image_url: imageUrl ?? null,
-      } as Record<string, unknown>);
+      const { error } = await supabase
+        .from('team_messages')
+        .insert({
+          team_id: teamId,
+          user_id: user.id,
+          content,
+          reply_to: replyTo ?? null,
+          image_url: imageUrl ?? null,
+        });
       if (error) throw error;
     },
     onSuccess: (_, vars) => {
