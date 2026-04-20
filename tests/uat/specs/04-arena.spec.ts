@@ -10,7 +10,7 @@ test.describe('squads hub', { tag: ['@arena', '@smoke'] }, () => {
     await page.goto('/squads');
     const root = page.getByTestId('uat-squads-page');
     await expect(root.getByText(/^HUB$/)).toBeVisible();
-    await expect(root.getByRole('button', { name: /New squad/i })).toBeVisible();
+    await expect(root.getByRole('link', { name: /New squad/i })).toBeVisible();
     await expect(root.getByRole('button', { name: /^Join$/i })).toBeVisible();
   });
 

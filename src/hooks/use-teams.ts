@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { endOfWeek, startOfWeek } from 'date-fns';
 import { createClient } from '@/lib/supabase/client';
+import { encodeTeamCrest, type TeamCrestPick } from '@/lib/squad-crest-codec';
 import { useAuth } from '@/providers/auth-provider';
 import type { UserTeam, TeamDetails, TeamMessage, TeamLeaderboardEntry, TeamMilestone } from '@/types/database';
 
@@ -257,7 +258,7 @@ export function useTeamMessages(teamId: string | null) {
       })) as TeamMessage[];
     },
     enabled: !!teamId,
-    refetchInterval: 5000,
+    refetchInterval: 25_000,
   });
 }
 
@@ -383,13 +384,22 @@ export function useCreateTeam() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ name, activitySlugs }: { name: string; activitySlugs: string[] }) => {
+    mutationFn: async ({
+      name,
+      activitySlugs,
+      crest,
+    }: {
+      name: string;
+      activitySlugs: string[];
+      crest?: TeamCrestPick;
+    }) => {
       if (!user) throw new Error('Not authenticated');
 
       const code = Math.random().toString(36).slice(2, 8).toUpperCase();
+      const avatar_url = crest ? encodeTeamCrest(crest) : null;
       const { data: team, error: teamErr } = await supabase
         .from('teams')
-        .insert({ name, invite_code: code, created_by: user.id })
+        .insert({ name, invite_code: code, created_by: user.id, avatar_url })
         .select()
         .single();
       if (teamErr) throw teamErr;
@@ -414,9 +424,10 @@ export function useCreateTeam() {
 
       return { team_id: team.id, invite_code: code };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['user-teams'] });
       queryClient.invalidateQueries({ queryKey: ['global-squads-week'] });
+      queryClient.invalidateQueries({ queryKey: ['team-details', data.team_id] });
     },
   });
 }

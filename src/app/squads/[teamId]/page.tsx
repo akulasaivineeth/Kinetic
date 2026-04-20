@@ -1,19 +1,20 @@
 'use client';
 
-import { useMemo, useState, useRef, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { endOfWeek, format, startOfWeek } from 'date-fns';
-import { Copy, Check, Send } from 'lucide-react';
+import { Copy, Check } from 'lucide-react';
 import { AppShell } from '@/components/layout/app-shell';
-import { KCard, KEyebrow, KDisplay, KPill, KCrest, KAvatar, crestVariantFromSeed } from '@/components/ui/k-primitives';
+import { KCard, KEyebrow, KDisplay, KPill, KCrest, KAvatar } from '@/components/ui/k-primitives';
+import { SquadChatPanel } from '@/components/squads/squad-chat-panel';
 import { IcBack } from '@/components/ui/k-icons';
+import { crestPropsForTeam } from '@/lib/squad-crest-codec';
 import {
   useTeamDetails,
   useTeamLeaderboard,
   useTeamMessages,
-  useSendTeamMessage,
 } from '@/hooks/use-teams';
 import { useAuth } from '@/providers/auth-provider';
 import type { TeamActivity, TeamLeaderboardEntry } from '@/types/database';
@@ -50,14 +51,11 @@ export default function SquadDetailPage() {
   const { data: squad, isLoading: loadSquad, isError: squadErr } = useTeamDetails(teamId);
   const { data: board = [], isLoading: loadBoard } = useTeamLeaderboard(teamId, from, to);
   const { data: messages = [], isLoading: loadChat } = useTeamMessages(teamId);
-  const sendMessage = useSendTeamMessage();
 
   const [tab, setTab] = useState<Tab>('overview');
-  const [chatInput, setChatInput] = useState('');
   const [copied, setCopied] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
 
-  const crest = teamId ? crestVariantFromSeed(teamId) : crestVariantFromSeed('x');
+  const crest = teamId ? crestPropsForTeam(teamId, squad?.avatar_url ?? null) : crestPropsForTeam('x', null);
 
   const squadWeekTotal = useMemo(
     () => board.reduce((s, e) => s + e.total_score, 0),
@@ -77,20 +75,6 @@ export default function SquadDetailPage() {
     }
     return acc;
   }, [board, squad]);
-
-  useEffect(() => {
-    if (tab === 'chat') bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [tab, messages.length]);
-
-  const handleSend = async () => {
-    if (!teamId || !chatInput.trim() || sendMessage.isPending) return;
-    try {
-      await sendMessage.mutateAsync({ teamId, content: chatInput.trim() });
-      setChatInput('');
-    } catch {
-      /* toast optional */
-    }
-  };
 
   if (!teamId) {
     return (
@@ -311,65 +295,9 @@ export default function SquadDetailPage() {
           </motion.div>
         )}
 
-        {tab === 'chat' && (
-          <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col min-h-[50vh]">
-            <div className="flex-1 space-y-2 mb-3">
-              {loadChat ? (
-                <div className="h-24 rounded-k-lg bg-k-card animate-pulse" />
-              ) : messages.length === 0 ? (
-                <KCard className="text-center py-10 text-k-muted-soft text-sm">Say hi to your squad.</KCard>
-              ) : (
-                messages.map((m) => {
-                  const mine = !!user?.id && m.user_id === user.id;
-                  return (
-                    <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                      <KCard
-                        pad={12}
-                        className={`max-w-[88%] !rounded-2xl ${mine ? '!bg-emerald-500/15' : ''}`}
-                        hi={mine}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <KAvatar name={m.full_name} src={m.avatar_url || null} size={26} />
-                          <span className="text-[11px] font-bold text-k-ink truncate">{m.full_name}</span>
-                          <span className="text-[10px] text-k-muted-soft shrink-0">
-                            {format(new Date(m.created_at), 'HH:mm')}
-                          </span>
-                        </div>
-                        <p className="text-[13px] text-k-ink leading-snug whitespace-pre-wrap">{m.content}</p>
-                      </KCard>
-                    </div>
-                  );
-                })
-              )}
-              <div ref={bottomRef} />
-            </div>
-
-            <div className="sticky bottom-0 pt-2 bg-k-bg pb-[max(8px,env(safe-area-inset-bottom))]">
-              <div className="flex gap-2 items-end">
-                <textarea
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      void handleSend();
-                    }
-                  }}
-                  rows={2}
-                  placeholder="Message squad…"
-                  className="flex-1 resize-none px-3 py-2.5 rounded-k-lg border border-k-line-strong bg-k-card text-[13px] text-k-ink placeholder:text-k-muted-soft"
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleSend()}
-                  disabled={!chatInput.trim() || sendMessage.isPending}
-                  className="shrink-0 w-11 h-11 rounded-full bg-emerald-500 text-white flex items-center justify-center disabled:opacity-40"
-                  aria-label="Send"
-                >
-                  <Send size={18} />
-                </button>
-              </div>
-            </div>
+        {tab === 'chat' && teamId && (
+          <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
+            <SquadChatPanel teamId={teamId} userId={user?.id} messages={messages} loadChat={loadChat} />
           </motion.div>
         )}
       </div>

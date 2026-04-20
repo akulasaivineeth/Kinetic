@@ -104,8 +104,11 @@ export function KAvatar({ name = '?', size = 44, color, src, ring, className }: 
 export type KCrestShape = 'shield' | 'hex' | 'circle' | 'diamond' | 'chevron';
 export type KCrestEmblem = 'bolt' | 'flame' | 'star' | 'peak' | 'wave' | 'cross' | 'arrow' | 'skull';
 
-const CREST_SHAPES: readonly KCrestShape[] = ['shield', 'hex', 'circle', 'diamond', 'chevron'] as const;
-const CREST_EMBLEMS: readonly KCrestEmblem[] = ['bolt', 'flame', 'star', 'peak', 'wave', 'cross', 'arrow', 'skull'] as const;
+export const CREST_SHAPE_OPTIONS: readonly KCrestShape[] = ['shield', 'hex', 'circle', 'diamond', 'chevron'] as const;
+export const CREST_EMBLEM_OPTIONS: readonly KCrestEmblem[] = ['bolt', 'flame', 'star', 'peak', 'wave', 'cross', 'arrow', 'skull'] as const;
+
+const CREST_SHAPES = CREST_SHAPE_OPTIONS;
+const CREST_EMBLEMS = CREST_EMBLEM_OPTIONS;
 
 /** Deterministic crest styling from any string (e.g. team UUID). */
 export function crestVariantFromSeed(seed: string): { shape: KCrestShape; emblem: KCrestEmblem; color: string } {
