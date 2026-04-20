@@ -47,35 +47,33 @@ export function Header() {
 
   return (
     <header className="flex items-center justify-between px-5 pt-[max(16px,env(safe-area-inset-top))] pb-3">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
         <Link
           href="/profile"
           className="flex-shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50"
           aria-label="Profile"
         >
-          {profile?.avatar_url ? (
-            <Image
-              src={profile.avatar_url}
-              alt=""
-              width={36}
-              height={36}
-              className="rounded-full border-2 border-emerald-500/30"
-            />
-          ) : (
-            <div className="w-9 h-9 rounded-full bg-dark-elevated flex items-center justify-center text-xs font-bold text-emerald-500 border-2 border-emerald-500/30">
-              {getInitials(profile?.full_name || 'U')}
-            </div>
-          )}
+          <div className="w-9 h-9 rounded-full border-2 border-[#1FB37A] overflow-hidden relative"
+            style={{ background: 'linear-gradient(135deg,#5D7B8C 0%,#8FA6B3 45%,#C9D5DC 100%)' }}>
+            {profile?.avatar_url ? (
+              <Image src={profile.avatar_url} alt="" width={36} height={36} className="object-cover w-full h-full" />
+            ) : (
+              <svg width="36" height="36" viewBox="0 0 36 36" className="absolute inset-0">
+                <path d="M0 22l8-9 6 6 4-4 6 7 12-6v20H0z" fill="#3A5566" opacity="0.8"/>
+                <path d="M0 28l10-6 8 4 6-3 12 5v8H0z" fill="#1E3340"/>
+              </svg>
+            )}
+          </div>
         </Link>
         <Link href="/dashboard" className="min-w-0">
-          <h1 className="text-xl font-black tracking-tight italic">KINETIC</h1>
+          <h1 className="font-display text-xl tracking-tight text-k-ink">KINETIC</h1>
         </Link>
       </div>
 
       <div className="flex items-center gap-2">
         {myRank > 0 && (
-          <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-dark-elevated border border-dark-border">
-            <span className="text-emerald-500 text-xs font-bold">#{myRank}</span>
+          <div className="px-3 py-1.5 rounded-k-pill border border-k-line-strong bg-k-card shadow-k-card text-[13px] font-semibold text-emerald-600 dark:text-emerald-400">
+            #{myRank}
           </div>
         )}
 
@@ -84,17 +82,17 @@ export function Header() {
             type="button"
             aria-label="Open notifications"
             onClick={() => setShowNotifications(!showNotifications)}
-            className="w-10 h-10 rounded-xl bg-dark-elevated border border-dark-border flex items-center justify-center relative"
+            className="w-9 h-9 rounded-k-pill border border-k-line-strong bg-k-card shadow-k-card flex items-center justify-center relative"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-dark-muted" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-k-ink">
+              <path d="M6 16V10a6 6 0 0112 0v6l1.5 2h-15L6 16z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
+              <path d="M10 20a2 2 0 004 0" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
             </svg>
             {unreadCount > 0 && (
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
-                className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center"
+                className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-[#E25C5C] flex items-center justify-center px-1"
               >
                 <span className="text-[10px] font-bold text-white">{unreadCount > 9 ? '9+' : unreadCount}</span>
               </motion.div>

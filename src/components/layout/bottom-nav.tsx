@@ -4,120 +4,77 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-
-/**
- * Apple-inspired bottom tab bar.
- * The Log button is elegantly integrated — no floating FAB.
- * Instead, it uses a subtle pill shape with a dumbbell icon and
- * a gentle emerald accent, matching Apple's Fitness+ aesthetic.
- */
+import { IcPulse, IcSquads, IcLog, IcProfile } from '@/components/ui/k-icons';
 
 const navItems = [
-  {
-    href: '/dashboard',
-    label: 'Pulse',
-    icon: (active: boolean) => (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-        stroke={active ? '#10B981' : '#636366'}>
-        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-      </svg>
-    ),
-  },
-  {
-    href: '/arena',
-    label: 'Squads',
-    icon: (active: boolean) => (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-        stroke={active ? '#10B981' : '#636366'}>
-        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-      </svg>
-    ),
-  },
-  {
-    href: '/log',
-    label: 'Log',
-    isCenter: true,
-    icon: (active: boolean) => (
-      <div className={cn(
-        'w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-300',
-        active
-          ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30'
-          : 'bg-emerald-500/15 border border-emerald-500/30'
-      )}>
-        {/* Dumbbell icon — feels more "fitness" than a generic + */}
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-          stroke={active ? '#000' : '#10B981'}
-          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M6.5 6.5h11" />
-          <path d="M6.5 17.5h11" />
-          <path d="M12 6.5v11" />
-          <rect x="3" y="8" width="3" height="8" rx="1" />
-          <rect x="18" y="8" width="3" height="8" rx="1" />
-          <rect x="1" y="10" width="2" height="4" rx="0.5" />
-          <rect x="21" y="10" width="2" height="4" rx="0.5" />
-        </svg>
-      </div>
-    ),
-  },
-  {
-    href: '/profile',
-    label: 'Profile',
-    icon: (active: boolean) => (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-        stroke={active ? '#10B981' : '#636366'}>
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-        <circle cx="12" cy="7" r="4" />
-      </svg>
-    ),
-  },
+  { href: '/dashboard', label: 'Pulse', Icon: IcPulse },
+  { href: '/arena', label: 'Squads', Icon: IcSquads },
+  { href: '/log', label: 'Log', Icon: IcLog, isCenter: true },
+  { href: '/profile', label: 'Profile', Icon: IcProfile },
 ];
 
 export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50"
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-50"
       style={{
-        background: 'rgba(18, 18, 20, 0.82)',
-        backdropFilter: 'saturate(180%) blur(20px)',
-        WebkitBackdropFilter: 'saturate(180%) blur(20px)',
-        borderTop: '1px solid rgba(255,255,255,0.08)',
+        background: 'linear-gradient(to top, rgba(22,28,30,0.96) 70%, rgba(22,28,30,0.9))',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
       }}
     >
-      <div className="flex items-center justify-around px-2 pt-2 pb-[max(6px,env(safe-area-inset-bottom))] max-w-lg mx-auto">
+      <div className="flex items-start justify-around px-6 pt-3 pb-[max(7px,env(safe-area-inset-bottom))] max-w-lg mx-auto">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
+          const { Icon } = item;
+
+          if (item.isCenter) {
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="flex flex-col items-center gap-1"
+              >
+                <motion.div
+                  whileTap={{ scale: 0.9 }}
+                  className="w-[54px] h-[54px] rounded-full flex items-center justify-center -mt-5"
+                  style={{
+                    background: '#1FB37A',
+                    boxShadow: '0 6px 20px rgba(31,179,122,0.35), 0 2px 6px rgba(31,179,122,0.2)',
+                    border: '3px solid rgba(255,255,255,0.06)',
+                  }}
+                >
+                  <Icon size={26} color="#fff" />
+                </motion.div>
+                <span className="text-[10px] font-semibold text-white/70 tracking-wide -mt-0.5">
+                  {item.label}
+                </span>
+              </Link>
+            );
+          }
+
           return (
             <Link
               key={item.href}
               href={item.href}
-              className="flex flex-col items-center gap-0.5 relative min-w-[60px]"
+              className="flex flex-col items-center gap-1 py-1 px-2"
             >
-              <motion.div
-                whileTap={{ scale: 0.85 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-              >
-                {item.icon(isActive)}
+              <motion.div whileTap={{ scale: 0.85 }}>
+                <Icon
+                  size={22}
+                  color={isActive ? '#1FB37A' : 'rgba(255,255,255,0.45)'}
+                />
               </motion.div>
               <span
                 className={cn(
-                  'text-[10px] font-medium',
-                  isActive ? 'text-emerald-500' : 'text-[#636366]',
-                  item.isCenter && 'mt-0.5'
+                  'text-[11px]',
+                  isActive ? 'font-bold text-[#1FB37A]' : 'font-medium text-white/45'
                 )}
               >
                 {item.label}
               </span>
-              {isActive && !item.isCenter && (
-                <motion.div
-                  layoutId="nav-dot"
-                  className="absolute -top-1 w-1 h-1 rounded-full bg-emerald-500"
-                  transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-                />
-              )}
             </Link>
           );
         })}
