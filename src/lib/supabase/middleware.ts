@@ -26,6 +26,13 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  /**
+   * Route policy:
+   * - Any signed-in user may open `/squads` and `/squads/new`.
+   * - `/squads/[teamId]/*` membership is enforced in `app/squads/[teamId]/layout.tsx`
+   *   (server reads `team_members` with the user session).
+   */
+
   // Redirect unauthenticated users to login (except auth routes and API)
   if (
     !user &&

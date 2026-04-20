@@ -6,6 +6,30 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/providers/auth-provider';
 import { getDateRange, type DateRange } from './use-workout-logs';
 import type { LeaderboardEntry } from '@/types/database';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+/** Refetch-friendly (e.g. after log submit) — same RPC as `useLeaderboard`. */
+export async function fetchLeaderboard(
+  supabase: SupabaseClient,
+  userId: string,
+  dateRange: DateRange,
+  metric: 'volume' | 'peak' = 'volume',
+  mode: 'raw' | 'percent' = 'raw',
+  customFrom?: Date,
+  customTo?: Date,
+): Promise<LeaderboardEntry[]> {
+  const { from, to } = getDateRange(dateRange, customFrom, customTo);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await supabase.rpc('get_leaderboard' as any, {
+    p_user_id: userId,
+    p_date_from: from.toISOString(),
+    p_date_to: to.toISOString(),
+    p_metric: metric,
+    p_mode: mode,
+  } as any);
+  if (error) throw error;
+  return (data ?? []) as LeaderboardEntry[];
+}
 
 export function useLeaderboard(
   dateRange: DateRange,

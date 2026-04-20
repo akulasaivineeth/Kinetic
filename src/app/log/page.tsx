@@ -7,7 +7,7 @@ import { KCard, KEyebrow, KDisplay, KPill } from '@/components/ui/k-primitives';
 import { EXERCISE_ICON_MAP } from '@/components/ui/k-icons';
 import { K } from '@/lib/design-tokens';
 import { useAuth } from '@/providers/auth-provider';
-import { useLeaderboard } from '@/hooks/use-leaderboard';
+import { fetchLeaderboard, useLeaderboard } from '@/hooks/use-leaderboard';
 import { useGoals } from '@/hooks/use-goals';
 import {
   useWeeklyVolume,
@@ -29,6 +29,7 @@ import { Confetti } from '@/components/ui/confetti';
 import { checkNewMilestones, type Milestone } from '@/lib/milestones';
 import { persistNewMilestoneUnlocks } from '@/lib/milestone-persistence';
 import { calculateSessionScore } from '@/lib/scoring';
+import { SCORE_REVEAL_STORAGE_KEY, type ScoreRevealPayload } from '@/lib/score-reveal';
 import { DayPicker } from 'react-day-picker';
 
 const CORE_SLUGS = ['pushups', 'squats', 'plank', 'run'] as const;
@@ -361,8 +362,36 @@ function LogPage() {
       }
       if (delayTime > 0) await new Promise((r) => setTimeout(r, delayTime));
 
+      const prevRankWeek = myRankWeek;
       setSubmitted(true);
       await refetchDashboardAfterLogChange();
+
+      const shouldReveal =
+        Math.round(totalPts) > 0 || !!isPB || flexEntries.length > 0;
+      if (shouldReveal) {
+        let nextRank = 0;
+        let streak = 0;
+        try {
+          const fresh = await fetchLeaderboard(createClient(), user.id, 'week');
+          const nextIdx = fresh.findIndex((e) => e.user_id === user.id);
+          nextRank = nextIdx >= 0 ? nextIdx + 1 : 0;
+          streak = nextIdx >= 0 ? fresh[nextIdx]!.streak ?? 0 : 0;
+        } catch {
+          /* leaderboard optional for reveal */
+        }
+        const payload: ScoreRevealPayload = {
+          totalPts: Math.round(totalPts),
+          streak,
+          prevRank: prevRankWeek > 0 ? prevRankWeek : null,
+          nextRank: nextRank > 0 ? nextRank : null,
+          headline: isPB ? 'NEW PB' : null,
+          flexExtras: flexEntries.length || undefined,
+        };
+        sessionStorage.setItem(SCORE_REVEAL_STORAGE_KEY, JSON.stringify(payload));
+        router.push('/score-reveal');
+        return;
+      }
+
       router.push('/dashboard');
     } catch (err) {
       console.error('Submit failed:', err);

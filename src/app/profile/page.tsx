@@ -3,22 +3,24 @@
 import { useState, useRef, Suspense, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
+import Link from 'next/link';
 import { AppShell } from '@/components/layout/app-shell';
-import { GlassCard } from '@/components/ui/glass-card';
+import { KCard, KEyebrow, KDisplay, KRing } from '@/components/ui/k-primitives';
 import { useAuth } from '@/providers/auth-provider';
+import { useTier } from '@/hooks/use-tier';
 import { useTheme } from '@/providers/theme-provider';
 import { useGoals, useUpdateGoals } from '@/hooks/use-goals';
 import { useSharingConnections, useSendSharingRequest, useRemoveSharing } from '@/hooks/use-sharing';
 import { getInitials } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { resizeImage } from '@/lib/image-resize';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { SCORING_FAQ } from '@/lib/scoring';
 import { useQueryClient } from '@tanstack/react-query';
 
 function ProfilePageContent() {
   const { user, profile, signOut, refreshProfile } = useAuth();
-  const router = useRouter();
+  const { tier, isLoading: tierLoading } = useTier();
   const searchParams = useSearchParams();
   const whoopParam = searchParams.get('whoop');
   const whoopReason = searchParams.get('reason');
@@ -189,33 +191,30 @@ function ProfilePageContent() {
                   : '.'}
           </div>
         )}
-        {/* Avatar Section */}
+        {/* Avatar + tier */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           className="flex flex-col items-center"
         >
-          <div className="relative mb-4">
-            {/* Emerald ring around avatar */}
-            <div className="w-32 h-32 rounded-full p-1 bg-gradient-to-br from-emerald-400 to-emerald-600">
-              <div className="w-full h-full rounded-full overflow-hidden bg-dark-bg p-0.5">
-                <div className="w-full h-full rounded-full overflow-hidden bg-dark-elevated">
-                  {profile?.avatar_url ? (
-                    <Image
-                      src={profile.avatar_url}
-                      alt="Avatar"
-                      width={128}
-                      height={128}
-                      className="object-cover w-full h-full"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-2xl font-black text-emerald-500">
-                      {getInitials(profile?.full_name || 'U')}
-                    </div>
-                  )}
-                </div>
+          <div className="relative mb-3 flex justify-center">
+            <KRing pct={tierLoading ? 0.35 : tier.pct} size={132} stroke={9} color={tier.color}>
+              <div className="w-[92px] h-[92px] rounded-full overflow-hidden bg-k-elevated ring-2 ring-k-card shadow-k-card">
+                {profile?.avatar_url ? (
+                  <Image
+                    src={profile.avatar_url}
+                    alt="Avatar"
+                    width={92}
+                    height={92}
+                    className="object-cover w-full h-full"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-xl font-black text-emerald-600 dark:text-emerald-400">
+                    {getInitials(profile?.full_name || 'U')}
+                  </div>
+                )}
               </div>
-            </div>
+            </KRing>
             {/* Edit button */}
             <button
               onClick={() => avatarInputRef.current?.click()}
@@ -239,33 +238,52 @@ function ProfilePageContent() {
             </p>
           )}
 
-          <h2 className="text-2xl font-black text-dark-text">
+          <h2 className="text-2xl font-black text-k-ink">
             {profile?.full_name || 'User'}
           </h2>
-          <p className="text-xs font-bold tracking-[0.2em] text-emerald-500 uppercase mt-1">
-            ELITE MEMBER
+          <p className="text-xs font-bold tracking-[0.2em] text-emerald-600 dark:text-emerald-400 uppercase mt-1">
+            {tierLoading ? '…' : `${tier.name} tier`}
+          </p>
+          <p className="text-[11px] text-k-muted-soft mt-1 text-center max-w-xs leading-snug">
+            {tier.next
+              ? `${Math.round(Math.min(1, tier.pct) * 100)}% to ${tier.next.name}`
+              : 'Max tier — stay dangerous.'}
           </p>
         </motion.div>
 
-          {/* System & Goals */}
+        <Link href="/library" className="block">
+          <KCard pad={16} hi className="flex items-center justify-between gap-3 !py-3.5">
+            <div>
+              <KEyebrow>Training</KEyebrow>
+              <KDisplay size={18} className="mt-0.5 !font-bold !not-italic">
+                Exercise library
+              </KDisplay>
+              <p className="text-[11px] text-k-muted-soft mt-1">Browse all moves · add in Log</p>
+            </div>
+            <span className="text-k-muted-soft text-lg" aria-hidden>
+              →
+            </span>
+          </KCard>
+        </Link>
+
         <div>
-          <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-3">
+          <p className="text-[10px] font-semibold tracking-[0.2em] text-k-muted-soft uppercase mb-3">
             SETTINGS
           </p>
 
-          <GlassCard className="flex flex-col py-3 px-4 gap-4" delay={0.1}>
+          <KCard pad={18} className="flex flex-col py-3 px-4 gap-4">
             {/* Appearance */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="text-lg">{theme === 'dark' ? '🌙' : '☀️'}</span>
-                <p className="text-sm font-semibold text-dark-text">Appearance</p>
+                <p className="text-sm font-semibold text-k-ink">Appearance</p>
               </div>
               <button
                 type="button"
                 data-testid="uat-profile-theme-toggle"
                 onClick={toggleTheme}
                 className={`w-12 h-7 rounded-full relative transition-colors duration-200 ${
-                  theme === 'dark' ? 'bg-emerald-500' : 'bg-dark-border'
+                  theme === 'dark' ? 'bg-emerald-500' : 'bg-k-line-strong'
                 }`}
               >
                 <motion.div
@@ -283,7 +301,7 @@ function ProfilePageContent() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="text-lg">📏</span>
-                <p className="text-sm font-semibold text-dark-text">Unit Preference</p>
+                <p className="text-sm font-semibold text-k-ink">Unit Preference</p>
               </div>
               <button
                 onClick={async () => {
@@ -302,7 +320,7 @@ function ProfilePageContent() {
                   }
                 }}
                 disabled={updatingUnit}
-                className="px-3 py-1.5 rounded-xl bg-dark-elevated border border-dark-border text-[10px] font-bold tracking-wider text-emerald-500 hover:border-emerald-500/30 transition-all font-mono disabled:opacity-60 uppercase"
+                className="px-3 py-1.5 rounded-xl bg-k-elevated border border-k-line-strong text-[10px] font-bold tracking-wider text-emerald-500 hover:border-emerald-500/30 transition-all font-mono disabled:opacity-60 uppercase"
               >
                 {updatingUnit ? 'UPDATING...' : (profile?.unit_preference === 'imperial' ? 'MILES' : 'KILOMETERS')}
               </button>
@@ -314,34 +332,30 @@ function ProfilePageContent() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="text-lg">⌚</span>
-                <p className="text-sm font-semibold text-dark-text">Whoop Integration</p>
+                <p className="text-sm font-semibold text-k-ink">Whoop Integration</p>
               </div>
               <a
                 href={profile?.whoop_user_id ? "#" : "/api/whoop/auth"}
                 className={`px-3 py-1.5 rounded-xl text-[10px] font-bold tracking-wider transition-all uppercase ${
                   profile?.whoop_user_id 
                     ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30' 
-                    : 'bg-dark-elevated border border-dark-border text-dark-muted hover:text-white'
+                    : 'bg-k-elevated border border-k-line-strong text-k-muted-soft hover:text-white'
                 }`}
               >
                 {profile?.whoop_user_id ? 'CONNECTED' : 'CONNECT'}
               </a>
             </div>
-          </GlassCard>
+          </KCard>
 
           <div className="h-4" />
 
           {/* Performance Goals */}
-          <GlassCard
-            className="flex items-center gap-3 cursor-pointer"
-            delay={0.25}
-            onClick={() => setShowGoals(!showGoals)}
-          >
-            <div className="w-10 h-10 rounded-xl bg-dark-elevated flex items-center justify-center">
+          <KCard pad={18} className="flex items-center gap-3 cursor-pointer" onClick={() => setShowGoals(!showGoals)}>
+            <div className="w-10 h-10 rounded-xl bg-k-elevated flex items-center justify-center">
               <span className="text-lg">🎯</span>
             </div>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-dark-text">Performance Goals</p>
+              <p className="text-sm font-semibold text-k-ink">Performance Goals</p>
             </div>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2" strokeLinecap="round">
               <line x1="4" y1="21" x2="4" y2="14" />
@@ -351,7 +365,7 @@ function ProfilePageContent() {
               <line x1="20" y1="21" x2="20" y2="16" />
               <line x1="20" y1="12" x2="20" y2="3" />
             </svg>
-          </GlassCard>
+          </KCard>
 
           {/* Goals Editor */}
           <AnimatePresence>
@@ -372,8 +386,8 @@ function ProfilePageContent() {
                     { label: 'Plank Peak Goal', key: 'plank_peak_goal' as const, suffix: 'sec' },
                     { label: 'Run Peak Goal', key: 'run_peak_goal' as const, suffix: 'km' },
                   ].map((item) => (
-                    <div key={item.key} className="flex items-center justify-between px-4 py-2 rounded-xl bg-dark-elevated/50">
-                      <span className="text-xs text-dark-muted">{item.label}</span>
+                    <div key={item.key} className="flex items-center justify-between px-4 py-2 rounded-xl bg-k-elevated/50">
+                      <span className="text-xs text-k-muted-soft">{item.label}</span>
                       <div className="flex items-center gap-1">
                         <input
                           type="number"
@@ -387,9 +401,9 @@ function ProfilePageContent() {
                             }
                           }}
                           onWheel={(e) => (e.target as HTMLElement).blur()}
-                          className="w-16 text-right text-sm font-bold bg-transparent text-dark-text outline-none"
+                          className="w-16 text-right text-sm font-bold bg-transparent text-k-ink outline-none"
                         />
-                        <span className="text-[10px] text-dark-muted">{item.suffix}</span>
+                        <span className="text-[10px] text-k-muted-soft">{item.suffix}</span>
                       </div>
                     </div>
                   ))}
@@ -404,7 +418,7 @@ function ProfilePageContent() {
                         ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-400'
                         : goalsDirty
                           ? 'emerald-gradient text-black shadow-lg shadow-emerald-500/20'
-                          : 'bg-dark-elevated border border-dark-border text-dark-muted'
+                          : 'bg-k-elevated border border-k-line-strong text-k-muted-soft'
                     }`}
                   >
                     {goalsSaving ? 'SAVING...' : goalsSaved ? '✓ SAVED' : goalsDirty ? 'SAVE GOALS' : 'NO CHANGES'}
@@ -417,23 +431,23 @@ function ProfilePageContent() {
           <div className="h-2" />
 
           {/* Sharing */}
-          <GlassCard
+          <KCard
+            pad={18}
             data-testid="uat-profile-sharing-card"
             className="flex items-center gap-3 cursor-pointer"
-            delay={0.3}
             onClick={() => setShowSharing(!showSharing)}
           >
-            <div className="w-10 h-10 rounded-xl bg-dark-elevated flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-k-elevated flex items-center justify-center">
               <span className="text-lg">👥</span>
             </div>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-dark-text">Sharing</p>
-              <p className="text-[10px] text-dark-muted">{connections.filter((c: { status: string; requester_id: string; recipient_id: string }) => c.status === 'accepted' || c.status === 'pending').length} connections ({connections.filter((c: { status: string }) => c.status === 'accepted').length} active, {connections.filter((c: { status: string }) => c.status === 'pending').length} pending)</p>
+              <p className="text-sm font-semibold text-k-ink">Sharing</p>
+              <p className="text-[10px] text-k-muted-soft">{connections.filter((c: { status: string; requester_id: string; recipient_id: string }) => c.status === 'accepted' || c.status === 'pending').length} connections ({connections.filter((c: { status: string }) => c.status === 'accepted').length} active, {connections.filter((c: { status: string }) => c.status === 'pending').length} pending)</p>
             </div>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2" strokeLinecap="round">
               <polyline points={showSharing ? "18 15 12 9 6 15" : "9 18 15 12 9 6"} />
             </svg>
-          </GlassCard>
+          </KCard>
 
           <AnimatePresence>
             {showSharing && (
@@ -455,7 +469,7 @@ function ProfilePageContent() {
                         setShareError(null);
                       }}
                       placeholder="Search by email..."
-                      className="flex-1 px-3 py-2 rounded-xl bg-dark-elevated text-sm text-dark-text placeholder-dark-muted outline-none border border-dark-border focus:border-emerald-500/50 transition-colors"
+                      className="flex-1 px-3 py-2 rounded-xl bg-k-elevated text-sm text-k-ink placeholder-k-muted-soft outline-none border border-k-line-strong focus:border-emerald-500/50 transition-colors"
                     />
                     <button
                       onClick={handleSendShare}
@@ -479,8 +493,8 @@ function ProfilePageContent() {
                     .map((conn: { id: string; requester: { full_name: string; email: string } | null; recipient: { full_name: string; email: string } | null }) => {
                       const other = conn.requester?.email === profile?.email ? conn.recipient : conn.requester;
                       return (
-                        <div key={conn.id} className="flex items-center justify-between px-3 py-2 rounded-xl bg-dark-elevated/50">
-                          <span className="text-xs text-dark-text">{other?.full_name || other?.email}</span>
+                        <div key={conn.id} className="flex items-center justify-between px-3 py-2 rounded-xl bg-k-elevated/50">
+                          <span className="text-xs text-k-ink">{other?.full_name || other?.email}</span>
                           <button
                             onClick={() => {
                               if (removeConfirmId === conn.id) {
@@ -509,19 +523,15 @@ function ProfilePageContent() {
           {profile?.is_admin && (
             <>
               <div className="h-2" />
-              <GlassCard
-                className="flex items-center gap-3 cursor-pointer"
-                delay={0.35}
-                onClick={() => setShowInvites(!showInvites)}
-              >
-                <div className="w-10 h-10 rounded-xl bg-dark-elevated flex items-center justify-center">
+              <KCard pad={18} className="flex items-center gap-3 cursor-pointer" onClick={() => setShowInvites(!showInvites)}>
+                <div className="w-10 h-10 rounded-xl bg-k-elevated flex items-center justify-center">
                   <span className="text-lg">🔗</span>
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-dark-text">Invite Links</p>
-                  <p className="text-[10px] text-dark-muted">Admin: generate one-time invite links</p>
+                  <p className="text-sm font-semibold text-k-ink">Invite Links</p>
+                  <p className="text-[10px] text-k-muted-soft">Admin: generate one-time invite links</p>
                 </div>
-              </GlassCard>
+              </KCard>
 
               <AnimatePresence>
                 {showInvites && (
@@ -539,12 +549,12 @@ function ProfilePageContent() {
                         GENERATE NEW INVITE LINK
                       </button>
                       {inviteLink && (
-                        <div className="px-3 py-2 rounded-xl bg-dark-elevated">
-                          <p className="text-[10px] text-dark-muted mb-1">Share this link:</p>
+                        <div className="px-3 py-2 rounded-xl bg-k-elevated">
+                          <p className="text-[10px] text-k-muted-soft mb-1">Share this link:</p>
                           <p className="text-xs text-emerald-400 break-all font-mono">{inviteLink}</p>
                           <button
                             onClick={() => navigator.clipboard.writeText(inviteLink)}
-                            className="mt-2 text-[10px] font-semibold text-dark-muted"
+                            className="mt-2 text-[10px] font-semibold text-k-muted-soft"
                           >
                             COPY TO CLIPBOARD
                           </button>
@@ -560,25 +570,21 @@ function ProfilePageContent() {
 
         {/* FAQ / How Scoring Works */}
         <div>
-          <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-3">
+          <p className="text-[10px] font-semibold tracking-[0.2em] text-k-muted-soft uppercase mb-3">
             HELP & FAQ
           </p>
-          <GlassCard
-            className="flex items-center gap-3 cursor-pointer"
-            delay={0.32}
-            onClick={() => setShowFaq(!showFaq)}
-          >
-            <div className="w-10 h-10 rounded-xl bg-dark-elevated flex items-center justify-center">
+          <KCard pad={18} className="flex items-center gap-3 cursor-pointer" onClick={() => setShowFaq(!showFaq)}>
+            <div className="w-10 h-10 rounded-xl bg-k-elevated flex items-center justify-center">
               <span className="text-lg">❓</span>
             </div>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-dark-text">How Scoring Works & FAQ</p>
-              <p className="text-[10px] text-dark-muted">Scoring tiers, streaks, milestones, and more</p>
+              <p className="text-sm font-semibold text-k-ink">How Scoring Works & FAQ</p>
+              <p className="text-[10px] text-k-muted-soft">Scoring tiers, streaks, milestones, and more</p>
             </div>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2" strokeLinecap="round">
               <polyline points={showFaq ? "18 15 12 9 6 15" : "9 18 15 12 9 6"} />
             </svg>
-          </GlassCard>
+          </KCard>
 
           <AnimatePresence>
             {showFaq && (
@@ -590,9 +596,9 @@ function ProfilePageContent() {
               >
                 <div className="pt-2 space-y-2">
                   {SCORING_FAQ.map((faq, i) => (
-                    <div key={i} className="px-4 py-3 rounded-xl bg-dark-elevated/50">
-                      <p className="text-xs font-bold text-dark-text mb-1">{faq.question}</p>
-                      <p className="text-[11px] text-dark-muted leading-relaxed">{faq.answer}</p>
+                    <div key={i} className="px-4 py-3 rounded-xl bg-k-elevated/50">
+                      <p className="text-xs font-bold text-k-ink mb-1">{faq.question}</p>
+                      <p className="text-[11px] text-k-muted-soft leading-relaxed">{faq.answer}</p>
                     </div>
                   ))}
                 </div>
@@ -603,7 +609,7 @@ function ProfilePageContent() {
 
         {/* Data & Export */}
         <div>
-          <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-3">
+          <p className="text-[10px] font-semibold tracking-[0.2em] text-k-muted-soft uppercase mb-3">
             DATA & EXPORT
           </p>
           <a
@@ -612,8 +618,8 @@ function ProfilePageContent() {
             data-testid="uat-profile-export-csv"
             className="block w-full"
           >
-            <GlassCard className="flex items-center gap-3" delay={0.35}>
-              <div className="w-10 h-10 rounded-xl bg-dark-elevated flex items-center justify-center">
+            <KCard pad={18} className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-k-elevated flex items-center justify-center">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                   <polyline points="7 10 12 15 17 10" />
@@ -621,13 +627,13 @@ function ProfilePageContent() {
                 </svg>
               </div>
               <div className="flex-1">
-                <p className="text-sm font-semibold text-dark-text">Export Data (CSV)</p>
-                <p className="text-[10px] text-dark-muted">Download all your workout logs</p>
+                <p className="text-sm font-semibold text-k-ink">Export Data (CSV)</p>
+                <p className="text-[10px] text-k-muted-soft">Download all your workout logs</p>
               </div>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="9 18 15 12 9 6" />
               </svg>
-            </GlassCard>
+            </KCard>
           </a>
         </div>
 
@@ -660,7 +666,7 @@ function ProfilePageContent() {
         </motion.button>
 
         {/* Version */}
-        <p className="text-center text-[10px] text-dark-muted/40 tracking-wider pb-4">
+        <p className="text-center text-[10px] text-k-muted-soft/40 tracking-wider pb-4">
           KINETIC PWA V4.2.0 • BUILD 2026
         </p>
       </div>
@@ -673,7 +679,7 @@ export default function ProfilePage() {
     <Suspense
       fallback={
         <AppShell>
-          <div className="flex items-center justify-center pt-20 text-dark-muted text-sm">
+          <div className="flex items-center justify-center pt-20 text-k-muted-soft text-sm">
             Loading profile…
           </div>
         </AppShell>

@@ -16,6 +16,7 @@ import {
   useTeamLeaderboard,
   useTeamMessages,
 } from '@/hooks/use-teams';
+import { useTeamScoresRealtime } from '@/hooks/use-team-scores-realtime';
 import { useAuth } from '@/providers/auth-provider';
 import type { TeamActivity, TeamLeaderboardEntry } from '@/types/database';
 
@@ -51,6 +52,9 @@ export default function SquadDetailPage() {
   const { data: squad, isLoading: loadSquad, isError: squadErr } = useTeamDetails(teamId);
   const { data: board = [], isLoading: loadBoard } = useTeamLeaderboard(teamId, from, to);
   const { data: messages = [], isLoading: loadChat } = useTeamMessages(teamId);
+
+  const memberIds = useMemo(() => squad?.members.map((m) => m.user_id) ?? [], [squad?.members]);
+  useTeamScoresRealtime(teamId, memberIds, !!squad && memberIds.length > 0);
 
   const [tab, setTab] = useState<Tab>('overview');
   const [copied, setCopied] = useState(false);

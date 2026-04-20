@@ -10,11 +10,13 @@ interface KCardProps {
   hi?: boolean;
   onClick?: () => void;
   style?: React.CSSProperties;
+  'data-testid'?: string;
 }
 
-export function KCard({ children, className, pad = 18, hi, onClick, style }: KCardProps) {
+export function KCard({ children, className, pad = 18, hi, onClick, style, 'data-testid': dataTestId }: KCardProps) {
   return (
     <div
+      data-testid={dataTestId}
       onClick={onClick}
       className={cn('bg-k-card rounded-k-lg', hi ? 'shadow-k-card-hi' : 'shadow-k-card', onClick && 'cursor-pointer', className)}
       style={{ padding: pad, ...style }}
