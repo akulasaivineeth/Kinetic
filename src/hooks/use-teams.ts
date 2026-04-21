@@ -439,29 +439,35 @@ export function useCreateTeam() {
 
 export function useJoinTeam() {
   const { user } = useAuth();
-  const supabase = createClient();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (inviteCode: string) => {
       if (!user) throw new Error('Not authenticated');
 
-      const { data: team, error: findErr } = await supabase
-        .from('teams')
-        .select('id')
-        .eq('invite_code', inviteCode.trim().toUpperCase())
-        .single();
-      if (findErr) throw new Error('Team not found. Check the invite code.');
+      // Use server API route — service role bypasses RLS for invite_code lookup
+      const res = await fetch('/api/teams/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ invite_code: inviteCode.trim() }),
+      });
 
-      const { error: joinErr } = await supabase
-        .from('team_members')
-        .insert({ team_id: team.id, user_id: user.id, role: 'member' });
-      if (joinErr) {
-        if (joinErr.message.includes('duplicate')) throw new Error('Already a member');
-        throw joinErr;
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        team_id?: string;
+        team_name?: string;
+      };
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Could not join squad');
       }
 
-      return { team_id: team.id };
+      if (!data.team_id) {
+        throw new Error('Invalid response from server');
+      }
+
+      return { team_id: data.team_id };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-teams'] });
