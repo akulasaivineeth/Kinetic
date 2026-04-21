@@ -38,22 +38,25 @@ export function BottomNav() {
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex flex-col items-center gap-1"
+                className="flex flex-col items-center gap-1 py-1 px-2"
               >
                 <motion.div
-                  whileTap={{ scale: 0.9 }}
-                  className="w-[54px] h-[54px] rounded-full flex items-center justify-center -mt-5"
+                  whileTap={{ scale: 0.85 }}
+                  className="w-10 h-10 rounded-2xl flex items-center justify-center"
                   style={{
-                    background: '#1FB37A',
-                    boxShadow: '0 6px 20px rgba(31,179,122,0.35), 0 2px 6px rgba(31,179,122,0.2)',
-                    border: '3px solid rgba(255,255,255,0.06)',
+                    background: isActive
+                      ? 'rgba(31,179,122,0.15)'
+                      : 'transparent',
                   }}
                 >
-                  <Icon size={26} color="#fff" />
+                  <Icon
+                    size={22}
+                    color={isActive ? '#1FB37A' : 'var(--nav-inactive-icon)'}
+                  />
                 </motion.div>
                 <span
-                  className="text-[10px] font-semibold tracking-wide -mt-0.5"
-                  style={{ color: 'var(--nav-center-label)' }}
+                  className={cn('text-[11px]', isActive ? 'font-bold text-[#1FB37A]' : 'font-medium')}
+                  style={!isActive ? { color: 'var(--nav-inactive-label)' } : undefined}
                 >
                   {item.label}
                 </span>

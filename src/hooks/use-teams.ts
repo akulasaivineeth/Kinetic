@@ -91,7 +91,10 @@ export function useUserTeams() {
         .from('team_members')
         .select('team_id, role')
         .eq('user_id', user.id);
-      if (memErr) throw memErr;
+      if (memErr) {
+        console.error('[useUserTeams] team_members query:', memErr.message, memErr.code);
+        throw memErr;
+      }
       if (!memberships?.length) return [];
 
       const teamIds = memberships.map((m) => m.team_id);
@@ -134,6 +137,8 @@ export function useUserTeams() {
       return results.sort((a, b) => b.team_score - a.team_score);
     },
     enabled: !!user,
+    retry: 2,
+    retryDelay: 800,
   });
 }
 

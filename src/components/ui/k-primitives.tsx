@@ -63,7 +63,7 @@ export function KPill({ children, active, onClick, size = 'md', className }: KPi
         size === 'sm' ? 'px-3 py-1.5 text-[11px]' : 'px-4 py-2 text-[13px]',
         active
           ? 'bg-k-mint text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400 border-none'
-          : 'bg-transparent text-k-muted border border-k-line-strong',
+          : 'bg-transparent text-k-muted border border-k-line-strong dark:bg-white/[0.06] dark:text-[#A1A1A6] dark:border-white/[0.14]',
         className
       )}
     >
@@ -160,7 +160,8 @@ interface KRingProps {
 export function KRing({ pct = 0.5, size = 110, stroke = 10, color = '#1FB37A', track, children }: KRingProps) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
-  const off = c * (1 - Math.min(1, Math.max(0, pct)));
+  const clampedPct = Math.min(1, Math.max(0, pct));
+  const off = c * (1 - clampedPct);
 
   return (
     <div className="relative" style={{ width: size, height: size }}>
@@ -182,7 +183,6 @@ export function KRing({ pct = 0.5, size = 110, stroke = 10, color = '#1FB37A', t
           fill="none"
           strokeLinecap="round"
           strokeDasharray={c}
-          initial={{ strokeDashoffset: c }}
           animate={{ strokeDashoffset: off }}
           transition={{ duration: 0.8, ease: [0.2, 0.8, 0.2, 1] }}
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
