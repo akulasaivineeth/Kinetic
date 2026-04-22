@@ -29,34 +29,31 @@ export async function POST(request: NextRequest) {
     if (process.env.WHOOP_WEBHOOK_SECRET && signature) {
       const crypto = await import('crypto');
       const messageToSign = timestamp + rawBody;
-      const expectedSig = crypto
-        .createHmac('sha256', process.env.WHOOP_WEBHOOK_SECRET)
-        .update(messageToSign)
-        .digest('base64'); 
+      
+      const hmac = crypto.createHmac('sha256', process.env.WHOOP_WEBHOOK_SECRET).update(messageToSign);
+      const expectedBase64 = hmac.copy().digest('base64');
+      const expectedHex = hmac.copy().digest('hex');
 
       const sigBuffer = Buffer.from(signature);
-      const expectedBuffer = Buffer.from(expectedSig);
+      const b64Buffer = Buffer.from(expectedBase64);
+      const hexBuffer = Buffer.from(expectedHex);
       
       let verified = false;
-      if (sigBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
+      if (sigBuffer.length === b64Buffer.length && crypto.timingSafeEqual(sigBuffer, b64Buffer)) {
         verified = true;
-      } else {
-        const hexSig = crypto
-          .createHmac('sha256', process.env.WHOOP_WEBHOOK_SECRET)
-          .update(messageToSign)
-          .digest('hex');
-        const hexExpectedBuffer = Buffer.from(hexSig);
-        if (sigBuffer.length === hexExpectedBuffer.length && crypto.timingSafeEqual(sigBuffer, hexExpectedBuffer)) {
-          verified = true;
+        console.log('[WHOOP WEBHOOK] Verified via Base64 signature.');
+      } else if (sigBuffer.length === hexBuffer.length && crypto.timingSafeEqual(sigBuffer, hexBuffer)) {
         verified = true;
-        }
+        console.log('[WHOOP WEBHOOK] Verified via Hex signature.');
       }
 
       if (!verified) {
-        console.error('[WHOOP WEBHOOK] Invalid signature. Check WHOOP_WEBHOOK_SECRET.');
+        console.error(`[WHOOP WEBHOOK] Signature validation failed. Header: ${signature.substring(0, 10)}... Expected (B64): ${expectedBase64.substring(0, 10)}... or (Hex): ${expectedHex.substring(0, 10)}...`);
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
-      console.log('[WHOOP WEBHOOK] Signature verified.');
+    } else if (!signature) {
+      console.warn('[WHOOP WEBHOOK] Missing x-whoop-signature header.');
+      // Optional: return 401 if security is strict
     }
 
     const payload = JSON.parse(rawBody);
@@ -101,13 +98,68 @@ export async function POST(request: NextRequest) {
         // Enrich workout.updated event
         if (type === 'workout.updated' && profile.whoop_access_token) {
           console.log(`[WHOOP WEBHOOK] Fetching workout details for ${eventId}...`);
-          const res = await fetch(`https://api.prod.whoop.com/developer/v2/activity/workout/${eventId}`, {
-            headers: { Authorization: `Bearer ${profile.whoop_access_token}` },
+          
+          let accessToken = profile.whoop_access_token;
+          let res = await fetch(`https://api.prod.whoop.com/developer/v2/activity/workout/${eventId}`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
           });
+
+          // If token is expired, try to refresh it
+          if (res.status === 401 && profile.id) {
+             console.log('[WHOOP WEBHOOK] Token expired. Attempting refresh...');
+             // Get current refresh token
+             const { data: latestProfile } = await supabase
+               .from('profiles')
+               .select('whoop_refresh_token')
+               .eq('id', profile.id)
+               .single();
+               
+             const refreshToken = latestProfile?.whoop_refresh_token;
+             
+             if (refreshToken) {
+               try {
+                 const refreshRes = await fetch('https://api.prod.whoop.com/oauth/oauth2/token', {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                   body: new URLSearchParams({
+                     grant_type: 'refresh_token',
+                     refresh_token: refreshToken,
+                     client_id: process.env.WHOOP_CLIENT_ID || '',
+                     client_secret: process.env.WHOOP_CLIENT_SECRET || '',
+                   }),
+                 });
+                 
+                 if (refreshRes.ok) {
+                   const newTokens = await refreshRes.json();
+                   accessToken = newTokens.access_token;
+                   console.log('[WHOOP WEBHOOK] Token refreshed successfully.');
+                   
+                   // Save new tokens
+                   await supabase
+                     .from('profiles')
+                     .update({
+                       whoop_access_token: newTokens.access_token,
+                       whoop_refresh_token: newTokens.refresh_token,
+                       updated_at: new Date().toISOString(),
+                     })
+                     .eq('id', profile.id);
+                     
+                   // Retry the original fetch with new token
+                   res = await fetch(`https://api.prod.whoop.com/developer/v2/activity/workout/${eventId}`, {
+                     headers: { Authorization: `Bearer ${accessToken}` },
+                   });
+                 } else {
+                   console.error('[WHOOP WEBHOOK] Token refresh failed:', await refreshRes.text());
+                 }
+               } catch (refreshErr) {
+                 console.error('[WHOOP WEBHOOK] Error during refresh process:', refreshErr);
+               }
+             }
+          }
 
           if (!res.ok) {
             const errBody = await res.text();
-            console.error('[WHOOP WEBHOOK] API Fetch Failed:', res.status, errBody);
+            console.error('[WHOOP WEBHOOK] API Fetch Failed final attempt:', res.status, errBody);
             return;
           }
 
