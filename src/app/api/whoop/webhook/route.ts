@@ -30,30 +30,38 @@ export async function POST(request: NextRequest) {
       const crypto = await import('crypto');
       const messageToSign = timestamp + rawBody;
       
-      const hmac = crypto.createHmac('sha256', process.env.WHOOP_WEBHOOK_SECRET).update(messageToSign);
-      const expectedBase64 = hmac.copy().digest('base64');
-      const expectedHex = hmac.copy().digest('hex');
+      // Digest to a Buffer once (Node.js hmac is finalized after digest)
+      const expectedBuffer = crypto
+        .createHmac('sha256', process.env.WHOOP_WEBHOOK_SECRET)
+        .update(messageToSign)
+        .digest();
 
-      const sigBuffer = Buffer.from(signature);
-      const b64Buffer = Buffer.from(expectedBase64);
-      const hexBuffer = Buffer.from(expectedHex);
-      
+      // The signature header could be Hex or Base64. 
+      // We'll compare the raw buffer to the header decoded in both formats.
       let verified = false;
-      if (sigBuffer.length === b64Buffer.length && crypto.timingSafeEqual(sigBuffer, b64Buffer)) {
+      
+      // Try Base64 decoding of the signature
+      const sigBufferB64 = Buffer.from(signature, 'base64');
+      if (sigBufferB64.length === expectedBuffer.length && crypto.timingSafeEqual(sigBufferB64, expectedBuffer)) {
         verified = true;
         console.log('[WHOOP WEBHOOK] Verified via Base64 signature.');
-      } else if (sigBuffer.length === hexBuffer.length && crypto.timingSafeEqual(sigBuffer, hexBuffer)) {
-        verified = true;
-        console.log('[WHOOP WEBHOOK] Verified via Hex signature.');
+      } 
+      
+      // Try Hex decoding of the signature if not already verified
+      if (!verified) {
+        const sigBufferHex = Buffer.from(signature, 'hex');
+        if (sigBufferHex.length === expectedBuffer.length && crypto.timingSafeEqual(sigBufferHex, expectedBuffer)) {
+          verified = true;
+          console.log('[WHOOP WEBHOOK] Verified via Hex signature.');
+        }
       }
 
       if (!verified) {
-        console.error(`[WHOOP WEBHOOK] Signature validation failed. Header: ${signature.substring(0, 10)}... Expected (B64): ${expectedBase64.substring(0, 10)}... or (Hex): ${expectedHex.substring(0, 10)}...`);
+        console.error(`[WHOOP WEBHOOK] Signature validation failed. Header: ${signature.substring(0, 10)}...`);
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
     } else if (!signature) {
       console.warn('[WHOOP WEBHOOK] Missing x-whoop-signature header.');
-      // Optional: return 401 if security is strict
     }
 
     const payload = JSON.parse(rawBody);
