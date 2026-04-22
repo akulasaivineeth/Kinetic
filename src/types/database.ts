@@ -134,42 +134,53 @@ export interface Database {
         Row: Profile;
         Insert: Partial<Profile> & { id: string; email: string };
         Update: Partial<Profile>;
+        Relationships: [];
       };
       invite_links: {
         Row: InviteLink;
         Insert: Partial<InviteLink>;
         Update: Partial<InviteLink>;
+        Relationships: [];
       };
       performance_goals: {
         Row: PerformanceGoals;
         Insert: Partial<PerformanceGoals> & { user_id: string };
         Update: Partial<PerformanceGoals>;
+        Relationships: [];
       };
       workout_logs: {
         Row: WorkoutLog;
         Insert: Partial<WorkoutLog> & { user_id: string };
         Update: Partial<WorkoutLog>;
+        Relationships: [];
       };
       sharing_connections: {
         Row: SharingConnection;
         Insert: Partial<SharingConnection> & { requester_id: string; recipient_id: string };
         Update: Partial<SharingConnection>;
+        Relationships: [];
       };
       notifications: {
         Row: Notification;
         Insert: Partial<Notification> & { user_id: string; type: string; title: string };
         Update: Partial<Notification>;
+        Relationships: [];
       };
       whoop_events: {
         Row: WhoopEvent;
         Insert: Partial<WhoopEvent> & { event_type: string; payload: Json };
         Update: Partial<WhoopEvent>;
+        Relationships: [];
       };
       user_milestone_unlocks: {
         Row: UserMilestoneUnlock;
         Insert: Partial<UserMilestoneUnlock> & { user_id: string; milestone_key: string; label: string; emoji: string };
         Update: Partial<UserMilestoneUnlock>;
+        Relationships: [];
       };
+    };
+    Relationships: {
+      [_ in never]: never;
     };
     Functions: {
       get_weekly_volume: {
@@ -186,6 +197,15 @@ export interface Database {
         };
         Returns: LeaderboardEntry[];
       };
+    };
+    Views: {
+      [_ in never]: never;
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+    CompositeTypes: {
+      [_ in never]: never;
     };
   };
 }
