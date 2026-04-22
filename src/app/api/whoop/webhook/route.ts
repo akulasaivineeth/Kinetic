@@ -28,14 +28,12 @@ export async function POST(request: NextRequest) {
     // Verify signature
     if (process.env.WHOOP_WEBHOOK_SECRET && signature) {
       const crypto = await import('crypto');
-      // WHOOP requires timestamp prepended to rawBody 
       const messageToSign = timestamp + rawBody;
       const expectedSig = crypto
         .createHmac('sha256', process.env.WHOOP_WEBHOOK_SECRET)
         .update(messageToSign)
         .digest('base64'); 
 
-      // WHOOP typically sends base64, but we provide hex fallback for safety
       const sigBuffer = Buffer.from(signature);
       const expectedBuffer = Buffer.from(expectedSig);
       
@@ -50,61 +48,71 @@ export async function POST(request: NextRequest) {
         const hexExpectedBuffer = Buffer.from(hexSig);
         if (sigBuffer.length === hexExpectedBuffer.length && crypto.timingSafeEqual(sigBuffer, hexExpectedBuffer)) {
           verified = true;
+        verified = true;
         }
       }
 
       if (!verified) {
-        console.error('Whoop webhook: invalid signature');
+        console.error('[WHOOP WEBHOOK] Invalid signature. Check WHOOP_WEBHOOK_SECRET.');
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
+      console.log('[WHOOP WEBHOOK] Signature verified.');
     }
 
     const payload = JSON.parse(rawBody);
+    console.log('[WHOOP WEBHOOK] Payload received:', JSON.stringify(payload));
 
     // Run processing in the background within the 1-second Whoop requirement
     after(async () => {
-      ensureVapid();
-      const supabase = await createServiceClient();
-      const { type, user_id, id: eventId } = payload;
+      try {
+        ensureVapid();
+        const supabase = await createServiceClient();
+        const { type, user_id, id: eventId } = payload;
 
-      // Find our user and their WHOOP token
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id, push_subscription, whoop_access_token')
-        .eq('whoop_user_id', String(user_id))
-        .single();
+        console.log(`[WHOOP WEBHOOK] Processing event. Type: ${type}, WhoopUID: ${user_id}, EventID: ${eventId}`);
 
-      if (!profile) {
-        // Store unmapped event
+        // Find our user and their WHOOP token
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('id, push_subscription, whoop_access_token')
+          .eq('whoop_user_id', String(user_id))
+          .single();
+
+        if (profileError || !profile) {
+          console.warn(`[WHOOP WEBHOOK] No matching Kinetic profile found for Whoop user ${user_id}. Error:`, profileError?.message);
+          await supabase.from('whoop_events').insert({
+            event_type: type,
+            payload: payload,
+            processed: false,
+          });
+          return;
+        }
+
+        console.log(`[WHOOP WEBHOOK] Found Kinetic user: ${profile.id}. Token exists: ${!!profile.whoop_access_token}`);
+
+        // Store mapped event immediately 
         await supabase.from('whoop_events').insert({
+          user_id: profile.id,
           event_type: type,
           payload: payload,
-          processed: false,
+          processed: true,
         });
-        return;
-      }
 
-      // Store mapped event immediately 
-      await supabase.from('whoop_events').insert({
-        user_id: profile.id,
-        event_type: type,
-        payload: payload,
-        processed: true,
-      });
-
-      // Enrich workout.updated event
-      if (type === 'workout.updated' && profile.whoop_access_token) {
-        try {
+        // Enrich workout.updated event
+        if (type === 'workout.updated' && profile.whoop_access_token) {
+          console.log(`[WHOOP WEBHOOK] Fetching workout details for ${eventId}...`);
           const res = await fetch(`https://api.prod.whoop.com/developer/v2/activity/workout/${eventId}`, {
             headers: { Authorization: `Bearer ${profile.whoop_access_token}` },
           });
 
           if (!res.ok) {
-            console.error('Failed to fetch WHOOP workout detail:', await res.text());
+            const errBody = await res.text();
+            console.error('[WHOOP WEBHOOK] API Fetch Failed:', res.status, errBody);
             return;
           }
 
           const workout = await res.json();
+          console.log('[WHOOP WEBHOOK] Workout data fetched successfully.');
 
           // Extract metrics
           const activityType = workout?.sport?.name || 'Strength Trainer';
@@ -117,12 +125,17 @@ export async function POST(request: NextRequest) {
           const distanceKm = distanceMeters ? Math.round((distanceMeters / 1000) * 100) / 100 : null;
           const distanceLabel = distanceKm ? ` • ${distanceKm} km` : '';
 
+          const notifTitle = 'Workout Detected';
+          const notifBody = `${activityType} • ${durationMins} min${distanceLabel} • Strain ${strain}`;
+
+          console.log(`[WHOOP WEBHOOK] Dispatching notification: "${notifBody}"`);
+
           // Save timeline notification
           await supabase.from('notifications').insert({
             user_id: profile.id,
             type: 'whoop_workout',
-            title: 'Workout Detected',
-            body: `${activityType} • ${durationMins} min${distanceLabel} • Strain ${strain}`,
+            title: notifTitle,
+            body: notifBody,
             data: {
               activity: activityType,
               duration: durationMins,
@@ -135,28 +148,33 @@ export async function POST(request: NextRequest) {
           // Dispatch Web Push notification
           if (profile.push_subscription) {
             const distParam = distanceKm ? `&distance_km=${distanceKm}` : '';
-            await webpush.sendNotification(
-              profile.push_subscription as webpush.PushSubscription,
-              JSON.stringify({
-                title: 'Workout Detected',
-                body: `${activityType} • ${durationMins} min${distanceLabel} • Strain ${strain}`,
-                data: {
-                  url: `/log?activity=${encodeURIComponent(activityType)}&duration=${durationMins}&strain=${strain}${distParam}`,
-                },
-              })
-            );
+            try {
+              await webpush.sendNotification(
+                profile.push_subscription as webpush.PushSubscription,
+                JSON.stringify({
+                  title: notifTitle,
+                  body: notifBody,
+                  data: {
+                    url: `/log?activity=${encodeURIComponent(activityType)}&duration=${durationMins}&strain=${strain}${distParam}`,
+                  },
+                })
+              );
+              console.log('[WHOOP WEBHOOK] Web Push sent successfully.');
+            } catch (pError) {
+              console.error('[WHOOP WEBHOOK] Web Push failed:', pError);
+            }
+          } else {
+            console.log('[WHOOP WEBHOOK] User has no push_subscription stored.');
           }
-
-        } catch (fetchErr) {
-          console.error('Failed to enrich whoop workout data:', fetchErr);
         }
+      } catch (bgError) {
+        console.error('[WHOOP WEBHOOK] Critical background error:', bgError);
       }
     });
 
-    // Immediately resolve to satisfy Whoop's 1-second timeout
     return NextResponse.json({ status: 'ok' });
   } catch (error) {
-    console.error('Webhook payload error:', error);
+    console.error('[WHOOP WEBHOOK] Main handler error:', error);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
 }
