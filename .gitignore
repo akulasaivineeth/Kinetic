@@ -62,3 +62,4 @@ kinetic-privacy/
 
 # npm cache if project-local (e.g. npm_config_cache)
 .npm-cache/
+agent_edits

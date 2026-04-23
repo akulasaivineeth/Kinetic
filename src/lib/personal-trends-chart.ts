@@ -209,7 +209,7 @@ export function buildWeekLineChart(
     let overlay: number | null | undefined;
     if (showOverlay) {
       if (mode === 'raw') {
-        overlay = prevRaw === 0 ? null : prevRaw / scale;
+        overlay = prevRaw / scale;
       } else {
         const prev2Raw = dayRaw(map, dayKey(addDays(d, -14)), agg);
         overlay = pctDiff(prevRaw, prev2Raw);

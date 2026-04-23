@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { addDays, endOfWeek, startOfWeek, subWeeks } from 'date-fns';
+import { useMemo, useState, useEffect } from 'react';
+import { addDays, endOfWeek, startOfWeek, subWeeks, subDays, startOfDay, endOfDay } from 'date-fns';
 import {
   Line,
   LineChart,
@@ -10,7 +10,9 @@ import {
   XAxis,
   YAxis,
   Legend,
+  Dot,
 } from 'recharts';
+import { motion, AnimatePresence } from 'framer-motion';
 import { KCard, KEyebrow } from '@/components/ui/k-primitives';
 import { useAllTimeStats } from '@/hooks/use-alltime-stats';
 import { useWorkoutLogs } from '@/hooks/use-workout-logs';
@@ -22,8 +24,7 @@ import {
 import { K } from '@/lib/design-tokens';
 import type { WorkoutLog } from '@/types/database';
 
-const CATEGORIES: { id: PersonalTrendCategory; label: string }[] = [
-  { id: 'overall', label: 'Overall' },
+const BASE_CATEGORIES: { id: PersonalTrendCategory; label: string }[] = [
   { id: 'pushups', label: 'Push-ups' },
   { id: 'plank', label: 'Plank' },
   { id: 'run', label: 'Run' },
@@ -54,38 +55,64 @@ function fmtVolume(cat: PersonalTrendCategory, v: number, unitPref: 'metric' | '
 
 export function PersonalHubPanel() {
   const { profile } = useAuth();
-  const unitPref = profile?.unit_preference ?? 'metric';
+  const unitPreference = profile?.unit_preference ?? 'metric';
   const [exercise, setExercise] = useState<PersonalTrendCategory>('overall');
+  const [isOpen, setIsOpen] = useState(false);
 
   const { thisWeekStart, thisWeekEnd, lastWeekStart, lastWeekEnd, chartFrom, chartTo } = useMemo(() => {
     const now = new Date();
-    const tws = startOfWeek(now, { weekStartsOn: 1 });
-    const twe = endOfWeek(now, { weekStartsOn: 1 });
-    const lws = subWeeks(tws, 1);
-    const lwe = endOfWeek(lws, { weekStartsOn: 1 });
+    const twEnd = endOfDay(now);
+    const twStart = startOfDay(subDays(now, 6));
+    
+    const lwEnd = endOfDay(subDays(twStart, 1));
+    const lwStart = startOfDay(subDays(lwEnd, 6));
+
     return {
-      thisWeekStart: tws,
-      thisWeekEnd: twe,
-      lastWeekStart: lws,
-      lastWeekEnd: lwe,
-      chartFrom: addDays(tws, -14),
-      chartTo: twe,
+      thisWeekStart: twStart,
+      thisWeekEnd: twEnd,
+      lastWeekStart: lwStart,
+      lastWeekEnd: lwEnd,
+      chartFrom: lwStart,
+      chartTo: twEnd,
     };
   }, []);
 
+  const { data: allLogs = [] } = useWorkoutLogs('custom', chartFrom, chartTo);
+
+  const categories = useMemo(() => {
+    const active = new Set<string>();
+    active.add('overall');
+    
+    for (const log of allLogs) {
+      if (log.pushup_reps && log.pushup_reps > 0) active.add('pushups');
+      if (log.plank_seconds && log.plank_seconds > 0) active.add('plank');
+      if (log.run_distance && Number(log.run_distance) > 0) active.add('run');
+      if (log.squat_reps && log.squat_reps > 0) active.add('squats');
+    }
+
+    const filtered = BASE_CATEGORIES.filter(c => active.has(c.id));
+    return [{ id: 'overall' as const, label: 'Overall' }, ...filtered];
+  }, [allLogs]);
+
+  useEffect(() => {
+    if (!categories.find(c => c.id === exercise)) {
+      setExercise('overall');
+    }
+  }, [categories, exercise]);
+
   const { data: allTime, isLoading: loadAt } = useAllTimeStats();
-  const { data: thisWeekLogs = [], isLoading: loadTw } = useWorkoutLogs('week');
+  const { data: thisWeekLogs = [], isLoading: loadTw } = useWorkoutLogs('custom', thisWeekStart, thisWeekEnd);
   const { data: lastWeekLogs = [], isLoading: loadLw } = useWorkoutLogs('custom', lastWeekStart, lastWeekEnd);
   const { data: chartLogs = [], isLoading: loadCh } = useWorkoutLogs('custom', chartFrom, chartTo);
 
   const weekCompare = useMemo(() => {
-    return CATEGORIES.map(({ id }) => {
+    return categories.map(({ id }) => {
       const tw = sumForCat(thisWeekLogs, id);
       const lw = sumForCat(lastWeekLogs, id);
       const deltaPct = lw > 0 ? Math.round(((tw - lw) / lw) * 100) : tw > 0 ? 100 : 0;
       return { id, tw, lw, deltaPct };
     });
-  }, [thisWeekLogs, lastWeekLogs]);
+  }, [thisWeekLogs, lastWeekLogs, categories]);
 
   const linePoints = useMemo(
     () =>
@@ -114,7 +141,7 @@ export function PersonalHubPanel() {
     [linePoints],
   );
 
-  const catLabel = CATEGORIES.find((c) => c.id === exercise)?.label ?? exercise;
+  const catLabel = categories.find((c) => c.id === exercise)?.label ?? exercise;
   const selectedCompare = weekCompare.find((r) => r.id === exercise);
 
   return (
@@ -132,8 +159,8 @@ export function PersonalHubPanel() {
           />
           <AllTimeCell
             label="Run"
-            main={fmtVolume('run', allTime?.totalRunDistance ?? 0, unitPref)}
-            sub={`Peak ${fmtVolume('run', allTime?.peakRunDistance ?? 0, unitPref)}`}
+            main={fmtVolume('run', allTime?.totalRunDistance ?? 0, unitPreference)}
+            sub={`Peak ${fmtVolume('run', allTime?.peakRunDistance ?? 0, unitPreference)}`}
           />
           <AllTimeCell label="Squats" main={allTime?.totalSquats ?? 0} sub={`Peak ${allTime?.peakSquats ?? 0}`} />
         </div>
@@ -146,37 +173,75 @@ export function PersonalHubPanel() {
         ) : (
           <KCard
             pad={14}
-            className="border border-white/[0.06] bg-k-card/80 shadow-[0_8px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl dark:bg-k-card/60"
+            className="border border-white/[0.06] bg-k-card/80 shadow-[0_8px_32px_rgba(0,0,0,0.12)] dark:bg-k-card/60"
           >
-            <label className="sr-only" htmlFor="personal-hub-exercise">
-              Exercise
-            </label>
-            <div className="relative">
-              <select
-                id="personal-hub-exercise"
-                value={exercise}
-                onChange={(e) => setExercise(e.target.value as PersonalTrendCategory)}
-                className="w-full appearance-none rounded-k-pill border border-k-line-strong/90 bg-[#F4F5F3] dark:bg-[#222224] py-2.5 pl-4 pr-10 text-[13px] font-bold text-k-ink shadow-inner outline-none transition-colors focus:border-emerald-500/40 focus:ring-2 focus:ring-emerald-500/15"
+            <div className="relative mb-4" style={{ isolation: 'isolate' }}>
+              <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex w-full items-center justify-between rounded-[16px] border border-k-line-strong/80 bg-white dark:bg-[#1C1C1E] py-3.5 pl-5 pr-5 text-[15px] font-black text-k-ink shadow-sm outline-none transition-all focus:ring-4 focus:ring-emerald-500/10"
               >
-                {CATEGORIES.map(({ id, label }) => (
-                  <option key={id} value={id}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <span
-                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-k-muted-soft text-xs"
-                aria-hidden
-              >
-                ▾
-              </span>
+                <span>{catLabel}</span>
+                <motion.div
+                  animate={{ rotate: isOpen ? 180 : 0 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-k-muted-soft">
+                    <path d="m6 9 6 6 6-6"/>
+                  </svg>
+                </motion.div>
+              </button>
+
+              <AnimatePresence>
+                {isOpen && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-[190]" 
+                      onClick={() => setIsOpen(false)} 
+                    />
+                    <motion.div
+                      initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 4, scale: 1 }}
+                      exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                      className="absolute left-0 right-0 z-[200] overflow-hidden rounded-[24px] border border-white/20 shadow-2xl dark:border-white/10"
+                    >
+                      {/* Dedicated High-Intensity Glass Layer */}
+                      <div 
+                        className="absolute inset-0 z-[-1] bg-white/40 dark:bg-black/40"
+                        style={{ 
+                          backdropFilter: 'blur(100px) saturate(210%) contrast(110%)', 
+                          WebkitBackdropFilter: 'blur(100px) saturate(210%) contrast(110%)',
+                        }}
+                      />
+                      
+                      <div className="max-h-[300px] overflow-y-auto py-1">
+                        {categories.map((cat) => (
+                          <button
+                            key={cat.id}
+                            onClick={() => {
+                              setExercise(cat.id);
+                              setIsOpen(false);
+                            }}
+                            className={`flex w-full items-center px-5 py-3 text-[15px] font-black transition-colors ${
+                              exercise === cat.id
+                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                : 'text-k-ink hover:bg-k-ink/5'
+                            }`}
+                          >
+                            {cat.label}
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
             </div>
             {selectedCompare && (
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[12px]">
                 <span className="text-k-muted-soft tabular-nums">
-                  {fmtVolume(exercise, selectedCompare.tw, unitPref)}
+                  {fmtVolume(exercise, selectedCompare.tw, unitPreference)}
                   <span className="text-k-muted-soft/70"> vs </span>
-                  {fmtVolume(exercise, selectedCompare.lw, unitPref)}
+                  {fmtVolume(exercise, selectedCompare.lw, unitPreference)}
                 </span>
                 <span
                   className={`font-bold tabular-nums ${
@@ -245,7 +310,7 @@ export function PersonalHubPanel() {
                               <span className="text-[10px] text-k-muted font-bold tracking-wider uppercase opacity-80">THIS WEEK</span>
                               <div className="flex items-baseline justify-between gap-4">
                                 <span className="text-[15px] font-black text-k-ink">
-                                  {thisWeekVal !== null ? fmtVolume(exercise, thisWeekVal, unitPref) : '—'}
+                                  {thisWeekVal !== null ? fmtVolume(exercise, thisWeekVal, unitPreference) : '—'}
                                 </span>
                                 {exercise !== 'overall' && data.score > 0 && (
                                   <span className="text-[11px] font-bold text-k-ink opacity-60">
@@ -259,7 +324,7 @@ export function PersonalHubPanel() {
                               <span className="text-[10px] text-k-muted font-bold tracking-wider uppercase opacity-60">LAST WEEK</span>
                               <div className="flex items-baseline justify-between gap-4">
                                 <span className="text-[13px] font-semibold text-k-muted">
-                                  {lastWeekVal !== null ? fmtVolume(exercise, lastWeekVal, unitPref) : '—'}
+                                  {lastWeekVal !== null ? fmtVolume(exercise, lastWeekVal, unitPreference) : '—'}
                                 </span>
                                 {exercise !== 'overall' && data.lastWeekScore > 0 && (
                                   <span className="text-[10px] font-medium text-k-muted opacity-50">

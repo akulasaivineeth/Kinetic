@@ -18,7 +18,7 @@ import {
   useMonthLogs,
   dateToLogsMap,
 } from '@/hooks/use-workout-logs';
-import { useActivityTypes, useLogActivity } from '@/hooks/use-activities';
+import { useActivityTypes, useLogActivity, useRankedActivityTypes } from '@/hooks/use-activities';
 import { formatPlankTime, parsePlankMmSsDigitInput } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -145,8 +145,9 @@ function LogPage() {
   const logsMap = useMemo(() => dateToLogsMap(monthLogs), [monthLogs]);
   const currentDayLogs = useMemo(() => logsMap.get(format(selectedDate, 'yyyy-MM-dd')) || [], [logsMap, selectedDate]);
 
-  const coreTypes = useMemo(() => activityTypes.filter(a => a.is_core), [activityTypes]);
-  const flexTypes = useMemo(() => activityTypes.filter(a => !a.is_core), [activityTypes]);
+  const rankedActivities = useRankedActivityTypes();
+  const quickLogTypes = useMemo(() => rankedActivities.slice(0, 4), [rankedActivities]);
+  const flexTypes = useMemo(() => rankedActivities.filter(a => !a.is_core), [rankedActivities]);
 
   const toggleActivity = (slug: string) => {
     setSelectedSlugs(prev => {
@@ -607,9 +608,17 @@ function LogPage() {
             {editLogId ? 'ACTIVITIES' : 'TAP TO LOG'}
           </p>
           <div className="grid grid-cols-4 gap-2">
-            {coreTypes.map(act => {
+            {quickLogTypes.map(act => {
               const active = selectedSlugs.has(act.slug);
-              const val = getCoreValue(act.slug as CoreSlug);
+              
+              // Correctly handle value lookup for both core and non-core ranked items
+              let val = 0;
+              if (isCoreSlug(act.slug)) {
+                val = getCoreValue(act.slug);
+              } else {
+                val = flexValues[act.slug] || 0;
+              }
+              
               const TileIcon = exerciseIconForSlug(act.slug);
               return (
                 <motion.button
