@@ -52,6 +52,10 @@ export interface WorkoutLog {
   run_distance: number;
   run_duration: number;
   squat_reps: number;
+  pushup_score: number;
+  squat_score: number;
+  plank_score: number;
+  run_score: number;
   whoop_workout_id: string | null;
   whoop_strain: number | null;
   whoop_activity_type: string | null;

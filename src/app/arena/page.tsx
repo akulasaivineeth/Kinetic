@@ -31,6 +31,10 @@ interface DailyStats {
   plank_total: number;
   run_total: number;
   day_score: number;
+  pushup_pts: number;
+  squat_pts: number;
+  plank_pts: number;
+  run_pts: number;
 }
 
 type ArenaMetric = 'overall' | 'pushups' | 'squats' | 'plank' | 'run';
@@ -593,15 +597,15 @@ export default function ArenaPage() {
                       const score = Math.round(Number(day.day_score));
 
                       const chips: { Icon: typeof Dumbbell; val: string; pts: number }[] = [];
-                      if (day.pushup_total > 0) chips.push({ Icon: Dumbbell, val: `${day.pushup_total}`, pts: Math.round(calculatePushupScore(day.pushup_total)) });
-                      if (day.squat_total > 0) chips.push({ Icon: Zap, val: `${day.squat_total}`, pts: Math.round(calculateSquatScore(day.squat_total)) });
+                      if (day.pushup_total > 0) chips.push({ Icon: Dumbbell, val: `${day.pushup_total}`, pts: Math.round(Number(day.pushup_pts)) });
+                      if (day.squat_total > 0) chips.push({ Icon: Zap, val: `${day.squat_total}`, pts: Math.round(Number(day.squat_pts)) });
                       if (day.plank_total > 0) {
                         const mins = Number(day.plank_total) / 60;
-                        chips.push({ Icon: Timer, val: mins >= 1 ? `${Math.round(mins)}m` : `${day.plank_total}s`, pts: Math.round(calculatePlankScore(Number(day.plank_total))) });
+                        chips.push({ Icon: Timer, val: mins >= 1 ? `${Math.round(mins)}m` : `${day.plank_total}s`, pts: Math.round(Number(day.plank_pts)) });
                       }
                       if (Number(day.run_total) > 0) {
                         const km = Number(day.run_total);
-                        chips.push({ Icon: Route, val: `${km.toFixed(1)}k`, pts: Math.round(calculateRunScore(km)) });
+                        chips.push({ Icon: Route, val: `${km.toFixed(1)}k`, pts: Math.round(Number(day.run_pts)) });
                       }
 
                       return (
