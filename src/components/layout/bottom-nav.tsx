@@ -33,51 +33,33 @@ export function BottomNav() {
               : pathname === item.href;
           const { Icon } = item;
 
-          if (item.isCenter) {
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex flex-col items-center gap-1 py-1 px-2"
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="flex flex-col items-center gap-0.5 py-1 px-2 group"
+            >
+              <div
+                className={cn(
+                  "w-10 h-10 rounded-2xl flex items-center justify-center transition-colors duration-200",
+                  isActive && "bg-[#1FB37A15]"
+                )}
               >
                 <motion.div
                   whileTap={{ scale: 0.85 }}
-                  className="w-10 h-10 rounded-2xl flex items-center justify-center"
-                  style={{
-                    background: isActive
-                      ? 'rgba(31,179,122,0.15)'
-                      : 'transparent',
-                  }}
+                  className="flex items-center justify-center"
                 >
                   <Icon
                     size={22}
                     color={isActive ? '#1FB37A' : 'var(--nav-inactive-icon)'}
                   />
                 </motion.div>
-                <span
-                  className={cn('text-[11px]', isActive ? 'font-bold text-[#1FB37A]' : 'font-medium')}
-                  style={!isActive ? { color: 'var(--nav-inactive-label)' } : undefined}
-                >
-                  {item.label}
-                </span>
-              </Link>
-            );
-          }
-
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex flex-col items-center gap-1 py-1 px-2"
-            >
-              <motion.div whileTap={{ scale: 0.85 }}>
-                <Icon
-                  size={22}
-                  color={isActive ? '#1FB37A' : 'var(--nav-inactive-icon)'}
-                />
-              </motion.div>
+              </div>
               <span
-                className={cn('text-[11px]', isActive ? 'font-bold text-[#1FB37A]' : 'font-medium')}
+                className={cn(
+                  'text-[10px] tracking-tight',
+                  isActive ? 'font-bold text-[#1FB37A]' : 'font-medium'
+                )}
                 style={!isActive ? { color: 'var(--nav-inactive-label)' } : undefined}
               >
                 {item.label}

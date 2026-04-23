@@ -39,12 +39,13 @@ export const K = {
 } as const;
 
 export const TIERS = [
-  { id: 'bronze', name: 'Bronze', min: 0, color: '#CD7F32' },
-  { id: 'silver', name: 'Silver', min: 2500, color: '#B8BCC2' },
-  { id: 'gold', name: 'Gold', min: 6000, color: '#E3B341' },
-  { id: 'platinum', name: 'Platinum', min: 12000, color: '#6BB6BF' },
-  { id: 'diamond', name: 'Diamond', min: 25000, color: '#7A9EF0' },
-  { id: 'elite', name: 'Elite', min: 50000, color: '#1FB37A' },
+  { id: 'rookie', name: 'Rookie', min: 0, color: '#8E8E93' },
+  { id: 'amateur', name: 'Amateur', min: 5000, color: '#6BB6BF' },
+  { id: 'contender', name: 'Contender', min: 20000, color: '#E3B341' },
+  { id: 'beyond', name: 'Beyond', min: 50000, color: '#1FB37A' },
+  { id: 'elite', name: 'Elite', min: 100000, color: '#168A5E' },
+  { id: 'master', name: 'Master', min: 250000, color: '#00D2FF' },
+  { id: 'kinetic', name: 'Kinetic', min: 500000, color: '#00FF9D' },
 ] as const;
 
 export type TierInfo = (typeof TIERS)[number] & {

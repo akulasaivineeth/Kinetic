@@ -23,6 +23,7 @@ import { K } from '@/lib/design-tokens';
 import type { WorkoutLog } from '@/types/database';
 
 const CATEGORIES: { id: PersonalTrendCategory; label: string }[] = [
+  { id: 'overall', label: 'Overall' },
   { id: 'pushups', label: 'Push-ups' },
   { id: 'plank', label: 'Plank' },
   { id: 'run', label: 'Run' },
@@ -32,7 +33,8 @@ const CATEGORIES: { id: PersonalTrendCategory; label: string }[] = [
 function sumForCat(logs: WorkoutLog[], cat: PersonalTrendCategory): number {
   let s = 0;
   for (const log of logs) {
-    if (cat === 'pushups') s += log.pushup_reps || 0;
+    if (cat === 'overall') s += log.session_score || 0;
+    else if (cat === 'pushups') s += log.pushup_reps || 0;
     else if (cat === 'plank') s += log.plank_seconds || 0;
     else if (cat === 'squats') s += log.squat_reps || 0;
     else s += Number(log.run_distance) || 0;
@@ -41,6 +43,7 @@ function sumForCat(logs: WorkoutLog[], cat: PersonalTrendCategory): number {
 }
 
 function fmtVolume(cat: PersonalTrendCategory, v: number, unitPref: 'metric' | 'imperial') {
+  if (cat === 'overall') return `${Math.round(v).toLocaleString()} pts`;
   if (cat === 'plank') return `${(v / 60).toFixed(1)} min`;
   if (cat === 'run') {
     if (unitPref === 'imperial') return `${(v * 0.621371).toFixed(1)} mi`;
@@ -52,7 +55,7 @@ function fmtVolume(cat: PersonalTrendCategory, v: number, unitPref: 'metric' | '
 export function PersonalHubPanel() {
   const { profile } = useAuth();
   const unitPref = profile?.unit_preference ?? 'metric';
-  const [exercise, setExercise] = useState<PersonalTrendCategory>('pushups');
+  const [exercise, setExercise] = useState<PersonalTrendCategory>('overall');
 
   const { thisWeekStart, thisWeekEnd, lastWeekStart, lastWeekEnd, chartFrom, chartTo } = useMemo(() => {
     const now = new Date();
@@ -104,6 +107,9 @@ export function PersonalHubPanel() {
         thisWeek: p.total,
         lastWeek: p.overlay,
         peak: p.peakHighlight,
+        score: p.score ?? 0,
+        lastWeekScore: p.overlayScore ?? 0,
+        fullLabel: p.tooltipLabel,
       })),
     [linePoints],
   );
@@ -150,7 +156,7 @@ export function PersonalHubPanel() {
                 id="personal-hub-exercise"
                 value={exercise}
                 onChange={(e) => setExercise(e.target.value as PersonalTrendCategory)}
-                className="w-full appearance-none rounded-k-pill border border-k-line-strong/90 bg-k-elevated/70 py-2.5 pl-4 pr-10 text-[13px] font-bold text-k-ink shadow-inner outline-none transition-colors focus:border-emerald-500/40 focus:ring-2 focus:ring-emerald-500/15"
+                className="w-full appearance-none rounded-k-pill border border-k-line-strong/90 bg-[#F4F5F3] dark:bg-[#222224] py-2.5 pl-4 pr-10 text-[13px] font-bold text-k-ink shadow-inner outline-none transition-colors focus:border-emerald-500/40 focus:ring-2 focus:ring-emerald-500/15"
               >
                 {CATEGORIES.map(({ id, label }) => (
                   <option key={id} value={id}>
@@ -203,26 +209,68 @@ export function PersonalHubPanel() {
             <p className="text-[11px] font-semibold text-k-muted-soft uppercase tracking-wide mb-2">{catLabel}</p>
             <div style={{ width: '100%', height: 220 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
+                <LineChart data={chartData} margin={{ top: 10, right: 4, left: -6, bottom: 0 }}>
                   <XAxis dataKey="name" tick={{ fontSize: 10, fill: K.mutedSoft }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: K.mutedSoft }} axisLine={false} tickLine={false} width={36} />
-                  <Tooltip
-                    contentStyle={{
-                      background: K.card,
-                      border: `1px solid ${K.lineStrong}`,
-                      borderRadius: 12,
-                      fontSize: 12,
-                    }}
-                    formatter={(value: unknown) => {
-                      const v = typeof value === 'number' && !Number.isNaN(value) ? value : null;
-                      if (v === null) return ['—'];
-                      if (exercise === 'plank') return [`${v.toFixed(1)} min`];
-                      if (exercise === 'run') {
-                        return unitPref === 'imperial'
-                          ? [`${(v * 0.621371).toFixed(1)} mi`]
-                          : [`${v.toFixed(1)} km`];
+                  <YAxis 
+                    tick={{ fontSize: 10, fill: K.mutedSoft }} 
+                    axisLine={false} 
+                    tickLine={false} 
+                    width={42} 
+                    domain={[
+                      0, 
+                      (dataMax: number) => {
+                        // Category-specific minimum ceilings
+                        const minCeil = exercise === 'overall' ? 1000 : 
+                                       exercise === 'run' ? 10 : 
+                                       exercise === 'plank' ? 5 : 
+                                       50;
+                        return Math.max(minCeil, Math.ceil(dataMax * 1.15));
                       }
-                      return [`${Math.round(v).toLocaleString()} reps`];
+                    ]}
+                  />
+                  <Tooltip
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      const data = payload[0].payload;
+                      const thisWeekVal = data.thisWeek;
+                      const lastWeekVal = data.lastWeek;
+                      
+                      return (
+                        <div className="rounded-[18px] border border-k-line-strong bg-white dark:bg-[#1C1C1E] shadow-2xl p-4 min-w-[160px]">
+                          <p className="text-[12px] font-black text-k-ink uppercase tracking-[0.12em] mb-3 border-b border-k-line/10 pb-2">
+                            {data.fullLabel}
+                          </p>
+                          <div className="space-y-3">
+                            <div className="flex flex-col">
+                              <span className="text-[10px] text-k-muted font-bold tracking-wider uppercase opacity-80">THIS WEEK</span>
+                              <div className="flex items-baseline justify-between gap-4">
+                                <span className="text-[15px] font-black text-k-ink">
+                                  {thisWeekVal !== null ? fmtVolume(exercise, thisWeekVal, unitPref) : '—'}
+                                </span>
+                                {exercise !== 'overall' && data.score > 0 && (
+                                  <span className="text-[11px] font-bold text-k-ink opacity-60">
+                                    +{Math.round(data.score).toLocaleString()} pts
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col pt-1">
+                              <span className="text-[10px] text-k-muted font-bold tracking-wider uppercase opacity-60">LAST WEEK</span>
+                              <div className="flex items-baseline justify-between gap-4">
+                                <span className="text-[13px] font-semibold text-k-muted">
+                                  {lastWeekVal !== null ? fmtVolume(exercise, lastWeekVal, unitPref) : '—'}
+                                </span>
+                                {exercise !== 'overall' && data.lastWeekScore > 0 && (
+                                  <span className="text-[10px] font-medium text-k-muted opacity-50">
+                                    +{Math.round(data.lastWeekScore).toLocaleString()} pts
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
                     }}
                   />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -233,7 +281,7 @@ export function PersonalHubPanel() {
                     stroke={K.mutedSoft}
                     strokeWidth={2}
                     dot={false}
-                    connectNulls={false}
+                    connectNulls={true}
                   />
                   <Line
                     type="monotone"

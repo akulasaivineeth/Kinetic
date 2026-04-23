@@ -94,9 +94,9 @@ export default function ScoreRevealPage() {
       <AnimatePresence>
         <motion.div
           key="card"
-          initial={{ opacity: 0, scale: 0.92, y: 24 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ duration: 0.55, ease: [0.2, 0.8, 0.2, 1] }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.4 }}
           className="relative z-10 w-full max-w-sm text-center"
         >
           {payload.headline && (

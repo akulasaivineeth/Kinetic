@@ -16,13 +16,193 @@ import { useUserMilestoneUnlocks } from '@/hooks/use-user-milestones';
 import { useAuth } from '@/providers/auth-provider';
 import { K } from '@/lib/design-tokens';
 
-/** Map a milestone_key like 'pushups_1000' to the matching SVG exercise icon. */
-function MilestoneIcon({ milestoneKey, size = 26 }: { milestoneKey: string; size?: number }) {
-  const metric = milestoneKey.split('_')[0]; // pushups, plank, run, squats
-  const Icon = EXERCISE_ICON_MAP[metric] ?? EXERCISE_ICON_MAP[metric + 's'];
-  if (Icon) return <Icon size={size} color={K.greenDeep} />;
-  // fallback for unknown metrics
-  return <IcTrophy size={size} color={K.gold} />;
+import { motion, AnimatePresence } from 'framer-motion';
+
+/** 
+ * KBadge: A high-end, Apple-inspired 3D medal for achievements.
+ * Now supports a "back" side for engravings.
+ */
+function KBadge({ 
+  milestoneKey, 
+  size = 48,
+  isFlipped = false,
+  dateLabel = '',
+  achievementLabel = ''
+}: { 
+  milestoneKey: string; 
+  size?: number;
+  isFlipped?: boolean;
+  dateLabel?: string;
+  achievementLabel?: string;
+}) {
+  const metric = milestoneKey.split('_')[0].replace(/s$/, '');
+  const Icon = EXERCISE_ICON_MAP[metric] ?? EXERCISE_ICON_MAP[metric + 's'] ?? IcTrophy;
+  
+  const themes: Record<string, { main: string; light: string; deep: string; glow: string }> = {
+    pushup: { main: '#E3B341', light: '#ffeecc', deep: '#997722', glow: '#ffd43b44' },
+    plank:  { main: '#1FB37A', light: '#cff7e8', deep: '#0f6b47', glow: '#1fb37a44' },
+    run:    { main: '#6BB6BF', light: '#e1f5f7', deep: '#2d6a71', glow: '#6bb6bf44' },
+    squat:  { main: '#FC3D39', light: '#ffeceb', deep: '#b31512', glow: '#fc3d3944' },
+    default:{ main: '#8E8E93', light: '#f0f0f0', deep: '#555555', glow: '#8e8e9333' }
+  };
+
+  const theme = themes[metric] || themes.default;
+  const iconSize = Math.round(size * 0.5);
+
+  return (
+    <div 
+      className="relative flex items-center justify-center shrink-0" 
+      style={{ 
+        width: size, 
+        height: size,
+        perspective: '1200px',
+        transformStyle: 'preserve-3d'
+      }}
+    >
+      <motion.div
+        animate={{ 
+          rotateY: isFlipped ? 180 : 0,
+          rotateX: isFlipped ? 0 : [0, 2, -2, 0],
+          rotateZ: isFlipped ? 0 : [0, 1, -1, 0]
+        }}
+        transition={{ 
+          rotateY: { type: 'spring', stiffness: 200, damping: 25 },
+          rotateX: { repeat: Infinity, duration: 4, ease: "linear" },
+          rotateZ: { repeat: Infinity, duration: 5, ease: "linear" }
+        }}
+        style={{ transformStyle: 'preserve-3d' }}
+        className="relative w-full h-full"
+      >
+        {/* FRONT SIDE */}
+        <div 
+          className="absolute inset-0 rounded-full border-[1.5px] shadow-lg flex items-center justify-center overflow-hidden"
+          style={{
+            backfaceVisibility: 'hidden',
+            WebkitBackfaceVisibility: 'hidden',
+            background: `linear-gradient(135deg, ${theme.light} 0%, ${theme.main} 50%, ${theme.deep} 100%)`,
+            borderColor: theme.deep,
+            boxShadow: `inset 0 1px 1px rgba(255,255,255,0.8), 0 4px 10px rgba(0,0,0,0.2)`,
+            transform: 'translateZ(1px)' // Small push forward to prevent bleed
+          }}
+        >
+          <div className="absolute inset-0 rounded-full blur-[10px] opacity-40" style={{ background: theme.glow }} />
+          <div className="absolute inset-[15%] rounded-full opacity-60 bg-white/40 backdrop-blur-[3px] border border-white/50 shadow-inner" />
+          
+          {/* Shimmer Effect */}
+          <motion.div 
+            animate={{ x: [-size, size * 2] }}
+            transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
+            className="absolute inset-0 w-1/3 bg-gradient-to-r from-transparent via-white/30 to-transparent -rotate-45"
+          />
+
+          <div 
+            className="absolute top-0 left-0 right-0 h-1/2 opacity-60"
+            style={{
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0) 100%)',
+              clipPath: 'ellipse(100% 100% at 50% 0%)'
+            }}
+          />
+          <div className="relative z-10 drop-shadow-md">
+            <Icon size={iconSize} color={theme.deep} />
+          </div>
+        </div>
+
+        {/* BACK SIDE (Engraved) */}
+        <div 
+          className="absolute inset-0 rounded-full border-[1.5px] shadow-lg flex flex-col items-center justify-center p-4 text-center overflow-hidden"
+          style={{
+            backfaceVisibility: 'hidden',
+            WebkitBackfaceVisibility: 'hidden',
+            transform: 'rotateY(180deg) translateZ(1px)', // Small push forward from its perspective
+            background: `linear-gradient(135deg, ${theme.main} 0%, ${theme.deep} 100%)`,
+            borderColor: theme.deep,
+            boxShadow: `inset 0 4px 10px rgba(0,0,0,0.3)`
+          }}
+        >
+          {/* Engraving Effect */}
+          <div className="flex flex-col items-center justify-center gap-1 relative z-10">
+            <div className="w-10 h-[1.5px] bg-black/30 mb-3 rounded-full opacity-50" />
+            <p 
+              className="font-display font-black italic uppercase leading-none text-black/60 mix-blend-overlay"
+              style={{ fontSize: size * 0.1, letterSpacing: '-0.02em' }}
+            >
+              {achievementLabel}
+            </p>
+            <p 
+              className="font-bold uppercase tracking-[0.2em] text-black/50 mt-1"
+              style={{ fontSize: size * 0.05 }}
+            >
+              Earned on
+            </p>
+            <p 
+              className="font-black uppercase text-black/60 mix-blend-overlay"
+              style={{ fontSize: size * 0.07 }}
+            >
+              {dateLabel}
+            </p>
+            <div className="w-10 h-[1.5px] bg-black/30 mt-3 rounded-full opacity-50" />
+          </div>
+          
+          {/* Subtle Brushed Metal Texture */}
+          <div className="absolute inset-0 opacity-10 pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/brushed-alum.png')]" />
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function BadgeModal({ 
+  milestone, 
+  onClose 
+}: { 
+  milestone: any; 
+  onClose: () => void 
+}) {
+  const [isFlipped, setIsFlipped] = useState(false);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.5, rotateY: -45 }}
+        animate={{ scale: 1, rotateY: 0 }}
+        exit={{ scale: 0.5, opacity: 0 }}
+        className="relative flex flex-col items-center gap-8"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div 
+          className="cursor-pointer"
+          onClick={() => setIsFlipped(!isFlipped)}
+        >
+          <KBadge 
+            milestoneKey={milestone.milestone_key} 
+            size={240} 
+            isFlipped={isFlipped}
+            dateLabel={format(new Date(milestone.earned_at), 'MMMM do, yyyy')}
+            achievementLabel={milestone.label}
+          />
+        </div>
+
+        <div className="text-center text-white/50 animate-pulse">
+          <p className="text-xs font-bold uppercase tracking-widest">
+            Tap to Flip
+          </p>
+        </div>
+
+        <button
+          onClick={onClose}
+          className="mt-4 px-6 py-2 rounded-full bg-white/10 text-white font-bold uppercase tracking-wider text-xs border border-white/20"
+        >
+          Done
+        </button>
+      </motion.div>
+    </motion.div>
+  );
 }
 
 const DAILY_GOAL = 600;
@@ -58,8 +238,13 @@ function useCountUp(target: number, duration = 1200) {
   return value;
 }
 
-export default function PulsePage() {
+export default function Dashboard() {
   const { user } = useAuth();
+  const [selectedMilestone, setSelectedMilestone] = useState<any>(null);
+  const { data: todayData, isLoading: logsLoading } = useTodayScore();
+  const todayScore = todayData?.score ?? 0;
+  const todaySessions = todayData?.sessions ?? 0;
+  const exercises = todayData?.exercises ?? [];
   const { data: leaderboardWeek = [] } = useLeaderboard('week');
   const myRank = useMemo(() => {
     if (!user) return 0;
@@ -67,7 +252,6 @@ export default function PulsePage() {
     return i >= 0 ? i + 1 : 0;
   }, [leaderboardWeek, user]);
 
-  const { data: today } = useTodayScore();
   const { tier, totalScore } = useTier();
   const { data: streak = 0 } = useStreak();
   const suggestions = useGoalSuggestions();
@@ -90,9 +274,6 @@ export default function PulsePage() {
     lastWeekEnd,
   );
 
-  const todayScore = today?.score ?? 0;
-  const todaySessions = today?.sessions ?? 0;
-  const exercises = today?.exercises ?? [];
   const ringPct = Math.min(1, todayScore / DAILY_GOAL);
   const animatedScore = useCountUp(todayScore);
   const todayIdx = (now.getDay() + 6) % 7;
@@ -131,36 +312,39 @@ export default function PulsePage() {
         {/* ── Eyebrow ── */}
         <KEyebrow>Today &middot; {dateLabel}</KEyebrow>
 
-        {/* ── Hero ring card ── */}
+        {/* ── Hero ring card (Integrated Status Hub) ── */}
         <KCard pad={22} className="relative overflow-hidden">
+          {/* Dynamic background glow based on tier color */}
           <div
-            className="absolute pointer-events-none rounded-full opacity-70"
+            className="absolute pointer-events-none rounded-full opacity-60"
             style={{
               top: -40,
               right: -40,
-              width: 180,
-              height: 180,
-              background: `radial-gradient(circle, ${K.mint} 0%, transparent 70%)`,
+              width: 220,
+              height: 220,
+              background: `radial-gradient(circle, ${tier.color}44 0%, transparent 70%)`,
             }}
           />
 
-          <div className="flex items-center gap-[18px] relative">
-            <KRing pct={ringPct} size={138} stroke={12} color={K.green}>
-              <div className="text-center">
-                <div
-                  className="font-display font-black italic text-k-ink leading-none"
-                  style={{ fontSize: 38, letterSpacing: -1 }}
-                >
-                  {animatedScore}
+          <div className="flex items-center gap-[18px] relative pb-10">
+            <div className="relative shrink-0">
+              <KRing pct={ringPct} size={138} stroke={12} color={K.green}>
+                <div className="text-center">
+                  <div
+                    className="font-display font-black italic text-k-ink leading-none"
+                    style={{ fontSize: 38, letterSpacing: -1 }}
+                  >
+                    {animatedScore}
+                  </div>
+                  <div
+                    className="text-k-muted font-semibold uppercase"
+                    style={{ fontSize: 10, letterSpacing: 1.2, marginTop: 4 }}
+                  >
+                    of {DAILY_GOAL} pts
+                  </div>
                 </div>
-                <div
-                  className="text-k-muted font-semibold uppercase"
-                  style={{ fontSize: 10, letterSpacing: 1.2, marginTop: 4 }}
-                >
-                  of {DAILY_GOAL} pts
-                </div>
-              </div>
-            </KRing>
+              </KRing>
+            </div>
 
             <div className="flex-1 min-w-0">
               <div
@@ -170,58 +354,85 @@ export default function PulsePage() {
                 Today&apos;s effort
               </div>
 
-              <KDisplay size={24} className="mt-1 mb-[10px]">
-                KEEP
-                <br />
-                GOING
+              <KDisplay size={24} className="mt-1 mb-[12px]">
+                {todayScore >= DAILY_GOAL ? "GOAL REACHED" : "KEEP GOING"}
               </KDisplay>
 
-              <div className="flex gap-[14px]">
-                <div>
-                  <div
-                    className="text-k-muted font-bold uppercase"
-                    style={{ fontSize: 10, letterSpacing: 1 }}
-                  >
-                    Streak
-                  </div>
-                  <div className="flex items-baseline gap-1 mt-0.5">
-                    <IcFlame size={14} color={K.danger} />
-                    <span
-                      className="font-display font-extrabold italic text-k-ink"
-                      style={{ fontSize: 20 }}
+              <div className="flex flex-col gap-3">
+                {/* Stats Row */}
+                <div className="flex gap-[16px]">
+                  <div>
+                    <div
+                      className="text-k-muted font-bold uppercase"
+                      style={{ fontSize: 10, letterSpacing: 1 }}
                     >
-                      {streak}
-                    </span>
-                    <span
-                      className="text-k-muted font-semibold"
-                      style={{ fontSize: 11 }}
+                      Streak
+                    </div>
+                    <div className="flex items-baseline gap-1 mt-0.5">
+                      <IcFlame size={14} color={K.danger} />
+                      <span
+                        className="font-display font-extrabold italic text-k-ink"
+                        style={{ fontSize: 20 }}
+                      >
+                        {streak}
+                      </span>
+                      <span
+                        className="text-k-muted font-semibold"
+                        style={{ fontSize: 11 }}
+                      >
+                        wk
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    className="self-stretch w-px"
+                    style={{ background: K.line }}
+                  />
+
+                  <div>
+                    <div
+                      className="text-k-muted font-bold uppercase"
+                      style={{ fontSize: 10, letterSpacing: 1 }}
                     >
-                      wk
-                    </span>
-                  </div>
-                </div>
-
-                <div
-                  className="self-stretch w-px"
-                  style={{ background: K.line }}
-                />
-
-                <div>
-                  <div
-                    className="text-k-muted font-bold uppercase"
-                    style={{ fontSize: 10, letterSpacing: 1 }}
-                  >
-                    Rank
-                  </div>
-                  <div
-                    className="font-display font-extrabold italic mt-0.5"
-                    style={{ fontSize: 20, color: K.greenDeep }}
-                  >
-                    {myRank > 0 ? `#${myRank}` : '—'}
+                      Rank
+                    </div>
+                    <div
+                      className="font-display font-extrabold italic mt-0.5"
+                      style={{ fontSize: 20, color: K.greenDeep }}
+                    >
+                      {myRank > 0 ? `#${myRank}` : '—'}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* ── Status Footer (Edge-to-Edge) ── */}
+          <div className="absolute bottom-0 left-0 right-0 bg-k-ink/[0.02] pt-2">
+             <div className="flex justify-between items-end px-5 mb-2">
+                <div className="flex flex-col">
+                  <span className="text-[8px] font-black text-k-muted-soft uppercase tracking-widest opacity-60">Status</span>
+                  <span className="text-[10px] font-black italic uppercase" style={{ color: tier.color }}>{tier.name} &middot; {totalScore.toLocaleString()} pts</span>
+                </div>
+                {tier.next && (
+                  <div className="text-right">
+                    <span className="text-[8px] font-black text-k-muted-soft uppercase tracking-widest opacity-60">Next Tier</span>
+                    <span className="block text-[10px] font-bold text-k-ink uppercase">{tier.next.name}</span>
+                  </div>
+                )}
+             </div>
+             <div className="h-[4px] w-full bg-k-line-strong/30 overflow-hidden">
+                <div 
+                  className="h-full transition-all duration-1000 ease-out"
+                  style={{ 
+                    width: `${Math.round(tier.pct * 100)}%`,
+                    background: tier.color,
+                    boxShadow: `0 0 10px ${tier.color}AA`
+                  }}
+                />
+             </div>
           </div>
         </KCard>
 
@@ -253,6 +464,8 @@ export default function PulsePage() {
           <div className="flex flex-col gap-[10px]">
             {exercises.map((ex) => {
               const Icon = EXERCISE_ICON_MAP[ex.slug];
+              const hasMultipleSessions = ex.sessions.length > 1;
+
               return (
                 <KCard key={ex.slug} pad={14}>
                   <div className="flex items-center gap-[14px]">
@@ -317,6 +530,44 @@ export default function PulsePage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* ── Individual Session Breakdown ── */}
+                  {hasMultipleSessions && (
+                    <div
+                      className="mt-3 pt-3 border-t space-y-2.5"
+                      style={{ borderColor: K.line }}
+                    >
+                      {ex.sessions.map((session, idx) => (
+                        <div
+                          key={idx}
+                          className="flex justify-between items-center"
+                          style={{ paddingLeft: 58 }}
+                        >
+                          <div
+                            className="text-k-muted font-bold uppercase"
+                            style={{ fontSize: 9, letterSpacing: 1 }}
+                          >
+                            Session {idx + 1}
+                          </div>
+                          <div
+                            className="font-display font-black italic"
+                            style={{ fontSize: 13, color: K.ink }}
+                          >
+                            <span style={{ color: K.ink }}>{session.value}</span>
+                            <span
+                              className="mx-1.5 opacity-30 font-bold"
+                              style={{ color: K.ink }}
+                            >
+                              /
+                            </span>
+                            <span style={{ color: K.greenDeep }}>
+                              {Math.round(session.score)} pts
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </KCard>
               );
             })}
@@ -497,13 +748,14 @@ export default function PulsePage() {
           ) : (
             <div className="flex gap-2 overflow-x-auto pb-1 -mx-0.5 px-0.5">
               {recentMilestones.map((m) => (
-                <KCard key={m.id} pad={12} className="min-w-[148px] max-w-[180px] shrink-0">
-                  <div
-                    className="flex items-center justify-center"
-                    style={{ width: 40, height: 40, borderRadius: 10, background: K.mintSoft }}
-                    aria-hidden
-                  >
-                    <MilestoneIcon milestoneKey={m.milestone_key} size={24} />
+                <KCard 
+                  key={m.id} 
+                  pad={12} 
+                  className="min-w-[148px] max-w-[180px] shrink-0 cursor-pointer active:scale-95 transition-transform"
+                  onClick={() => setSelectedMilestone(m)}
+                >
+                  <div className="flex items-center justify-center p-1" aria-hidden>
+                    <KBadge milestoneKey={m.milestone_key} size={54} />
                   </div>
                   <p className="text-[11px] font-bold text-k-ink mt-2 leading-tight line-clamp-3">{m.label}</p>
                   <p className="text-[9px] font-semibold text-k-muted-soft mt-1 uppercase tracking-wide">
@@ -515,95 +767,6 @@ export default function PulsePage() {
           )}
         </div>
 
-        {/* ── Tier progress ── */}
-        <div>
-          <KEyebrow>Progression</KEyebrow>
-          <KDisplay size={22} className="mt-1 mb-3">
-            TIER UP
-          </KDisplay>
-
-          <KCard pad={18}>
-            <div className="flex items-center gap-[14px] mb-[14px]">
-              <div
-                className="flex-shrink-0 flex items-center justify-center"
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 12,
-                  background: `linear-gradient(135deg, ${tier.color}, ${tier.color}cc)`,
-                  boxShadow: `0 4px 14px ${tier.color}66`,
-                }}
-              >
-                <IcTrophy size={24} color="#fff" />
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div
-                  className="text-k-muted font-bold uppercase"
-                  style={{ fontSize: 10, letterSpacing: 1.2 }}
-                >
-                  Current tier
-                </div>
-                <div
-                  className="font-display font-black italic text-k-ink"
-                  style={{ fontSize: 22, marginTop: 2 }}
-                >
-                  {tier.name.toUpperCase()}
-                </div>
-              </div>
-
-              {tier.next && (
-                <div className="text-right">
-                  <div
-                    className="text-k-muted font-bold uppercase"
-                    style={{ fontSize: 10, letterSpacing: 1 }}
-                  >
-                    Next
-                  </div>
-                  <div
-                    className="font-bold"
-                    style={{
-                      fontSize: 13,
-                      color: tier.next.color,
-                      marginTop: 2,
-                    }}
-                  >
-                    {tier.next.name}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div
-              style={{
-                height: 6,
-                borderRadius: 3,
-                background: '#EFEFEF',
-                overflow: 'hidden',
-              }}
-            >
-              <div
-                style={{
-                  height: '100%',
-                  width: `${Math.round(tier.pct * 100)}%`,
-                  background: `linear-gradient(90deg, ${tier.color}, ${tier.next?.color || tier.color})`,
-                  borderRadius: 3,
-                  transition: 'width 1s',
-                }}
-              />
-            </div>
-
-            <div
-              className="flex justify-between text-k-muted"
-              style={{ marginTop: 8, fontSize: 11 }}
-            >
-              <span>{totalScore.toLocaleString()} pts</span>
-              {tier.next && (
-                <span>{tier.next.min.toLocaleString()} pts</span>
-              )}
-            </div>
-          </KCard>
-        </div>
 
         {/* ── Insights ── */}
         <div>
@@ -689,6 +852,15 @@ export default function PulsePage() {
           </div>
         </div>
       </div>
+
+      <AnimatePresence>
+        {selectedMilestone && (
+          <BadgeModal 
+            milestone={selectedMilestone} 
+            onClose={() => setSelectedMilestone(null)} 
+          />
+        )}
+      </AnimatePresence>
     </AppShell>
   );
 }

@@ -15,13 +15,14 @@ import {
   startOfWeek,
   subMonths,
   subWeeks,
+  subDays,
 } from 'date-fns';
 
-export type PersonalTrendCategory = 'pushups' | 'plank' | 'run' | 'squats';
+export type PersonalTrendCategory = 'pushups' | 'plank' | 'run' | 'squats' | 'overall';
 export type TrendAgg = 'volume' | 'peak';
 export type TrendMode = 'raw' | 'percent';
 
-type DayAgg = { vol: number; peak: number };
+type DayAgg = { vol: number; peak: number; score: number };
 
 export function isWeekLineMode(
   range: 'week' | 'month' | '3mo' | '6mo' | 'year' | 'custom',
@@ -87,8 +88,15 @@ export function buildDayMap(
     const t = new Date(log.logged_at).getTime();
     if (t < fromMs || t > toMs) continue;
     const dk = format(new Date(log.logged_at), 'yyyy-MM-dd');
-    const cur = map.get(dk) ?? { vol: 0, peak: 0 };
-    if (category === 'pushups') {
+    const cur = map.get(dk) ?? { vol: 0, peak: 0, score: 0 };
+    
+    // Accumulate total score for the day regardless of category
+    cur.score += log.session_score || 0;
+
+    if (category === 'overall') {
+      cur.vol += log.session_score || 0;
+      cur.peak = Math.max(cur.peak, log.session_score || 0);
+    } else if (category === 'pushups') {
       cur.vol += log.pushup_reps;
       cur.peak = Math.max(cur.peak, log.pushup_reps);
     } else if (category === 'plank') {
@@ -98,7 +106,7 @@ export function buildDayMap(
       const reps = log.squat_reps || 0;
       cur.vol += reps;
       cur.peak = Math.max(cur.peak, reps);
-    } else {
+    } else if (category === 'run') {
       const km = Number(log.run_distance) || 0;
       cur.vol += km;
       cur.peak = Math.max(cur.peak, km);
@@ -106,6 +114,10 @@ export function buildDayMap(
     map.set(dk, cur);
   }
   return map;
+}
+
+function dayScore(map: Map<string, DayAgg>, dk: string): number {
+  return map.get(dk)?.score ?? 0;
 }
 
 function dayRaw(map: Map<string, DayAgg>, dk: string, agg: TrendAgg): number {
@@ -135,6 +147,8 @@ export type WeekLinePoint = {
   /** Raw mode: null = no workout that day (line gaps, not a flat zero runway). */
   total: number | null;
   overlay?: number | null;
+  score?: number;
+  overlayScore?: number;
   peakHighlight?: boolean;
 };
 
@@ -171,15 +185,23 @@ export function buildWeekLineChart(
 
   const showOverlay = !(agg === 'peak' && mode === 'raw');
 
+  const now = startOfDay(new Date());
+
   for (const d of days) {
     const sk = dayKey(d);
-    const prevSk = dayKey(addDays(d, -7));
+    const prevSk = dayKey(subDays(d, 7));
     const curRaw = dayRaw(map, sk, agg);
     const prevRaw = dayRaw(map, prevSk, agg);
 
+    const isPastOrToday = !isAfter(startOfDay(d), now);
+
     let total: number | null;
     if (mode === 'raw') {
-      total = curRaw === 0 ? null : curRaw / scale;
+      if (curRaw > 0) {
+        total = curRaw / scale;
+      } else {
+        total = isPastOrToday ? 0 : null;
+      }
     } else {
       total = pctDiff(curRaw, prevRaw);
     }
@@ -201,6 +223,8 @@ export function buildWeekLineChart(
       sortKey: sk,
       total,
       overlay,
+      score: dayScore(map, sk),
+      overlayScore: dayScore(map, prevSk),
     });
   }
 

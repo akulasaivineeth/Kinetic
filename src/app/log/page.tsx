@@ -388,20 +388,6 @@ function LogPage() {
         (pushupReps > allTimeStats.peakPushups) || (plankSeconds > allTimeStats.peakPlankSeconds) ||
         (finalRunDist > allTimeStats.peakRunDistance) || (squatReps > allTimeStats.peakSquats));
 
-      let delayTime = 0;
-      if (isPB) { setPbCelebration('NEW PB!'); delayTime = 1200; }
-      if (totalPts > 0 && delayTime === 0) {
-        const parts = [
-          pushupPts > 0 ? `Push ${Math.round(pushupPts)}` : '',
-          plankPts > 0 ? `Plank ${Math.round(plankPts)}` : '',
-          runPts > 0 ? `Run ${Math.round(runPts)}` : '',
-          squatPts > 0 ? `Squat ${Math.round(squatPts)}` : '',
-        ].filter(Boolean).join(' + ');
-        setPbCelebration(`${Math.round(totalPts)} PTS${parts ? ` — ${parts}` : ''}`);
-        delayTime = 1200;
-      }
-      if (delayTime > 0) await new Promise((r) => setTimeout(r, delayTime));
-
       const prevRankWeek = myRankWeek;
       setSubmitted(true);
       await refetchDashboardAfterLogChange();
