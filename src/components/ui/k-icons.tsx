@@ -207,6 +207,97 @@ export function ExJumprope({ size = 28, color = 'currentColor', className }: Ico
   );
 }
 
+export function ExBurpee({ size = 28, color = 'currentColor', className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" className={className}>
+      <circle cx="16" cy="5" r="2" stroke={color} strokeWidth="1.6"/>
+      <path d="M16 7v5l-5 4M16 12l5 4M4 16l7-5M21 16l7-5" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M10 27l2-6h8l2 6" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M7 27h18" stroke={color} strokeWidth="1.6" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+export function ExLunge({ size = 28, color = 'currentColor', className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" className={className}>
+      <circle cx="16" cy="5" r="2" stroke={color} strokeWidth="1.6"/>
+      <path d="M16 8v7l-5 6v6M16 15l4-2 4 2v11" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M8 27h7M20 27h7" stroke={color} strokeWidth="1.6" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+export function ExDeadlift({ size = 28, color = 'currentColor', className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" className={className}>
+      <circle cx="16" cy="5" r="2" stroke={color} strokeWidth="1.6"/>
+      <path d="M16 7l-2 9-4 3M16 16l4-3" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M8 22h16" stroke={color} strokeWidth="1.6" strokeLinecap="round"/>
+      <rect x="4" y="20" width="4" height="5" rx="1" stroke={color} strokeWidth="1.4"/>
+      <rect x="24" y="20" width="4" height="5" rx="1" stroke={color} strokeWidth="1.4"/>
+    </svg>
+  );
+}
+
+export function ExBenchPress({ size = 28, color = 'currentColor', className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" className={className}>
+      <circle cx="9" cy="11" r="2" stroke={color} strokeWidth="1.6"/>
+      <path d="M9 13v8M7 17h4" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M13 17h10" stroke={color} strokeWidth="1.6" strokeLinecap="round"/>
+      <path d="M23 12v10" stroke={color} strokeWidth="1.6" strokeLinecap="round"/>
+      <rect x="20" y="9" width="6" height="3" rx="1.2" stroke={color} strokeWidth="1.4"/>
+      <rect x="20" y="22" width="6" height="3" rx="1.2" stroke={color} strokeWidth="1.4"/>
+      <path d="M5 21h6" stroke={color} strokeWidth="1.6" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+export function ExKettlebell({ size = 28, color = 'currentColor', className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" className={className}>
+      <circle cx="16" cy="14" r="8" stroke={color} strokeWidth="1.6"/>
+      <path d="M11 8c-1-3 1-6 5-6s6 3 5 6" stroke={color} strokeWidth="1.6" strokeLinecap="round"/>
+      <path d="M13 22h6l1 5H12l1-5z" stroke={color} strokeWidth="1.6" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+export function ExStepup({ size = 28, color = 'currentColor', className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" className={className}>
+      <circle cx="10" cy="7" r="2" stroke={color} strokeWidth="1.6"/>
+      <path d="M10 9l2 5h5" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M14 10l4-3" stroke={color} strokeWidth="1.6" strokeLinecap="round"/>
+      <path d="M12 14l-1 7M10 21l5 3" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+      <rect x="16" y="18" width="12" height="5" rx="1.5" stroke={color} strokeWidth="1.4"/>
+      <path d="M3 27h26" stroke={color} strokeWidth="1.6" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+export function ExCurl({ size = 28, color = 'currentColor', className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" className={className}>
+      <path d="M8 24V14a6 6 0 0112 0" stroke={color} strokeWidth="1.6" strokeLinecap="round"/>
+      <path d="M8 14l-3 0M8 20l-3 0" stroke={color} strokeWidth="1.4" strokeLinecap="round"/>
+      <rect x="18" y="11" width="7" height="4" rx="1.5" stroke={color} strokeWidth="1.4"/>
+      <rect x="4" y="21" width="7" height="4" rx="1.5" stroke={color} strokeWidth="1.4"/>
+    </svg>
+  );
+}
+
+export function ExGeneric({ size = 28, color = 'currentColor', className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" className={className}>
+      <rect x="3" y="13" width="6" height="6" rx="1.5" stroke={color} strokeWidth="1.6"/>
+      <rect x="23" y="13" width="6" height="6" rx="1.5" stroke={color} strokeWidth="1.6"/>
+      <path d="M9 16h14" stroke={color} strokeWidth="2.5" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
 export const EXERCISE_ICON_MAP: Record<string, React.ComponentType<IconProps>> = {
   pushup: ExPushup,
   pushups: ExPushup,
@@ -220,6 +311,7 @@ export const EXERCISE_ICON_MAP: Record<string, React.ComponentType<IconProps>> =
   swim: ExSwim,
   yoga: ExYoga,
   bike: ExBike,
+  cycling: ExBike,
   rowing: ExRow,
   row: ExRow,
   jumprope: ExJumprope,
@@ -227,4 +319,15 @@ export const EXERCISE_ICON_MAP: Record<string, React.ComponentType<IconProps>> =
   walking: ExRun,
   elliptical: ExBike,
   stairclimber: ExSquat,
+  burpee: ExBurpee,
+  lunge: ExLunge,
+  deadlift: ExDeadlift,
+  bench: ExBenchPress,
+  kettlebell: ExKettlebell,
+  stepup: ExStepup,
+  curl: ExCurl,
 };
+
+export function exerciseIcon(slug: string): React.ComponentType<IconProps> {
+  return EXERCISE_ICON_MAP[slug] ?? EXERCISE_ICON_MAP[slug?.replace(/s$/, '')] ?? ExGeneric;
+}

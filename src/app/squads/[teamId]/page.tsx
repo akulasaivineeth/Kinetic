@@ -4,11 +4,13 @@ import { useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { endOfWeek, format, startOfWeek } from 'date-fns';
+import { endOfWeek, startOfWeek } from 'date-fns';
 import { Copy, Check, Vote } from 'lucide-react';
 import { AppShell } from '@/components/layout/app-shell';
-import { KCard, KEyebrow, KDisplay, KPill, KCrest, KAvatar } from '@/components/ui/k-primitives';
+import { KCard, KEyebrow, KDisplay, KAvatar, KCrest } from '@/components/ui/k-primitives';
+import { ActivityEmojiIcon } from '@/components/ui/activity-emoji-icon';
 import { SquadChatPanel } from '@/components/squads/squad-chat-panel';
+import { SquadArenaPanel } from '@/components/squads/squad-arena-panel';
 import { IcBack } from '@/components/ui/k-icons';
 import { crestPropsForTeam } from '@/lib/squad-crest-codec';
 import {
@@ -22,11 +24,7 @@ import type { TeamActivity, TeamLeaderboardEntry } from '@/types/database';
 
 type Tab = 'overview' | 'arena' | 'chat';
 
-function formatMemberStat(
-  slug: string,
-  value: number,
-  unitPref: 'metric' | 'imperial',
-): string {
+function formatMemberStat(slug: string, value: number, unitPref: 'metric' | 'imperial'): string {
   if (slug === 'plank') return `${Math.round(value / 60)}′`;
   if (slug === 'run') {
     return unitPref === 'imperial' ? `${(value * 0.621371).toFixed(1)} mi` : `${Number(value).toFixed(1)} km`;
@@ -61,24 +59,8 @@ export default function SquadDetailPage() {
 
   const crest = teamId ? crestPropsForTeam(teamId, squad?.avatar_url ?? null) : crestPropsForTeam('x', null);
 
-  const squadWeekTotal = useMemo(
-    () => board.reduce((s, e) => s + e.total_score, 0),
-    [board],
-  );
+  const squadWeekTotal = useMemo(() => board.reduce((s, e) => s + e.total_score, 0), [board]);
   const activeMembers = useMemo(() => board.filter((e) => e.total_score > 0).length, [board]);
-  const maxScore = useMemo(() => Math.max(1, ...board.map((e) => e.total_score)), [board]);
-
-  const squadVolumeByActivity = useMemo(() => {
-    const acc = new Map<string, number>();
-    if (!squad) return acc;
-    for (const row of board) {
-      for (const act of squad.activities) {
-        const v = row.activity_breakdown?.[act.slug]?.value ?? 0;
-        acc.set(act.slug, (acc.get(act.slug) ?? 0) + v);
-      }
-    }
-    return acc;
-  }, [board, squad]);
 
   if (!teamId) {
     return (
@@ -103,10 +85,7 @@ export default function SquadDetailPage() {
   if (squadErr || !squad) {
     return (
       <AppShell>
-        <Link
-          href="/squads"
-          className="inline-flex items-center gap-2 text-[13px] font-semibold text-emerald-600 dark:text-emerald-400 mb-4"
-        >
+        <Link href="/squads" className="inline-flex items-center gap-2 text-[13px] font-semibold text-emerald-600 dark:text-emerald-400 mb-4">
           <IcBack size={18} /> Back to hub
         </Link>
         <KCard>
@@ -122,195 +101,187 @@ export default function SquadDetailPage() {
   return (
     <AppShell>
       <div className="pb-28 space-y-4">
-        <Link
-          href="/squads"
-          className="inline-flex items-center gap-2 text-[13px] font-semibold text-k-muted-soft hover:text-k-ink"
-        >
-          <IcBack size={18} /> Squads
-        </Link>
-
-        <div className="flex items-start gap-3">
-          <KCrest {...crest} size={56} glow />
+        {/* Back + squad header */}
+        <div className="flex items-center gap-2.5">
+          <Link
+            href="/squads"
+            className="w-9 h-9 rounded-k-pill border-none bg-k-card shadow-k-card flex items-center justify-center shrink-0 no-underline"
+          >
+            <IcBack size={18} color="var(--k-ink, #0B0D0C)" />
+          </Link>
           <div className="flex-1 min-w-0">
-            <KDisplay size={26} className="truncate">
-              {squad.name}
-            </KDisplay>
-            <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <KEyebrow className="!tracking-[0.25em] font-mono text-[10px]">{squad.invite_code}</KEyebrow>
-              <button
-                type="button"
-                onClick={() => {
-                  void navigator.clipboard.writeText(squad.invite_code);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                }}
-                className="p-1.5 rounded-k-lg border border-k-line-strong bg-k-bg"
-                aria-label="Copy invite code"
-              >
-                {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} className="text-k-muted-soft" />}
-              </button>
+            <KEyebrow>{squad.members.length} members</KEyebrow>
+            <div className="flex items-center gap-2 mt-1">
+              <KCrest {...crest} size={28} />
+              <KDisplay size={22} className="truncate">{squad.name.toUpperCase()}</KDisplay>
             </div>
-            <p className="text-[11px] text-k-muted-soft mt-1">
-              {squad.members.length} member{squad.members.length === 1 ? '' : 's'} · this week (Mon–Sun)
-            </p>
+          </div>
+          <div
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-k-pill bg-k-card shadow-k-card shrink-0"
+            style={{ fontSize: 11, fontWeight: 600, fontFamily: 'monospace', letterSpacing: '0.04em', color: '#6B7280' }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard.writeText(squad.invite_code);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="flex items-center gap-1.5 border-none bg-transparent p-0 cursor-pointer"
+              aria-label="Copy invite code"
+            >
+              {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} color="#9AA2A9" />}
+              <span className="text-k-muted-soft">{squad.invite_code}</span>
+            </button>
           </div>
         </div>
 
-        <div className="flex gap-2 flex-wrap">
-          {(['overview', 'arena', 'chat'] as const).map((t) => (
-            <KPill key={t} size="sm" active={tab === t} onClick={() => setTab(t)}>
-              {t === 'overview' ? 'Overview' : t === 'arena' ? 'Arena' : 'Chat'}
-            </KPill>
+        {/* Tab bar — pill group style */}
+        <div className="flex bg-k-card rounded-k-pill shadow-k-card p-1">
+          {(['overview', 'arena', 'chat'] as Tab[]).map(t => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={`flex-1 relative py-2.5 px-2 rounded-k-pill text-[12px] font-bold uppercase tracking-wide transition-all border-none ${
+                tab === t
+                  ? 'bg-k-mint text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400'
+                  : 'bg-transparent text-k-muted'
+              }`}
+            >
+              {t}
+              {t === 'chat' && (
+                <span className="absolute top-2 right-3.5 w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              )}
+            </button>
           ))}
         </div>
 
         {tab === 'overview' && (
-          <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <KCard hi className="!py-4">
-                <KEyebrow className="!text-[10px]">Squad week</KEyebrow>
-                <p className="text-2xl font-display text-emerald-600 dark:text-emerald-400 tabular-nums mt-1">
+          <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+            {/* Score + active cards */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <KCard pad={16} style={{ background: 'linear-gradient(135deg, #1FB37A, #158A5D)', color: '#fff' }}>
+                <div className="text-[10px] font-bold tracking-[1.5px] uppercase" style={{ opacity: 0.8 }}>Squad score</div>
+                <div className="font-display italic font-black mt-1" style={{ fontSize: 34, letterSpacing: -1 }}>
                   {Math.round(squadWeekTotal).toLocaleString()}
-                </p>
-                <p className="text-[10px] text-k-muted-soft mt-0.5">session points</p>
+                </div>
+                <div className="text-[11px] mt-1 font-semibold" style={{ opacity: 0.8 }}>this week</div>
               </KCard>
-              <KCard className="!py-4">
-                <KEyebrow className="!text-[10px]">Training</KEyebrow>
-                <p className="text-2xl font-display text-k-ink tabular-nums mt-1">{activeMembers}</p>
-                <p className="text-[10px] text-k-muted-soft mt-0.5">logged this week</p>
+              <KCard pad={16}>
+                <div className="text-[10px] font-bold tracking-[1.5px] uppercase text-k-muted">Active</div>
+                <div className="font-display italic font-black text-k-ink mt-1" style={{ fontSize: 34, letterSpacing: -1 }}>
+                  {activeMembers}<span className="text-k-muted" style={{ fontSize: 20 }}>/{squad.members.length}</span>
+                </div>
+                <div className="text-[11px] text-k-muted font-semibold mt-1">this week</div>
               </KCard>
             </div>
 
+            {/* Lineup */}
             <div>
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <KEyebrow>Lineup · tracked moves</KEyebrow>
+              <div className="flex items-center justify-between gap-2 mb-2.5">
+                <KEyebrow>Squad lineup</KEyebrow>
                 <Link
                   href={`/squads/${teamId}/vote`}
-                  className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400 hover:opacity-90 shrink-0"
+                  className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400 hover:opacity-90 shrink-0 no-underline"
                 >
                   <Vote size={14} strokeWidth={2.4} aria-hidden />
                   Start vote
                 </Link>
               </div>
-              {squad.activities.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {squad.activities.map((a: TeamActivity) => (
-                    <span
-                      key={a.id}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-k-pill border border-k-line-strong bg-k-bg text-[11px] font-semibold text-k-ink"
-                    >
-                      <span aria-hidden>{a.emoji}</span>
-                      {a.name}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <KCard pad={12} className="!py-3">
+              <KCard pad={14}>
+                {squad.activities.length > 0 ? (
+                  <div className="flex gap-2.5 flex-wrap">
+                    {squad.activities.map((a: TeamActivity) => (
+                      <div
+                        key={a.id}
+                        className="flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-k-pill border border-k-line"
+                        style={{ background: '#fff' }}
+                      >
+                        <ActivityEmojiIcon emoji={a.emoji} slug={a.slug} size="sm" />
+                        <span className="text-[12px] font-bold text-k-ink">{a.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
                   <p className="text-[12px] text-k-muted-soft leading-relaxed">
-                    No moves linked yet. Open a vote to rehearse the lineup flow with your squad.
+                    No moves linked yet. Open a vote to set the squad lineup.
                   </p>
-                </KCard>
-              )}
+                )}
+              </KCard>
             </div>
 
-            <KEyebrow className="mt-1">Members · this week</KEyebrow>
-            {loadBoard ? (
-              <div className="h-32 rounded-k-lg bg-k-card animate-pulse" />
-            ) : (
-              <div className="space-y-2">
-                {board.map((row: TeamLeaderboardEntry, i) => (
-                  <KCard key={row.user_id} pad={14}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="text-sm font-display text-k-muted-soft w-6 shrink-0">{i + 1}</span>
-                        <KAvatar name={row.full_name} src={row.avatar_url || null} size={40} />
-                        <div className="min-w-0">
-                          <p className="text-[13px] font-bold text-k-ink truncate">{row.full_name || 'Athlete'}</p>
-                          <p className="text-[11px] text-k-muted-soft">
-                            {user?.id === row.user_id ? 'You · ' : ''}Streak {row.streak ?? 0}
+            {/* Members sorted by week */}
+            <div>
+              <KEyebrow className="mb-2.5">Members · sorted by week</KEyebrow>
+              {loadBoard ? (
+                <div className="h-32 rounded-k-lg bg-k-card animate-pulse" />
+              ) : (
+                <div className="space-y-2">
+                  {board.map((row: TeamLeaderboardEntry, i) => (
+                    <KCard key={row.user_id} pad={12}>
+                      <div className="flex items-center gap-3">
+                        <span
+                          className="font-display italic font-black w-6 text-center shrink-0"
+                          style={{ fontSize: 14, color: i === 0 ? '#158A5D' : '#9AA2A9' }}
+                        >{i + 1}</span>
+                        <KAvatar name={row.full_name} src={row.avatar_url || null} size={36} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[13px] font-bold text-k-ink truncate">
+                              {user?.id === row.user_id ? 'You' : row.full_name || 'Athlete'}
+                            </span>
+                            {user?.id === row.user_id && (
+                              <span
+                                className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                                style={{ background: '#D7F0E2', color: '#158A5D' }}
+                              >You</span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-k-muted font-semibold mt-0.5">
+                            Streak {row.streak ?? 0}
                           </p>
                         </div>
+                        <div className="text-right shrink-0">
+                          <div className="font-display italic font-black text-emerald-600 dark:text-emerald-400 tabular-nums" style={{ fontSize: 18, letterSpacing: -0.3 }}>
+                            {Math.round(row.total_score).toLocaleString()}
+                          </div>
+                          <div className="text-[9px] font-bold text-k-muted uppercase tracking-wide">pts</div>
+                        </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-[15px] font-display text-emerald-600 dark:text-emerald-400 tabular-nums leading-none">
-                          {Math.round(row.total_score).toLocaleString()}
-                        </p>
-                        <p className="text-[9px] font-semibold text-k-muted-soft uppercase mt-0.5">pts</p>
-                      </div>
-                    </div>
-                    {squad.activities.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2.5 pl-[52px]">
-                        {squad.activities.map((a: TeamActivity) => {
-                          const raw = row.activity_breakdown?.[a.slug]?.value ?? 0;
-                          if (!raw) return null;
-                          return (
-                            <span
-                              key={`${row.user_id}-${a.slug}`}
-                              className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-k-pill bg-k-mint/40 dark:bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold text-k-ink"
-                            >
-                              <span aria-hidden>{a.emoji}</span>
-                              {formatMemberStat(a.slug, raw, unitPref)}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </KCard>
-                ))}
-              </div>
-            )}
+                      {squad.activities.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2 pl-[52px]">
+                          {squad.activities.map((a: TeamActivity) => {
+                            const raw = row.activity_breakdown?.[a.slug]?.value ?? 0;
+                            if (!raw) return null;
+                            return (
+                              <span
+                                key={`${row.user_id}-${a.slug}`}
+                                className="inline-flex items-center gap-1 pl-1 pr-2 py-0.5 rounded-k-pill text-[10px] font-bold text-k-ink border border-k-line"
+                                style={{ background: '#fff' }}
+                              >
+                                <ActivityEmojiIcon emoji={a.emoji} slug={a.slug} size="xs" />
+                                {formatMemberStat(a.slug, raw, unitPref)}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </KCard>
+                  ))}
+                </div>
+              )}
+            </div>
           </motion.div>
         )}
 
         {tab === 'arena' && (
-          <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
-            {squad.activities.length > 0 && (
-              <>
-                <KEyebrow>Squad volume · this week</KEyebrow>
-                {loadBoard ? (
-                  <div className="h-16 rounded-k-lg bg-k-card animate-pulse" />
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    {squad.activities.map((a: TeamActivity) => (
-                      <KCard key={a.slug} pad={12} className="!py-3">
-                        <div className="flex items-center gap-2 text-[11px] font-bold text-k-ink">
-                          <span>{a.emoji}</span>
-                          {a.name}
-                        </div>
-                        <p className="text-lg font-display text-k-ink tabular-nums mt-1">
-                          {formatMemberStat(a.slug, squadVolumeByActivity.get(a.slug) ?? 0, unitPref)}
-                        </p>
-                      </KCard>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-            <KEyebrow>Head-to-head · this week</KEyebrow>
-            {loadBoard ? (
-              <div className="h-40 rounded-k-lg bg-k-card animate-pulse" />
-            ) : board.length === 0 ? (
-              <KCard className="text-center py-8 text-k-muted-soft text-sm">No scores yet.</KCard>
-            ) : (
-              board.slice(0, 8).map((row) => (
-                <KCard key={row.user_id} pad={14}>
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="text-[13px] font-bold text-k-ink truncate">{row.full_name}</span>
-                    <span className="text-[12px] font-display text-emerald-600 dark:text-emerald-400 tabular-nums shrink-0">
-                      {Math.round(row.total_score)}
-                    </span>
-                  </div>
-                  <div className="h-2.5 rounded-full bg-black/5 dark:bg-white/10 overflow-hidden">
-                    <motion.div
-                      className="h-full rounded-full bg-emerald-500"
-                      initial={{ width: 0 }}
-                      animate={{ width: `${(row.total_score / maxScore) * 100}%` }}
-                      transition={{ duration: 0.5, ease: [0.2, 0.8, 0.2, 1] }}
-                    />
-                  </div>
-                </KCard>
-              ))
-            )}
+          <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
+            <SquadArenaPanel
+              teamId={teamId}
+              activities={squad.activities}
+              memberIds={memberIds}
+            />
           </motion.div>
         )}
 

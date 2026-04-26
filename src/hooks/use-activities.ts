@@ -132,8 +132,10 @@ export function useRankedActivityTypes() {
     });
 
     // Flex sessions
+    const typeById = new Map(allTypes.map(t => [t.id, t.slug]));
     flexLogs.forEach(log => {
-      counts[log.slug] = (counts[log.slug] || 0) + 1;
+      const slug = typeById.get(log.activity_type_id);
+      if (slug) counts[slug] = (counts[slug] || 0) + 1;
     });
 
     // 2. Sort all types by count

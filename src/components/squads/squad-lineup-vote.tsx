@@ -6,8 +6,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Check, ChevronRight, Vote } from 'lucide-react';
 import { KCard, KEyebrow, KDisplay, KPill } from '@/components/ui/k-primitives';
-import { EXERCISE_ICON_MAP } from '@/components/ui/k-icons';
-import { IcBack } from '@/components/ui/k-icons';
+import { exerciseIcon as getExerciseIcon, IcBack } from '@/components/ui/k-icons';
 import { useActivityTypes } from '@/hooks/use-activities';
 import { useTeamDetails } from '@/hooks/use-teams';
 import { useAuth } from '@/providers/auth-provider';
@@ -16,7 +15,7 @@ import type { ActivityType } from '@/types/database';
 const MAX_PICKS = 6;
 
 function exerciseIconForSlug(slug: string) {
-  return EXERCISE_ICON_MAP[slug] ?? EXERCISE_ICON_MAP[slug.replace(/s$/, '')];
+  return getExerciseIcon(slug);
 }
 
 function hashString(s: string): number {
@@ -250,7 +249,7 @@ export function SquadLineupVote({ teamId }: { teamId: string }) {
                       picked ? 'bg-emerald-500 text-white' : 'bg-k-mint-soft text-emerald-600 dark:text-emerald-400'
                     }`}
                   >
-                    {Icon ? <Icon size={22} /> : <span className="text-lg">{ex.emoji}</span>}
+                    {Icon && <Icon size={22} />}
                   </div>
                   <p className="text-[13px] font-bold text-k-ink leading-tight">{ex.name}</p>
                   <p className="text-[10px] text-k-muted-soft font-semibold mt-1 uppercase tracking-wide">{ex.unit}</p>
@@ -310,7 +309,7 @@ export function SquadLineupVote({ teamId }: { teamId: string }) {
                     >
                       {(() => {
                         const Icon = exerciseIconForSlug(row.slug);
-                        return Icon ? <Icon size={20} /> : <span>{ex.emoji}</span>;
+                        return Icon ? <Icon size={20} /> : null;
                       })()}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -376,7 +375,7 @@ export function SquadLineupVote({ teamId }: { teamId: string }) {
                   <KCard key={slug} pad={14}>
                     <div className="flex items-center gap-3">
                       <div className="w-11 h-11 rounded-k-md bg-k-mint-soft flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-                        {Icon ? <Icon size={24} /> : <span className="text-xl">{ex.emoji}</span>}
+                        {Icon && <Icon size={24} />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[14px] font-extrabold text-k-ink">{ex.name}</p>

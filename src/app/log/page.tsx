@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, Suspense, useMemo, type Compo
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppShell } from '@/components/layout/app-shell';
 import { KCard, KEyebrow, KDisplay, KPill } from '@/components/ui/k-primitives';
-import { EXERCISE_ICON_MAP } from '@/components/ui/k-icons';
+import { exerciseIcon } from '@/components/ui/k-icons';
 import { K } from '@/lib/design-tokens';
 import { useAuth } from '@/providers/auth-provider';
 import { fetchLeaderboard, useLeaderboard } from '@/hooks/use-leaderboard';
@@ -40,7 +40,7 @@ function isCoreSlug(slug: string): slug is CoreSlug {
 }
 
 function exerciseIconForSlug(slug: string) {
-  return EXERCISE_ICON_MAP[slug] ?? EXERCISE_ICON_MAP[slug.replace(/s$/, '')];
+  return exerciseIcon(slug);
 }
 
 /** v2 monoline icons + values (replaces emoji in history rows). */
@@ -55,22 +55,10 @@ function LogDayMetricsRow({
   };
 }) {
   const chips: { key: string; Icon: ComponentType<{ size?: number; color?: string }>; text: string }[] = [];
-  if ((log.pushup_reps ?? 0) > 0) {
-    const Icon = EXERCISE_ICON_MAP.pushups ?? EXERCISE_ICON_MAP.pushup;
-    if (Icon) chips.push({ key: 'pu', Icon, text: String(log.pushup_reps) });
-  }
-  if ((log.squat_reps ?? 0) > 0) {
-    const Icon = EXERCISE_ICON_MAP.squats ?? EXERCISE_ICON_MAP.squat;
-    if (Icon) chips.push({ key: 'sq', Icon, text: String(log.squat_reps) });
-  }
-  if ((log.plank_seconds ?? 0) > 0) {
-    const Icon = EXERCISE_ICON_MAP.plank;
-    if (Icon) chips.push({ key: 'pl', Icon, text: formatPlankTime(log.plank_seconds ?? 0) });
-  }
-  if (Number(log.run_distance ?? 0) > 0) {
-    const Icon = EXERCISE_ICON_MAP.run;
-    if (Icon) chips.push({ key: 'rn', Icon, text: `${Number(log.run_distance)}km` });
-  }
+  if ((log.pushup_reps ?? 0) > 0) chips.push({ key: 'pu', Icon: exerciseIcon('pushup'), text: String(log.pushup_reps) });
+  if ((log.squat_reps ?? 0) > 0)  chips.push({ key: 'sq', Icon: exerciseIcon('squat'),  text: String(log.squat_reps) });
+  if ((log.plank_seconds ?? 0) > 0) chips.push({ key: 'pl', Icon: exerciseIcon('plank'), text: formatPlankTime(log.plank_seconds ?? 0) });
+  if (Number(log.run_distance ?? 0) > 0) chips.push({ key: 'rn', Icon: exerciseIcon('run'), text: `${Number(log.run_distance)}km` });
   return (
     <div className="flex flex-wrap gap-2.5 items-center font-bold text-sm tracking-wide text-k-ink">
       {chips.map(({ key, Icon, text }) => (
@@ -633,7 +621,7 @@ function LogPage() {
                       : 'bg-k-elevated/60 border-k-line-strong/80 hover:border-k-line-strong'
                   }`}>
                   <span className="mb-0.5 flex h-7 w-7 items-center justify-center text-emerald-600 dark:text-emerald-400">
-                    {TileIcon ? <TileIcon size={22} /> : <span className="text-xl">{act.emoji}</span>}
+                    {TileIcon && <TileIcon size={22} />}
                   </span>
                   <span className={`text-[9px] font-bold tracking-wide ${active ? 'text-emerald-600 dark:text-emerald-400' : 'text-k-muted-soft'}`}>
                     {act.name.split(' ')[0]}
@@ -664,7 +652,7 @@ function LogPage() {
                         whileTap={{ scale: 0.95 }}
                         className="inline-flex items-center gap-2 pl-2 pr-3 py-2 rounded-k-pill border border-emerald-500/25 bg-k-mint-soft dark:bg-emerald-500/10"
                       >
-                        {Icon ? <Icon size={20} className="text-emerald-600 dark:text-emerald-400 shrink-0" /> : <span className="text-base">{act.emoji}</span>}
+                        {Icon && <Icon size={20} className="text-emerald-600 dark:text-emerald-400 shrink-0" />}
                         <span className="text-[11px] font-bold text-k-ink max-w-[120px] truncate">{act.name}</span>
                         {val > 0 && <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400">{val}</span>}
                       </motion.button>
@@ -703,7 +691,7 @@ function LogPage() {
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <span className="flex h-8 w-8 items-center justify-center text-emerald-600 dark:text-emerald-400">
-                          {HeaderIcon ? <HeaderIcon size={22} /> : <span className="text-lg">{act.emoji}</span>}
+                          {HeaderIcon && <HeaderIcon size={22} />}
                         </span>
                         <span className="text-[11px] font-black tracking-wider text-k-ink uppercase">{act.name}</span>
                       </div>
@@ -766,7 +754,7 @@ function LogPage() {
                 <div className="rounded-2xl bg-k-elevated/70 border border-k-line-strong/80 p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="flex h-8 w-8 items-center justify-center text-emerald-600 dark:text-emerald-400">
-                      {FlexHeaderIcon ? <FlexHeaderIcon size={22} /> : <span className="text-lg">{act.emoji}</span>}
+                      {FlexHeaderIcon && <FlexHeaderIcon size={22} />}
                     </span>
                     <span className="text-[11px] font-black tracking-wider text-k-ink uppercase">{act.name}</span>
                     <span className="text-[9px] text-k-muted-soft font-semibold">({act.unit})</span>
@@ -890,7 +878,7 @@ function LogPage() {
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="w-9 h-9 rounded-k-sm bg-k-card border border-k-line-strong flex items-center justify-center shrink-0 text-k-green">
-                            {Icon ? <Icon size={22} className="text-emerald-600 dark:text-emerald-400" /> : <span className="text-lg">{act.emoji}</span>}
+                            {Icon && <Icon size={22} className="text-emerald-600 dark:text-emerald-400" />}
                           </div>
                           <span className="text-[12px] font-bold text-k-ink leading-tight line-clamp-2">{act.name}</span>
                         </div>

@@ -255,6 +255,7 @@ export function useSubmitLog() {
       let plank_seconds = 0;
       let run_distance = 0;
       let squat_reps = 0;
+      let run_duration = 0;
 
       if (metrics) {
         pushup_reps = metrics.pushup_reps;
@@ -266,7 +267,7 @@ export function useSubmitLog() {
           new Promise<any>((resolve, reject) => {
             supabase
               .from('workout_logs')
-              .select('pushup_reps, plank_seconds, run_distance, squat_reps')
+              .select('pushup_reps, plank_seconds, run_distance, squat_reps, run_duration')
               .eq('id', logId)
               .single()
               .then(resolve, reject);
@@ -276,9 +277,10 @@ export function useSubmitLog() {
         plank_seconds = draftData?.plank_seconds || 0;
         run_distance = Number(draftData?.run_distance || 0);
         squat_reps = draftData?.squat_reps || 0;
+        run_duration = draftData?.run_duration || 0;
       }
 
-      const { totalPts } = calculateSessionScore(pushup_reps, plank_seconds, run_distance, squat_reps);
+      const { totalPts } = calculateSessionScore(pushup_reps, plank_seconds, run_distance, squat_reps, run_duration);
 
       // Submit: always persist metrics on this row when provided so we never submit stale debounced draft data.
       const { data, error } = await withTimeout(
@@ -419,7 +421,7 @@ export function useUpdateSubmittedLog() {
       if ('pushup_reps' in patch || 'plank_seconds' in patch || 'run_distance' in patch || 'squat_reps' in patch) {
         const { data: currentLog } = await supabase
           .from('workout_logs')
-          .select('pushup_reps, plank_seconds, run_distance, squat_reps')
+          .select('pushup_reps, plank_seconds, run_distance, squat_reps, run_duration')
           .eq('id', logId)
           .single();
         if (currentLog) {
@@ -428,7 +430,8 @@ export function useUpdateSubmittedLog() {
             merged.pushup_reps || 0,
             merged.plank_seconds || 0,
             Number(merged.run_distance || 0),
-            merged.squat_reps || 0
+            merged.squat_reps || 0,
+            merged.run_duration || 0
           );
           sessionScore = totalPts;
         }

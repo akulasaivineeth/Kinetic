@@ -4,13 +4,14 @@ import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus, LogIn, X, ChevronRight, Users } from 'lucide-react';
+import { X, ChevronRight } from 'lucide-react';
 import { AppShell } from '@/components/layout/app-shell';
-import { KCard, KEyebrow, KDisplay, KPill, KCrest, crestVariantFromSeed } from '@/components/ui/k-primitives';
+import { KCard, KEyebrow, KDisplay, KCrest, KAvatar, crestVariantFromSeed } from '@/components/ui/k-primitives';
+import { ActivityEmojiIcon } from '@/components/ui/activity-emoji-icon';
+import { exerciseIcon } from '@/components/ui/k-icons';
 import { PersonalHubPanel } from '@/components/squads/personal-hub-panel';
 import { crestPropsForTeam } from '@/lib/squad-crest-codec';
 import { useUserTeams, useJoinTeam } from '@/hooks/use-teams';
-import { useActivityTypes } from '@/hooks/use-activities';
 import type { UserTeam } from '@/types/database';
 
 type HubTab = 'personal' | 'squads';
@@ -20,19 +21,14 @@ export default function SquadsHubPage() {
   const [hubTab, setHubTab] = useState<HubTab>('personal');
   const { data: squads = [], isLoading: loadSquads } = useUserTeams();
   const joinTeam = useJoinTeam();
-  const { data: activityTypes = [] } = useActivityTypes();
-  const emojiMap = useMemo(() => new Map(activityTypes.map((a) => [a.slug, a.emoji])), [activityTypes]);
 
   const [showJoin, setShowJoin] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [error, setError] = useState('');
 
-  const sorted = useMemo(
-    () => [...squads].sort((a, b) => b.team_score - a.team_score),
-    [squads],
-  );
-  const podium = sorted.slice(0, 3);
-  const rest = sorted.slice(3);
+  const sorted = useMemo(() => [...squads].sort((a, b) => b.team_score - a.team_score), [squads]);
+  const maxScore = useMemo(() => Math.max(1, ...sorted.map(s => s.team_score)), [sorted]);
+  const combinedScore = useMemo(() => sorted.reduce((s, q) => s + q.team_score, 0), [sorted]);
 
   const handleJoin = async () => {
     if (!joinCode.trim()) return;
@@ -51,49 +47,50 @@ export default function SquadsHubPage() {
     <AppShell>
       <div className="space-y-5 pt-1 pb-28" data-testid="uat-squads-page">
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
-          <KEyebrow>Squads</KEyebrow>
-          <KDisplay size={30} className="mt-1">
-            HUB
-          </KDisplay>
-          <p className="text-[13px] text-k-muted-soft mt-2 leading-snug max-w-[320px]">
-            {hubTab === 'personal'
-              ? 'Your totals and week-over-week trends. Squads you belong to live on the Squads tab.'
-              : 'Squads you are in — weekly totals pool everyone’s session points.'}
-          </p>
+          <KEyebrow>{hubTab === 'personal' ? 'Personal · all-time' : 'Your squads'}</KEyebrow>
+          <KDisplay size={42} className="mt-1">HUB</KDisplay>
         </motion.div>
 
-        <div className="flex gap-2 flex-wrap">
-          <KPill active={hubTab === 'personal'} onClick={() => setHubTab('personal')} size="sm">
-            Yours
-          </KPill>
-          <KPill active={hubTab === 'squads'} onClick={() => setHubTab('squads')} size="sm">
-            Squads
-          </KPill>
+        {/* Toggle + actions */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex bg-k-card rounded-k-pill shadow-k-card p-1">
+            {(['personal', 'squads'] as HubTab[]).map(t => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setHubTab(t)}
+                className={`rounded-k-pill px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide transition-all border-none ${
+                  hubTab === t
+                    ? 'bg-k-mint text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400'
+                    : 'bg-transparent text-k-muted'
+                }`}
+              >
+                {t === 'personal' ? 'Yours' : 'Squads'}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => { setShowJoin(true); setError(''); }}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-k-pill border border-k-line-strong bg-k-card text-k-ink font-bold text-[11px] tracking-wide shadow-k-card"
+            >
+              JOIN
+            </button>
+            <Link
+              href="/squads/new"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-k-pill bg-emerald-500 text-white font-bold text-[11px] tracking-wide no-underline"
+              style={{ boxShadow: '0 4px 10px rgba(31,179,122,0.3)' }}
+            >
+              NEW
+            </Link>
+          </div>
         </div>
 
         {hubTab === 'personal' && <PersonalHubPanel />}
 
         {hubTab === 'squads' && (
           <>
-            <div className="flex gap-2">
-              <Link
-                href="/squads/new"
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-k-lg bg-k-mint text-emerald-700 font-bold text-[12px] tracking-wide shadow-k-card no-underline"
-              >
-                <Plus size={16} strokeWidth={2.5} /> New squad
-              </Link>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowJoin(true);
-                  setError('');
-                }}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-k-lg border border-k-line-strong bg-k-card text-k-ink font-bold text-[12px] tracking-wide shadow-k-card"
-              >
-                <LogIn size={16} /> Join
-              </button>
-            </div>
-
             <AnimatePresence>
               {showJoin && (
                 <motion.div
@@ -133,7 +130,7 @@ export default function SquadsHubPage() {
             {loadSquads ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-[92px] rounded-k-lg bg-k-card shadow-k-card animate-pulse" />
+                  <div key={i} className="h-[120px] rounded-k-lg bg-k-card shadow-k-card animate-pulse" />
                 ))}
               </div>
             ) : sorted.length === 0 ? (
@@ -150,64 +147,77 @@ export default function SquadsHubPage() {
               )
             ) : (
               <>
-                {podium.length > 0 && (
-                  <div>
-                    <KEyebrow className="mb-3">This week — top 3</KEyebrow>
-                    <div className="flex items-end justify-center gap-2 sm:gap-4 px-1">
-                      {[podium[1], podium[0], podium[2]].map((row, i) => {
-                        const rank = i === 0 ? 2 : i === 1 ? 1 : 3;
-                        const h = rank === 1 ? 'pt-2' : 'opacity-95';
-                        if (!row) {
-                          return (
-                            <div key={`empty-${rank}`} className={`flex-1 max-w-[110px] flex flex-col items-center ${h}`}>
-                              <div className="w-full rounded-k-lg bg-k-bg border border-dashed border-k-line-strong h-[100px] flex items-center justify-center text-k-muted-soft text-xs">
-                                —
-                              </div>
-                              <span className="text-[11px] font-bold text-k-muted-soft mt-2">#{rank}</span>
-                            </div>
-                          );
-                        }
-                        const crest = crestPropsForTeam(row.team_id, row.avatar_url);
-                        const ring =
-                          rank === 1 ? '#E6C200' : rank === 2 ? '#9CA3AF' : '#B87333';
+                {/* Squad leaderboard card */}
+                <div>
+                  <KEyebrow className="mb-3">Your squad leaderboard · this week</KEyebrow>
+                  <KCard pad={16}>
+                    <div className="flex flex-col gap-3.5">
+                      {sorted.map((s, i) => {
+                        const pct = (s.team_score / maxScore) * 100;
+                        const isTop = i === 0;
+                        const crest = crestPropsForTeam(s.team_id, s.avatar_url);
                         return (
-                          <Link
-                            key={row.team_id}
-                            href={`/squads/${row.team_id}`}
-                            className={`flex-1 max-w-[118px] flex flex-col items-center ${h}`}
-                          >
-                            <motion.div whileTap={{ scale: 0.97 }} className="w-full">
-                              <KCard pad={14} className="text-center border-t-4" style={{ borderTopColor: ring }}>
-                                <div className="flex justify-center mb-2">
-                                  <KCrest {...crest} size={rank === 1 ? 58 : 48} glow={rank === 1} />
+                          <Link key={s.team_id} href={`/squads/${s.team_id}`} className="no-underline">
+                            <div className="cursor-pointer">
+                              <div className="flex items-center gap-2.5 mb-1.5">
+                                <div
+                                  className="font-display italic font-black w-5 text-center"
+                                  style={{
+                                    fontSize: 18,
+                                    letterSpacing: -0.5,
+                                    color: isTop ? '#158A5D' : '#9AA2A9',
+                                  }}
+                                >{i + 1}</div>
+                                <KCrest {...crest} size={34} />
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-[13px] font-extrabold text-k-ink truncate">{s.team_name}</div>
+                                  <div className="text-[10px] text-k-muted font-semibold mt-0.5">{s.member_count} members</div>
                                 </div>
-                                <p className="text-[12px] font-bold text-k-ink truncate w-full">{row.team_name}</p>
-                                <p className="text-lg font-display text-emerald-600 dark:text-emerald-400 tabular-nums mt-1">
-                                  {Math.round(row.team_score).toLocaleString()}
-                                </p>
-                                <p className="text-[9px] font-semibold text-k-muted-soft uppercase tracking-wider">pts</p>
-                              </KCard>
-                            </motion.div>
-                            <span className="text-[11px] font-bold text-k-muted-soft mt-2">#{rank}</span>
+                                <div className="text-right shrink-0">
+                                  <div
+                                    className="font-display italic font-black text-[20px]"
+                                    style={{
+                                      letterSpacing: -0.5,
+                                      color: isTop ? '#158A5D' : '#0B0D0C',
+                                    }}
+                                  >{s.team_score.toLocaleString()}</div>
+                                  <div className="text-[9px] text-k-muted font-bold tracking-[1px] uppercase">pts</div>
+                                </div>
+                              </div>
+                              <div className="h-[7px] rounded-full overflow-hidden ml-8" style={{ background: '#EDEEEC' }}>
+                                <motion.div
+                                  className="h-full rounded-full"
+                                  style={{
+                                    background: isTop ? 'linear-gradient(90deg, #1FB37A, #158A5D)' : crest.color,
+                                    boxShadow: isTop ? '0 0 8px rgba(31,179,122,0.33)' : 'none',
+                                    opacity: isTop ? 1 : 0.75,
+                                  }}
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${pct}%` }}
+                                  transition={{ duration: 1, ease: [0.2, 0.8, 0.2, 1] }}
+                                />
+                              </div>
+                            </div>
                           </Link>
                         );
                       })}
                     </div>
-                  </div>
-                )}
+                    <div className="mt-4 pt-3 border-t border-k-line flex justify-between items-center">
+                      <span className="text-[11px] text-k-muted font-semibold">Combined output this week</span>
+                      <span
+                        className="font-display italic font-black text-[20px] text-emerald-600 dark:text-emerald-400"
+                        style={{ letterSpacing: -0.5 }}
+                      >{combinedScore.toLocaleString()} pts</span>
+                    </div>
+                  </KCard>
+                </div>
 
-                {rest.length > 0 && (
-                  <div className="space-y-2">
-                    <KEyebrow>Standings</KEyebrow>
-                    {rest.map((row, idx) => (
-                      <SquadStandingRow key={row.team_id} row={row} rank={idx + 4} emojiMap={emojiMap} />
-                    ))}
-                  </div>
-                )}
-
-                {sorted.length > 0 && sorted.length <= 3 && (
-                  <p className="text-[11px] text-k-muted-soft text-center">Invite more crews to fill the podium.</p>
-                )}
+                {/* Squad cards */}
+                <div className="space-y-2.5">
+                  {sorted.map(s => (
+                    <SquadCard key={s.team_id} squad={s} />
+                  ))}
+                </div>
               </>
             )}
           </>
@@ -217,45 +227,64 @@ export default function SquadsHubPage() {
   );
 }
 
-function SquadStandingRow({
-  row,
-  rank,
-  emojiMap,
-}: {
-  row: UserTeam;
-  rank: number;
-  emojiMap: Map<string, string>;
-}) {
-  const crest = crestPropsForTeam(row.team_id, row.avatar_url);
-  const slugLine = row.activity_slugs?.length
-    ? row.activity_slugs
-        .slice(0, 5)
-        .map((s) => emojiMap.get(s) ?? '')
-        .join(' ')
-    : '';
+function SquadCard({ squad }: { squad: UserTeam }) {
+  const crest = crestPropsForTeam(squad.team_id, squad.avatar_url);
+  const slugLine = squad.activity_slugs?.slice(0, 4) ?? [];
 
   return (
-    <Link href={`/squads/${row.team_id}`}>
+    <Link href={`/squads/${squad.team_id}`} className="no-underline">
       <motion.div whileTap={{ scale: 0.99 }}>
-        <KCard className="flex items-center gap-3 !py-3.5">
-          <span className="text-[13px] font-display w-7 text-k-muted-soft tabular-nums">{rank}</span>
-          <KCrest {...crest} size={44} />
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-bold text-k-ink truncate">{row.team_name}</p>
-            <div className="flex items-center gap-2 mt-0.5 text-[11px] text-k-muted-soft">
-              <span className="inline-flex items-center gap-0.5">
-                <Users size={11} /> {row.member_count}
-              </span>
-              {slugLine ? <span>{slugLine}</span> : null}
+        <KCard pad={0} style={{ overflow: 'hidden' }}>
+          {/* colored header strip */}
+          <div
+            className="flex items-center gap-3 px-4 py-4"
+            style={{ background: `linear-gradient(135deg, ${crest.color}, ${crest.color}cc)` }}
+          >
+            <KCrest {...crest} size={48} />
+            <div className="flex-1 min-w-0">
+              <div
+                className="font-display italic font-black text-white truncate"
+                style={{ fontSize: 20, letterSpacing: -0.3 }}
+              >
+                {squad.team_name.toUpperCase()}
+              </div>
+              <div className="text-[11px] text-white/75 font-semibold mt-0.5">
+                {squad.member_count} members
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <div className="text-[9px] font-bold tracking-[1.2px] uppercase mb-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>
+                This week
+              </div>
+              <div className="font-display italic font-black text-white" style={{ fontSize: 26, letterSpacing: -1 }}>
+                {Math.round(squad.team_score).toLocaleString()}
+              </div>
             </div>
           </div>
-          <div className="text-right shrink-0">
-            <p className="text-[15px] font-display text-emerald-600 dark:text-emerald-400 tabular-nums">
-              {Math.round(row.team_score).toLocaleString()}
-            </p>
-            <p className="text-[9px] font-semibold text-k-muted-soft uppercase">week</p>
+          {/* body */}
+          <div className="px-4 py-3">
+            <div className="flex gap-1.5 flex-wrap items-center">
+              {slugLine.map(slug => (
+                <span
+                  key={slug}
+                  className="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-k-pill text-[11px] font-bold text-k-ink border border-k-line"
+                  style={{ background: '#fff' }}
+                >
+                  <ActivityEmojiIcon slug={slug} size="xs" />
+                  {slug}
+                </span>
+              ))}
+              {squad.activity_slugs && squad.activity_slugs.length > 4 && (
+                <span
+                  className="inline-flex items-center px-2.5 py-1 rounded-k-pill text-[11px] font-bold text-k-muted border border-k-line"
+                  style={{ background: '#fff' }}
+                >
+                  +{squad.activity_slugs.length - 4}
+                </span>
+              )}
+              <ChevronRight size={14} className="text-k-muted ml-auto" />
+            </div>
           </div>
-          <ChevronRight size={16} className="text-k-muted-soft shrink-0" />
         </KCard>
       </motion.div>
     </Link>

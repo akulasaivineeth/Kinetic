@@ -4,11 +4,11 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AppShell } from '@/components/layout/app-shell';
 import { KCard, KEyebrow, KDisplay, KPill } from '@/components/ui/k-primitives';
-import { EXERCISE_ICON_MAP } from '@/components/ui/k-icons';
+import { exerciseIcon } from '@/components/ui/k-icons';
 import { useActivityTypes } from '@/hooks/use-activities';
 
 function exerciseIconForSlug(slug: string) {
-  return EXERCISE_ICON_MAP[slug] ?? EXERCISE_ICON_MAP[slug.replace(/s$/, '')];
+  return exerciseIcon(slug);
 }
 
 export default function ExerciseLibraryPage() {
@@ -67,7 +67,7 @@ export default function ExerciseLibraryPage() {
               <KCard key={act.slug} pad={14} className="!py-3">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-9 h-9 rounded-k-sm bg-k-mint-soft flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-                    {Icon ? <Icon size={22} /> : <span className="text-lg">{act.emoji}</span>}
+                    {Icon && <Icon size={22} />}
                   </div>
                   <span className="text-[12px] font-bold text-k-ink leading-tight line-clamp-2">{act.name}</span>
                 </div>

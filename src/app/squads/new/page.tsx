@@ -16,7 +16,7 @@ import {
   type KCrestEmblem,
   type KCrestShape,
 } from '@/components/ui/k-primitives';
-import { IcBack } from '@/components/ui/k-icons';
+import { IcBack, exerciseIcon } from '@/components/ui/k-icons';
 import { useCreateTeam } from '@/hooks/use-teams';
 import { useActivityTypes } from '@/hooks/use-activities';
 import type { TeamCrestPick } from '@/lib/squad-crest-codec';
@@ -163,7 +163,7 @@ export default function NewSquadPage() {
                       : 'border-k-line-strong text-k-muted-soft'
                   }`}
                 >
-                  {act.emoji} {act.name}
+                  {(() => { const Ic = exerciseIcon(act.slug); return <Ic size={13} className="inline-block align-middle mr-1" />; })()} {act.name}
                 </button>
               );
             })}
