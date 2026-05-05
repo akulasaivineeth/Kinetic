@@ -25,25 +25,36 @@ function withTimeout<T>(promise: Promise<T>, ms = 12000): Promise<T> {
   ]);
 }
 
-export type DateRange = 'week' | 'month' | '3mo' | '6mo' | 'year' | 'custom';
+export type DateRange = 'week' | 'month' | '3mo' | '6mo' | 'year' | 'all' | 'custom';
 
 export function getDateRange(range: DateRange, customFrom?: Date, customTo?: Date) {
   const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
   switch (range) {
     case 'week':
-      return { from: startOfWeek(now, { weekStartsOn: 1 }), to: endOfWeek(now, { weekStartsOn: 1 }) };
+      return { 
+        from: startOfWeek(now, { weekStartsOn: 1 }), 
+        to: endOfWeek(now, { weekStartsOn: 1 }) 
+      };
     case 'month':
-      return { from: startOfMonth(now), to: endOfMonth(now) };
+      return { 
+        from: startOfMonth(now), 
+        to: endOfMonth(now) 
+      };
     case '3mo':
-      return { from: subMonths(now, 3), to: now };
+      return { from: subMonths(startOfToday, 3), to: endOfToday };
     case '6mo':
-      return { from: subMonths(now, 6), to: now };
+      return { from: subMonths(startOfToday, 6), to: endOfToday };
     case 'year':
-      return { from: subMonths(now, 12), to: now };
+      return { from: subMonths(startOfToday, 12), to: endOfToday };
+    case 'all':
+      return { from: new Date('2000-01-01T00:00:00Z'), to: endOfToday };
     case 'custom':
-      return { from: customFrom || subWeeks(now, 1), to: customTo || now };
+      return { from: customFrom || subWeeks(startOfToday, 1), to: customTo || endOfToday };
     default:
-      return { from: startOfWeek(now, { weekStartsOn: 1 }), to: now };
+      return { from: startOfWeek(now, { weekStartsOn: 1 }), to: endOfToday };
   }
 }
 

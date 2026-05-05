@@ -24,7 +24,7 @@ export type TrendMode = 'raw' | 'percent';
 type DayAgg = { vol: number; peak: number };
 
 export function isWeekLineMode(
-  range: 'week' | 'month' | '3mo' | '6mo' | 'year' | 'custom',
+  range: 'week' | 'month' | '3mo' | '6mo' | 'year' | 'all' | 'custom',
   customFrom?: Date,
   customTo?: Date
 ): boolean {
@@ -39,7 +39,7 @@ export function isWeekLineMode(
 
 /** Month preset keeps weekly bars; longer presets use monthly buckets. Custom &gt; ~1 month → monthly. */
 export function shouldUseMonthBars(
-  range: 'week' | 'month' | '3mo' | '6mo' | 'year' | 'custom',
+  range: 'week' | 'month' | '3mo' | '6mo' | 'year' | 'all' | 'custom',
   customFrom?: Date,
   customTo?: Date
 ): boolean {
