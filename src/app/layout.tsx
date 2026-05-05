@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { Analytics } from '@vercel/analytics/next';
 import { AuthProvider } from '@/providers/auth-provider';
 import { QueryProvider } from '@/providers/query-provider';
 import { ThemeProvider } from '@/providers/theme-provider';
@@ -48,6 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <WorkoutDataRealtimeSync />
                 <PWAInit />
                 {children}
+                <Analytics />
               </AuthProvider>
             </QueryProvider>
           </ErrorBoundary>
