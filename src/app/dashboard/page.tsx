@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { AppShell } from '@/components/layout/app-shell';
 import { GlassCard } from '@/components/ui/glass-card';
 import { ScoreRing } from '@/components/ui/score-ring';
@@ -33,7 +33,9 @@ import { useAuth } from '@/providers/auth-provider';
 import { formatDistance, formatPlankTime } from '@/lib/utils';
 import { generateInsights } from '@/lib/insights';
 import { useUserMilestoneUnlocks } from '@/hooks/use-user-milestones';
-import { TrendingUp, TrendingDown, Lightbulb, AlertTriangle, Award } from 'lucide-react';
+import { TrendingUp, TrendingDown, Lightbulb, AlertTriangle } from 'lucide-react';
+import { WeekBars } from '@/components/dashboard/week-bars';
+import { KBadge } from '@/components/ui/k-badge';
 import { Onboarding } from '@/components/ui/onboarding';
 import type { WorkoutLog } from '@/types/database';
 import {
@@ -51,7 +53,7 @@ import {
   ReferenceLine,
   ReferenceDot,
 } from 'recharts';
-import { format, startOfWeek, endOfWeek } from 'date-fns';
+import { format, startOfWeek, endOfWeek, subWeeks } from 'date-fns';
 
 function PersonalTrendTooltip({
   active,
@@ -207,6 +209,14 @@ export default function DashboardPage() {
   const { data: weeklyVolume } = useWeeklyVolume();
   const { data: goals } = useGoals();
   const { data: streak = 0 } = useStreak();
+
+  const { lastWeekStart, lastWeekEnd } = useMemo(() => {
+    const thisWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const lwStart = subWeeks(thisWeekStart, 1);
+    return { lastWeekStart: lwStart, lastWeekEnd: endOfWeek(lwStart, { weekStartsOn: 1 }) };
+  }, []);
+  const { data: weekBarsThisLogs = [] } = useWorkoutLogs('week');
+  const { data: weekBarsLastLogs = [] } = useWorkoutLogs('custom', lastWeekStart, lastWeekEnd);
 
   const weeklyGoalPct = useMemo(() => {
     const pushGoal = goals?.pushup_weekly_goal || 500;
@@ -495,6 +505,16 @@ export default function DashboardPage() {
           </GlassCard>
         </div>
         )}
+
+        <GlassCard className="p-5" animate={false} data-testid="uat-dashboard-week-bars">
+          <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-3">
+            Weekly score
+          </p>
+          <WeekBars thisWeekLogs={weekBarsThisLogs} lastWeekLogs={weekBarsLastLogs} />
+          <p className="text-[9px] text-dark-muted mt-3 leading-relaxed">
+            Faded bars = last week (Mon–Sun). Solid = this week. Uses session points per day.
+          </p>
+        </GlassCard>
 
         <div className="pt-4" data-testid="uat-dashboard-trends">
           <h3 className="text-2xl font-black italic mb-4">
@@ -955,34 +975,78 @@ function GoalSuggestionsSection() {
 
 function MilestonesSection() {
   const { data: unlocks = [], isPending } = useUserMilestoneUnlocks();
+  const [selected, setSelected] = useState<(typeof unlocks)[number] | null>(null);
+  const [flipped, setFlipped] = useState(false);
 
   if (isPending) return null;
 
   return (
     <div className="pt-2 pb-4">
-      <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-2">MILESTONES EARNED</p>
+      <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase mb-3">MILESTONES EARNED</p>
       {unlocks.length === 0 ? (
         <p className="text-[10px] text-dark-muted leading-relaxed px-1">
           Milestones unlock here when you cross a lifetime total (for example 1K push-ups). Submit a log that crosses the line to earn it and get a notification.
         </p>
       ) : (
-        <div className="flex flex-wrap gap-2">
-          {unlocks.map((row, i) => (
-            <motion.div
+        <div className="flex flex-wrap gap-4">
+          {unlocks.map((row) => (
+            <button
               key={row.id}
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: i * 0.05 }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20"
+              type="button"
+              onClick={() => {
+                setSelected(row);
+                setFlipped(false);
+              }}
+              className="flex flex-col items-center gap-2 min-w-[72px] focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 rounded-xl"
             >
-              <Award size={12} className="text-emerald-500" />
-              <span className="text-[10px] font-bold text-emerald-400 tracking-wider">
-                {row.emoji} {row.label}
+              <KBadge milestoneKey={row.milestone_key} size={56} achievementLabel={row.label} dateLabel="" />
+              <span className="text-[9px] font-bold text-emerald-400/90 tracking-wider text-center leading-tight max-w-[80px]">
+                {row.label}
               </span>
-            </motion.div>
+            </button>
           ))}
         </div>
       )}
+
+      <AnimatePresence>
+        {selected && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md"
+            onClick={() => setSelected(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              className="flex flex-col items-center gap-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button type="button" onClick={() => setFlipped((f) => !f)} className="focus:outline-none">
+                <KBadge
+                  milestoneKey={selected.milestone_key}
+                  size={120}
+                  isFlipped={flipped}
+                  achievementLabel={selected.label}
+                  dateLabel={format(new Date(selected.earned_at), 'MMM d, yyyy')}
+                />
+              </button>
+              <p className="text-xs text-dark-muted text-center max-w-[240px]">
+                Tap the badge to flip. {selected.emoji} {selected.label}
+              </p>
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                className="text-sm font-bold text-emerald-400"
+              >
+                Close
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

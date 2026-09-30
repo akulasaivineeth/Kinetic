@@ -17,7 +17,7 @@ import { StandingsSkeleton } from '@/components/ui/skeleton';
 import { getInitials, formatDistance } from '@/lib/utils';
 import type { LeaderboardEntry } from '@/types/database';
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceDot,
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceDot, CartesianGrid,
 } from 'recharts';
 import { format } from 'date-fns';
 import { Dumbbell, Timer, Route, Trophy, Zap } from 'lucide-react';
@@ -392,10 +392,11 @@ export default function ArenaPage() {
               </div>
             </div>
 
-            <div className="h-48">
+            <div className="h-52 rounded-xl bg-black/20 border border-white/[0.04] p-2">
               {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}>
+                  <LineChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
                     <XAxis
                       dataKey="date"
                       axisLine={false}
@@ -423,8 +424,9 @@ export default function ArenaPage() {
                       dataKey="you"
                       stroke="#10B981"
                       strokeWidth={3}
+                      strokeLinecap="round"
                       dot={false}
-                      activeDot={{ r: 4 }}
+                      activeDot={{ r: 5, stroke: '#F5F5F7', strokeWidth: 2 }}
                     />
                     {lastYouPoint && (
                       <ReferenceDot
