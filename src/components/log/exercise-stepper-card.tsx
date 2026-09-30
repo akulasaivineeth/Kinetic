@@ -17,6 +17,7 @@ export type ExerciseStepperCardProps = {
   /** Optional centered value display (e.g. formatted plank time). */
   valueDisplay?: ReactNode;
   className?: string;
+  'data-testid'?: string;
 };
 
 function roundStep(val: number, step: number, direction: 1 | -1): number {
@@ -36,12 +37,14 @@ export function ExerciseStepperCard({
   goalLeft,
   valueDisplay,
   className,
+  'data-testid': dataTestId,
 }: ExerciseStepperCardProps) {
   const decrement = () => onChange(Math.max(min, roundStep(value, step, -1)));
   const increment = () => onChange(Math.max(min, roundStep(value, step, 1)));
 
   return (
     <div
+      data-testid={dataTestId}
       className={cn(
         'rounded-2xl bg-dark-elevated/70 border border-dark-border/80 p-4',
         className,

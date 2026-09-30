@@ -4,7 +4,12 @@ import { useState, useEffect, useCallback, useRef, Suspense, useMemo } from 'rea
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppShell } from '@/components/layout/app-shell';
 import { GlassCard } from '@/components/ui/glass-card';
+import { ExerciseStepperCard } from '@/components/log/exercise-stepper-card';
+import { LogDayMetrics } from '@/components/log/log-day-metrics';
+import { exerciseIcon } from '@/components/ui/k-icons';
 import { useAuth } from '@/providers/auth-provider';
+import { useLeaderboard } from '@/hooks/use-leaderboard';
+import { useStreak } from '@/hooks/use-streak';
 import { useGoals } from '@/hooks/use-goals';
 import {
   useWeeklyVolume,
@@ -15,16 +20,17 @@ import {
   useMonthLogs,
   dateToLogsMap,
 } from '@/hooks/use-workout-logs';
-import { formatPlankTime, parsePlankMmSsDigitInput } from '@/lib/utils';
+import { formatPlankTime } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { format, isSameDay, startOfDay } from 'date-fns';
 import { useAllTimeStats } from '@/hooks/use-alltime-stats';
-import { Confetti } from '@/components/ui/confetti';
 import { checkNewMilestones, type Milestone } from '@/lib/milestones';
 import { persistNewMilestoneUnlocks } from '@/lib/milestone-persistence';
 import { calculateSessionScore } from '@/lib/scoring';
+import { SCORE_REVEAL_STORAGE_KEY, type ScoreRevealPayload } from '@/lib/score-reveal';
+import { fetchWeeklyVolumeRank } from '@/lib/weekly-rank';
 import { DayPicker } from 'react-day-picker';
 
 export default function LogPageWrapper() {
@@ -47,6 +53,8 @@ function LogPage() {
   const submitLog = useSubmitLog();
   const updateSubmittedLog = useUpdateSubmittedLog();
   const { data: allTimeStats } = useAllTimeStats();
+  const { data: weeklyBoard = [] } = useLeaderboard('week', 'volume', 'raw');
+  const { data: streakWeeks = 0 } = useStreak();
 
   // Whoop prefill from notification
   const whoopActivity = searchParams.get('activity') || '';
@@ -70,7 +78,6 @@ function LogPage() {
   const [importResult, setImportResult] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [editLogId, setEditLogId] = useState<string | null>(null);
-  const [pbCelebration, setPbCelebration] = useState<string | null>(null);
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Calendar state
@@ -242,6 +249,8 @@ function LogPage() {
         ? Number((runDistance * 1.60934).toFixed(3))
         : runDistance;
 
+      const prevRank = editLogId ? null : await fetchWeeklyVolumeRank(user.id);
+
       if (editLogId) {
         const oldLog = monthLogs.find((r) => r.id === editLogId);
         if (!oldLog) throw new Error('Could not load log to update');
@@ -344,44 +353,36 @@ function LogPage() {
         navigator.vibrate([100, 50, 200]);
       }
 
-      // Fast display of celebration (don't force long delays that block routing)
+      const { totalPts } = calculateSessionScore(pushupReps, plankSeconds, finalRunDist, squatReps);
+
       const isPB =
         (allTimeStats && pushupReps > allTimeStats.peakPushups) ||
         (allTimeStats && plankSeconds > allTimeStats.peakPlankSeconds) ||
         (allTimeStats && finalRunDist > allTimeStats.peakRunDistance) ||
         (allTimeStats && squatReps > allTimeStats.peakSquats);
 
-      let delayTime = 0;
-      if (isPB) {
-        setPbCelebration('NEW PB!');
-        delayTime = 1200;
-      }
-      if (crossedNew.length > 0) {
-        setPbCelebration(
-          crossedNew.length === 1
-            ? `${crossedNew[0].emoji} ${crossedNew[0].label}`
-            : `${crossedNew.length} milestones unlocked!`
-        );
-        delayTime = 1200;
-      }
-
-      const { totalPts, pushupPts, plankPts, runPts, squatPts } = calculateSessionScore(pushupReps, plankSeconds, finalRunDist, squatReps);
-      if (totalPts > 0 && delayTime === 0) {
-        const parts = [
-          pushupPts > 0 ? `💪${Math.round(pushupPts)}` : '',
-          plankPts > 0 ? `🧘${Math.round(plankPts)}` : '',
-          runPts > 0 ? `🏃${Math.round(runPts)}` : '',
-          squatPts > 0 ? `🦵${Math.round(squatPts)}` : '',
-        ].filter(Boolean).join(' + ');
-        setPbCelebration(`⚡ ${Math.round(totalPts)} PTS (${parts})`);
-        delayTime = 1200;
-      }
-
-      if (delayTime > 0) await new Promise((r) => setTimeout(r, delayTime));
-
       setSubmitted(true);
       await refetchDashboardAfterLogChange();
-      router.push('/dashboard');
+      await queryClient.refetchQueries({ queryKey: ['streak', user.id] });
+      const nextRank = await fetchWeeklyVolumeRank(user.id);
+      const streakAfter =
+        queryClient.getQueryData<number>(['streak', user.id]) ?? streakWeeks;
+
+      const payload: ScoreRevealPayload = {
+        totalPts: Math.round(totalPts),
+        streak: streakAfter,
+        prevRank,
+        nextRank,
+        headline: isPB
+          ? 'NEW PB'
+          : crossedNew.length === 1
+            ? `${crossedNew[0].emoji} ${crossedNew[0].label}`
+            : crossedNew.length > 1
+              ? `${crossedNew.length} milestones unlocked`
+              : null,
+      };
+      sessionStorage.setItem(SCORE_REVEAL_STORAGE_KEY, JSON.stringify(payload));
+      router.push('/score-reveal');
     } catch (err) {
       console.error('Submit failed:', err);
       setSubmitError(err instanceof Error ? err.message : 'Failed to save log');
@@ -407,10 +408,39 @@ function LogPage() {
   }, [logsMap]);
   const isToday = isSameDay(selectedDate, new Date());
 
+  const projectedScore = useMemo(() => {
+    const finalRun = profile?.unit_preference === 'imperial'
+      ? Number((runDistance * 1.60934).toFixed(3))
+      : runDistance;
+    return calculateSessionScore(pushupReps, plankSeconds, finalRun, squatReps);
+  }, [pushupReps, plankSeconds, runDistance, squatReps, profile?.unit_preference]);
+
+  const previewRank = useMemo(() => {
+    if (!user) return null;
+    const idx = weeklyBoard.findIndex((e) => e.user_id === user.id);
+    return idx >= 0 ? idx + 1 : null;
+  }, [weeklyBoard, user]);
+
+  const runDisplayForLog = (km: number) =>
+    profile?.unit_preference === 'imperial'
+      ? `${(km * 0.621371).toFixed(1)}mi`
+      : `${km}km`;
+
   return (
     <AppShell>
-      <Confetti active={!!pbCelebration} message={pbCelebration || undefined} />
       <div className="max-w-md mx-auto px-6 space-y-5 pt-2 pb-32">
+
+        <GlassCard className="!p-4" animate={false}>
+          <p className="text-[10px] font-semibold tracking-[0.2em] text-dark-muted uppercase text-center">
+            Projected session
+          </p>
+          <p className="text-4xl font-black text-center text-emerald-500 tabular-nums mt-1">
+            {Math.round(projectedScore.totalPts)} pts
+          </p>
+          <p className="text-[10px] text-dark-muted text-center mt-2">
+            {previewRank ? `Weekly rank #${previewRank} before submit` : 'Log to place on the weekly board'}
+          </p>
+        </GlassCard>
 
         {/* Collapsible Session History Header */}
         <div className="flex items-center justify-between">
@@ -533,12 +563,14 @@ function LogPage() {
                           : 'border-dark-border bg-dark-elevated text-dark-text hover:border-emerald-500/30'
                       }`}
                     >
-                      <div className="flex gap-4 font-bold text-sm tracking-wide">
-                        {log.pushup_reps > 0 && <span>💪 {log.pushup_reps}</span>}
-                        {log.squat_reps > 0 && <span>🦵 {log.squat_reps}</span>}
-                        {log.plank_seconds > 0 && <span>🧘 {formatPlankTime(log.plank_seconds)}</span>}
-                        {Number(log.run_distance) > 0 && <span>🏃 {Number(log.run_distance)}km</span>}
-                      </div>
+                      <LogDayMetrics
+                        log={log}
+                        runLabel={
+                          Number(log.run_distance) > 0
+                            ? runDisplayForLog(Number(log.run_distance))
+                            : undefined
+                        }
+                      />
                       <span className="text-[10px] font-bold uppercase tracking-wider opacity-60">
                         {editLogId === log.id ? 'EDITING' : 'EDIT'}
                       </span>
@@ -602,97 +634,40 @@ function LogPage() {
           </div>
         )}
 
-        {/* Push-up Reps Card */}
-        <GlassCard className="relative" delay={0.1}>
-          <div className="flex justify-end mb-1">
-            <span className="text-[10px] font-bold tracking-wider text-emerald-500">
-              {pushupGoal} GOAL • {Math.max(pushupGoal - totalPushups, 0)} LEFT
-            </span>
-          </div>
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-dark-muted text-center uppercase mb-1">
-            PUSH-UP REPS
-          </p>
-          <input
-            type="number"
-            data-testid="uat-log-pushup-reps"
-            value={pushupReps || ''}
-            onChange={(e) => setPushupReps(parseInt(e.target.value) || 0)}
-            onWheel={(e) => (e.target as HTMLElement).blur()}
-            placeholder="0"
-            className="w-full text-center text-5xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors duration-200 py-2"
-          />
-        </GlassCard>
-
-        {/* Squat Reps Card */}
-        <GlassCard className="relative" delay={0.15}>
-          <div className="flex justify-end mb-1">
-            <span className="text-[10px] font-bold tracking-wider text-emerald-500">
-              {squatGoal} GOAL • {Math.max(squatGoal - totalSquats, 0)} LEFT
-            </span>
-          </div>
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-dark-muted text-center uppercase mb-1">
-            SQUAT REPS
-          </p>
-          <input
-            type="number"
-            value={squatReps || ''}
-            onChange={(e) => setSquatReps(parseInt(e.target.value) || 0)}
-            onWheel={(e) => (e.target as HTMLElement).blur()}
-            placeholder="0"
-            className="w-full text-center text-5xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors duration-200 py-2"
-          />
-        </GlassCard>
-
-        {/* Plank MM:SS Card */}
-        <GlassCard className="relative" delay={0.2}>
-          <div className="flex justify-end mb-1">
-            <span className="text-[10px] font-bold tracking-wider text-emerald-500">
-              {formatPlankTime(plankGoal)} GOAL • {formatPlankTime(Math.max(plankGoal - totalPlankSecs, 0))} LEFT
-            </span>
-          </div>
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-dark-muted text-center uppercase mb-1">
-            PLANK TIME (MM:SS)
-          </p>
-          <div className="flex items-center justify-center relative">
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="\d*"
-              value={plankSeconds ? `${Math.floor(plankSeconds / 60)}:${(plankSeconds % 60).toString().padStart(2, '0')}` : ''}
-              onChange={(e) => {
-                const raw = e.target.value;
-                if (!raw.replace(/\D/g, '')) {
-                  setPlankSeconds(0);
-                  return;
-                }
-                setPlankSeconds(parsePlankMmSsDigitInput(raw));
-              }}
-              placeholder="00:00"
-              className="w-full text-center text-5xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors duration-200 py-2"
-            />
-          </div>
-        </GlassCard>
-
-        {/* Run Distance Card */}
-        <GlassCard className="relative" delay={0.3}>
-          <div className="flex justify-end mb-1">
-            <span className="text-[10px] font-bold tracking-wider text-emerald-500 uppercase">
-              {displayRunGoal.toFixed(1)}{unitLabel} GOAL • {Math.max(displayRunGoal - (profile?.unit_preference === 'imperial' ? totalRunDist * 0.621371 : totalRunDist), 0).toFixed(1)}{unitLabel} LEFT
-            </span>
-          </div>
-          <p className="text-[11px] font-semibold tracking-[0.15em] text-dark-muted text-center uppercase mb-1">
-            RUN DISTANCE ({unitLabel})
-          </p>
-          <input
-            type="number"
-            step="0.1"
-            value={runDistance || ''}
-            onChange={(e) => setRunDistance(parseFloat(e.target.value) || 0)}
-            onWheel={(e) => (e.target as HTMLElement).blur()}
-            placeholder="0.0"
-            className="w-full text-center text-5xl font-black bg-transparent text-dark-text/30 focus:text-dark-text placeholder-dark-text/20 outline-none transition-colors duration-200 py-2"
-          />
-        </GlassCard>
+        <ExerciseStepperCard
+          data-testid="uat-log-pushup-reps"
+          label="Push-up reps"
+          icon={exerciseIcon('pushups')}
+          value={pushupReps}
+          onChange={setPushupReps}
+          step={1}
+          goalLeft={`${Math.max(pushupGoal - totalPushups, 0)} left`}
+        />
+        <ExerciseStepperCard
+          label="Squat reps"
+          icon={exerciseIcon('squats')}
+          value={squatReps}
+          onChange={setSquatReps}
+          step={1}
+          goalLeft={`${Math.max(squatGoal - totalSquats, 0)} left`}
+        />
+        <ExerciseStepperCard
+          label="Plank"
+          icon={exerciseIcon('plank')}
+          value={plankSeconds}
+          onChange={setPlankSeconds}
+          step={5}
+          goalLeft={`${formatPlankTime(Math.max(plankGoal - totalPlankSecs, 0))} left`}
+          valueDisplay={plankSeconds > 0 ? formatPlankTime(plankSeconds) : 0}
+        />
+        <ExerciseStepperCard
+          label={`Run (${unitLabel})`}
+          icon={exerciseIcon('run')}
+          value={runDistance}
+          onChange={setRunDistance}
+          step={0.1}
+          goalLeft={`${Math.max(displayRunGoal - (profile?.unit_preference === 'imperial' ? totalRunDist * 0.621371 : totalRunDist), 0).toFixed(1)}${unitLabel} left`}
+        />
 
         {/* Action Buttons */}
         <div className="space-y-4">
